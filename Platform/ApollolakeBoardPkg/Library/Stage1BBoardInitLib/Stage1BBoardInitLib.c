@@ -229,6 +229,540 @@ CONST MEMORY_SKU_CONFIG mMemorySkuConfig[] = {
 };
 
 
+// X001 >>>
+// PMC Device Byte List
+#define	  Obf		                0x01
+#define   Ibf		                0x02
+
+#define	  A9610_DEVICE_NONE			          0x00
+#define	  A9610_DEVICE_1			            0x00
+#define	  A9610_DEVICE_2			            0x01
+
+#define	  A9610_CMD_READ_BOARD_INFO   		0x53
+#define	  A9610_CMD_WRITE_BOARD_INFO  		0x52
+
+#define	  A9610_CMD_READ_SYSTEM       		0x55
+#define	  A9610_CMD_WRITE_SYSTEM      		0x54
+
+#define WRITE_ACPI_RAM                  0x30
+#define READ_ACPI_RAM                   0x31
+
+#define   A9610_PMC_CMD_PORT	            0x66
+#define   A9610_PMC_DATA_PORT	            0x62 
+
+#define   EC_CMD_PORT	              0x66
+#define   EC_DATA_PORT	            0x62
+
+
+#define	  A9610_CTRL_BOARD_NAME			      0x10
+#define	  A9610_CTRL_MANUFACTURER_NAME		0x11
+#define	  A9610_CTRL_CHIP_NAME			      0x12
+#define	  A9610_CTRL_PLATFORM_TYPE		    0x13
+#define	  A9610_CTRL_PLATFORM_VERSION		  0x14
+
+#define READ_EC_FIRMWARE_VERSION        0x4B
+#define FIRMWARE_VERSION_IN_BIOS        0x00
+#define FIRMWARE_VERSION_IN_PROJECT     0x07
+
+
+#define A9610_ACTIVATE_VALUE	0x1
+#define A9610_DEACTIVATE_VALUE	0x0
+#define A9610_CONFIG_MODE_ENTER_VALUE	0x87
+#define A9610_CONFIG_MODE_EXIT_VALUE	0xaa
+
+#define A9610_CONFIG_INDEX	0x299
+#define A9610_CONFIG_DATA	0x29a
+
+#define A9610_PMC1_BASE_ADDRESS	0x2f0
+
+
+#define A9610_LDN_LPT	0xa
+#define A9610_LDN_PS2K	0xb
+#define A9610_LDN_PS2M	0xb
+#define A9610_LDN_GPIO0	0x24
+#define A9610_LDN_GPIO1	0x25
+#define A9610_LDN_PMC0	0xc
+#define A9610_LDN_PMC1	0xd
+#define A9610_LDN_CAN0	0x18
+#define A9610_LDN_CAN1	0x19
+#define A9610_LDN_I2C0	0x20
+#define A9610_LDN_I2C1	0x21
+#define A9610_LDN_SMBUS0	0x22
+#define A9610_LDN_SMBUS1	0x23
+#define A9610_LDN_PMCMB	0xe
+#define A9610_LDN_EC	0xf
+#define A9610_LDN_UART1	0x2
+#define A9610_LDN_UART2	0x3
+#define A9610_LDN_UART3	0x4
+#define A9610_LDN_UART4	0x5
+#define A9610_LDN_UART5	0x6
+#define A9610_LDN_UART6	0x7
+#define A9610_LDN_UART7	0x8
+#define A9610_LDN_UART8	0x9
+#define A9610_LDN_UART9	0x10 
+
+#define A9610_LDN_SEL_REGISTER	0x7
+#define A9610_ACTIVATE_REGISTER	0x30
+#define A9610_BASE1_HI_REGISTER	0x60
+#define A9610_BASE1_LO_REGISTER	0x61
+#define A9610_BASE2_HI_REGISTER	0x62
+#define A9610_BASE2_LO_REGISTER	0x63
+#define A9610_IRQ1_REGISTER	0x70
+#define A9610_IRQ2_REGISTER	0x72
+#define A9610_DMA1_REGISTER	0x74
+#define A9610_DMA2_REGISTER	0x75 
+
+const
+BXT_GPIO_PAD_INIT  mGpioInitTblLPC[] = {
+  /*                  Group Pin#:  pad_name,    PMode,GPIO_Config,HostSw,GPO_STATE,INT_Trigger,  Wake_Enabled ,Term_H_L,Inverted, GPI_ROUT, IOSstae, IOSTerm,MMIO_Offset,Community */
+  BXT_GPIO_PAD_CONF (L"SMB_CLK",                    M1,     NA,   NA,  NA,   NA, Wake_Disabled, P_20K_H,    NA,    NA, IOS_Masked, SAME, GPIO_PADBAR + 0x0100,  SOUTHWEST),
+  BXT_GPIO_PAD_CONF (L"SMB_DATA",                   M1,     NA,   NA,  NA,   NA, Wake_Disabled, P_20K_H,    NA,    NA, IOS_Masked, SAME, GPIO_PADBAR + 0x0108,  SOUTHWEST),
+  BXT_GPIO_PAD_CONF (L"LPC_ILB_SERIRQ",             M1,     NA,   NA,  NA,   NA, Wake_Disabled, P_20K_H,    NA,    NA, IOS_Masked, SAME, GPIO_PADBAR + 0x0110,  SOUTHWEST),
+  BXT_GPIO_PAD_CONF (L"LPC_CLKOUT0",                M1,     NA,   NA,  NA,   NA, Wake_Disabled, P_NONE,     NA,    NA, IOS_Masked, SAME, GPIO_PADBAR + 0x0118,  SOUTHWEST),
+  BXT_GPIO_PAD_CONF (L"LPC_CLKOUT1",                M1,     NA,   NA,  NA,   NA, Wake_Disabled, P_NONE,     NA,    NA, IOS_Masked, SAME, GPIO_PADBAR + 0x0120,  SOUTHWEST),
+  BXT_GPIO_PAD_CONF (L"LPC_AD0",                    M1,     NA,   NA,  NA,   NA, Wake_Disabled, P_20K_H,    NA,    NA, IOS_Masked, SAME, GPIO_PADBAR + 0x0128,  SOUTHWEST),
+  BXT_GPIO_PAD_CONF (L"LPC_AD1",                    M1,     NA,   NA,  NA,   NA, Wake_Disabled, P_20K_H,    NA,    NA, IOS_Masked, SAME, GPIO_PADBAR + 0x0130,  SOUTHWEST),
+  BXT_GPIO_PAD_CONF (L"LPC_AD2",                    M1,     NA,   NA,  NA,   NA, Wake_Disabled, P_20K_H,    NA,    NA, IOS_Masked, SAME, GPIO_PADBAR + 0x0138,  SOUTHWEST),
+  BXT_GPIO_PAD_CONF (L"LPC_AD3",                    M1,     NA,   NA,  NA,   NA, Wake_Disabled, P_20K_H,    NA,    NA, IOS_Masked, SAME, GPIO_PADBAR + 0x0140,  SOUTHWEST),
+  BXT_GPIO_PAD_CONF (L"LPC_CLKRUNB",                M1,     NA,   NA,  NA,   NA, Wake_Disabled, P_20K_H,    NA,    NA, IOS_Masked, SAME, GPIO_PADBAR + 0x0148,  SOUTHWEST),
+  BXT_GPIO_PAD_CONF (L"LPC_FRAMEB",                 M1,     NA,   NA,  NA,   NA, Wake_Disabled, P_20K_H,    NA,    NA, IOS_Masked, SAME, GPIO_PADBAR + 0x0150,  SOUTHWEST),
+};
+
+
+#define   CHIP_VEN_CODE         0xFA      // I-ITE, E-ENE
+#define   CHIP_CODE             0xFB      // FOR ITE, 12-8512, 16-8516
+#define   PROJ_NAME_CODE        0xFC      //
+#define   PROJ_TYPE_CODE        0xFD      // S-SOM, P-PCM
+#define   FW_MAJ_VER_NUMBER     0xFE
+#define   FW_MIN_VER_NUMBER     0xFF
+#define   DEFAULT_STRING_SIZE   0x20
+
+
+
+typedef struct _BOARD_ID_DATA{
+    UINT8       BoardID;
+    CHAR8       Brdstr[8];
+    CHAR16*     Board_name;
+} BOARD_ID_DATA;
+
+BOARD_ID_DATA BoardIDTable[]= {
+    {0x00, {'S','O','M','-','2','5','6','9'}, L"SOM-2569"},
+    {0x01, {'S','O','M','-','3','5','6','9'}, L"SOM-3569"},
+    {0x02, {'S','O','M','-','6','8','6','9'}, L"SOM-6869"},
+    {0x03, {'S','O','M','-','7','5','6','9'}, L"SOM-7569"},
+};
+
+typedef struct _SIO_CHIP_DATA{
+    UINT8       VenderID;
+    UINT8       ChipID;
+    UINT8       CodeID;
+    UINT16      ConfigIndex;
+    UINT16      ConfigData;
+    CHAR16*     Chip_name;
+} SIO_CHIP_DATA;
+
+SIO_CHIP_DATA SioChipTable[]= {
+    {0x52, 0x10, 0x00, 0x299, 0x29A,  L"RDC-9610 SW"},
+    {0x52, 0x10, 0x80, 0x299, 0x29A,  L"RDC-9610 FW"},
+    {0x49, 0x28, 0x00, 0x29C, 0x29D,  L"ITE-8528"},
+    {0x49, 0x21, 0x00, 0x29C, 0x29D,  L"ITE-5121"},
+};
+
+typedef struct _BOARD_INFORMATION{
+    UINT8       BoardID;
+    UINT8       SioChipIndex;
+    UINT16      CfgIndex;
+    UINT16      CfgData;
+    UINT16      EcIndex;
+    UINT16      EcData;
+    UINT8       Protocal;
+} BOARD_INFORMATION;
+
+BOARD_INFORMATION mBoardInfo;
+
+typedef struct _SIO_INIT_DATA{
+    UINT16      Reg16;
+    UINT8       AndData8;   // 0x00 means register don't need AndMask
+                            // only write OrData8 to regisrer.
+    UINT8       OrData8;
+} SIO_INIT_DATA;
+
+SIO_INIT_DATA A9610InitTable[]= {
+    // -----------------------------
+    //|  Addr | DataMask  | DataValue |
+    // -----------------------------
+
+    {A9610_CONFIG_INDEX, 0x00, A9610_CONFIG_MODE_ENTER_VALUE},
+    {A9610_CONFIG_INDEX, 0x00, A9610_CONFIG_MODE_ENTER_VALUE},
+
+    //------------------------------------------------------------------
+    // Program and initialize some logical device if needed.
+    //------------------------------------------------------------------
+    // Select device LDN 0C
+        {A9610_CONFIG_INDEX, 0x00, A9610_LDN_SEL_REGISTER},
+        {A9610_CONFIG_DATA,  0x00, A9610_LDN_PMC0},
+        // Activate Device
+        {A9610_CONFIG_INDEX, 0x00, A9610_ACTIVATE_REGISTER},
+        {A9610_CONFIG_DATA,  0x00, A9610_ACTIVATE_VALUE},
+    // Select device LDN 0D
+        {A9610_CONFIG_INDEX, 0x00, A9610_LDN_SEL_REGISTER},
+        {A9610_CONFIG_DATA,  0x00, A9610_LDN_PMC1},
+        // Program Base Addr 
+        {A9610_CONFIG_INDEX, 0x00, A9610_BASE1_LO_REGISTER},
+        {A9610_CONFIG_DATA,  0x00, (UINT8)((A9610_PMC1_BASE_ADDRESS+0x02) & 0xFF)},
+        {A9610_CONFIG_INDEX, 0x00, A9610_BASE1_HI_REGISTER},
+        {A9610_CONFIG_DATA,  0x00, (UINT8)((A9610_PMC1_BASE_ADDRESS+0x02) >> 8)},
+        {A9610_CONFIG_INDEX, 0x00, A9610_BASE2_LO_REGISTER},
+        {A9610_CONFIG_DATA,  0x00, (UINT8)((A9610_PMC1_BASE_ADDRESS+0x06) & 0xFF)},
+        {A9610_CONFIG_INDEX, 0x00, A9610_BASE2_HI_REGISTER},
+        {A9610_CONFIG_DATA,  0x00, (UINT8)((A9610_PMC1_BASE_ADDRESS+0x06) >> 8)},
+        // Activate Device
+        {A9610_CONFIG_INDEX, 0x00, A9610_ACTIVATE_REGISTER},
+        {A9610_CONFIG_DATA,  0x00, A9610_ACTIVATE_VALUE},
+
+    {A9610_CONFIG_INDEX, 0x00, A9610_CONFIG_MODE_EXIT_VALUE},
+};
+
+
+void 
+A9610Init(
+    IN  SIO_INIT_DATA  *Table,
+    IN  UINT8   Count
+)
+{
+    UINT8   i;
+    UINT8   Value8;
+
+    for (i=0;i<Count;i++) {
+      
+      if (Table[i].AndData8 == 0x00)  
+        Value8 = Table[i].OrData8;
+      else 
+        Value8 = (IoRead8(Table[i].Reg16) & Table[i].AndData8) | Table[i].OrData8;
+      
+      IoWrite8 (Table[i].Reg16, Value8 );
+    }
+
+}
+
+
+
+//----------------------------------------------------------------------------
+// Procedure:	EcIbFree
+//----------------------------------------------------------------------------
+EFI_STATUS
+PmcIbFree ()
+{
+	UINTN   Status = EFI_SUCCESS;
+	UINTN   Timeout = 100000;
+    
+	do {
+		Status = IoRead8(A9610_PMC_CMD_PORT);
+		Timeout--;
+		if(Timeout==0) return EFI_TIMEOUT;
+	} while (Status & Ibf); 
+	
+	return EFI_SUCCESS;
+}
+
+//----------------------------------------------------------------------------
+// Procedure:	EcObFull
+//----------------------------------------------------------------------------
+EFI_STATUS
+PmcObFull ()
+{
+	UINTN   Status = EFI_SUCCESS;
+	UINTN   Timeout = 100000;
+    
+	do {
+		Status = IoRead8(A9610_PMC_CMD_PORT);
+		Timeout--;
+		if(Timeout==0) return EFI_TIMEOUT;
+	} while (!(Status & Obf));
+	
+	return EFI_SUCCESS;
+}
+
+// read data if obf
+//----------------------------------------------------------------------------
+// Procedure:	read data if obf
+//----------------------------------------------------------------------------
+EFI_STATUS
+CheckPmcObf ()
+{
+	UINTN   Status = EFI_SUCCESS;
+	UINTN   Timeout = 100000;
+	UINT8   temp = 0;
+	do {
+		Status = IoRead8(A9610_PMC_CMD_PORT);
+		if(Status & Obf) temp = IoRead8(A9610_PMC_DATA_PORT);
+
+		Timeout--;
+		if(Timeout==0) return EFI_TIMEOUT;
+	} while (Status & Obf);
+
+	return EFI_SUCCESS;
+}
+
+//----------------------------------------------------------------------------
+// Procedure:	EcPmcWriteCmd
+//----------------------------------------------------------------------------
+EFI_STATUS
+EcPmcWriteCmd (UINT8	cmd)
+{
+	UINTN   Status = EFI_SUCCESS;
+
+	Status = CheckPmcObf();
+	if(EFI_ERROR(Status)) return Status;
+
+	Status = PmcIbFree();
+	if(!EFI_ERROR(Status)) IoWrite8(A9610_PMC_CMD_PORT, (UINT8)cmd);
+
+//  DEBUG ((DEBUG_ERROR, "EcPmcWriteCmd:CommandByte(cmd) %r \n",cmd,Status));
+
+	return Status;
+}
+
+//----------------------------------------------------------------------------
+// Procedure:	EcPmcWriteData
+//----------------------------------------------------------------------------
+EFI_STATUS
+EcPmcWriteData (UINT8	data)
+{
+	UINTN   Status = EFI_SUCCESS;
+
+	Status = PmcIbFree();
+	if(!EFI_ERROR(Status)) IoWrite8(A9610_PMC_DATA_PORT, (UINT8)data);
+
+//  DEBUG ((DEBUG_ERROR, "EcPmcWriteData:DataByte(data) %r \n",data,Status));
+	
+	return Status;
+}
+
+//----------------------------------------------------------------------------
+// Procedure:	EcPmcReadData
+//----------------------------------------------------------------------------
+EFI_STATUS
+EcPmcReadData (UINT8 *pData)
+{
+	UINTN   Status = EFI_SUCCESS;
+
+	Status = PmcObFull();
+    
+	if(!EFI_ERROR(Status)) *pData = IoRead8(A9610_PMC_DATA_PORT);
+	return Status;
+}
+
+//----------------------------------------------------------------------------
+// Procedure:	EcPmcWrite_Protocol
+//----------------------------------------------------------------------------
+EFI_STATUS
+EcPmcWrite_Protocol (UINT8 CommandByte, UINT8 ControlByte, UINT8 DeviceByte, UINT8 PayloadSizeByte, UINT8 *PayloadByte)
+{
+	UINTN   Status = EFI_SUCCESS;
+	UINT8   i = 1;
+	
+	Status=EcPmcWriteCmd(CommandByte);
+	if(EFI_ERROR(Status)) return Status;
+	Status=EcPmcWriteData(ControlByte);
+	if(EFI_ERROR(Status)) return Status;
+	Status=EcPmcWriteData(DeviceByte);
+	if(EFI_ERROR(Status)) return Status;
+	Status=EcPmcWriteData(PayloadSizeByte);
+	if(EFI_ERROR(Status)) return Status;
+	for(i=0; i<PayloadSizeByte; i++) {
+		Status=EcPmcWriteData(PayloadByte[i]);
+		if(EFI_ERROR(Status)) return Status;
+	}
+        
+	return Status;
+}
+
+//----------------------------------------------------------------------------
+// Procedure:	EcPmcRead_Protocol
+//----------------------------------------------------------------------------
+EFI_STATUS
+EcPmcRead_Protocol (UINT8 CommandByte, UINT8 ControlByte, UINT8 DeviceByte, UINT8 PayloadSizeByte, UINT8 *PayloadByte)
+{
+	UINTN   Status = EFI_SUCCESS;
+	UINT8   i = 1;
+
+	Status=EcPmcWriteCmd(CommandByte);
+
+	if(EFI_ERROR(Status)) return Status;
+	Status=EcPmcWriteData(ControlByte);
+	if(EFI_ERROR(Status)) return Status;
+	Status=EcPmcWriteData(DeviceByte);
+	if(EFI_ERROR(Status)) return Status;
+	Status=EcPmcWriteData(PayloadSizeByte);
+	if(EFI_ERROR(Status)) return Status;
+	for(i=0; i<PayloadSizeByte; i++) {
+		Status=EcPmcReadData(&PayloadByte[i]);
+		if(EFI_ERROR(Status)) return Status;
+	}
+
+	return Status;
+}
+
+
+//----------------------------------------------------------------------------
+// Procedure:	EcPmcRead
+//----------------------------------------------------------------------------
+EFI_STATUS
+EcPmcRead (UINT8 Command, UINT8 Offset, UINT8 Length, UINT8 *Data)
+{
+        EFI_STATUS      Status;
+        UINT8           i;
+
+        Status=EcPmcWriteCmd(Command);
+        if(EFI_ERROR(Status)) return Status;
+        Status=EcPmcWriteData(Offset);
+        if(EFI_ERROR(Status)) return Status;
+        Status=EcPmcWriteData(Length);
+        if(EFI_ERROR(Status)) return Status;
+        for(i=0; i<Length; i++) {
+                Status=EcPmcReadData(&Data[i]);
+                if(EFI_ERROR(Status)) return Status;
+        }
+        return Status;
+}
+
+//----------------------------------------------------------------------------
+// Procedure:	EcPmcReadRam
+//----------------------------------------------------------------------------
+EFI_STATUS
+EcPmcReadRam (UINT8 Command, UINT8 Offset, UINT8 *Data)
+{
+        EFI_STATUS      Status;
+
+        Status=EcPmcWriteCmd(Command);
+        if(EFI_ERROR(Status)) return Status;
+        Status=EcPmcWriteData(Offset);
+        if(EFI_ERROR(Status)) return Status;
+        Status=EcPmcReadData(Data);
+        if(EFI_ERROR(Status)) return Status;
+        return Status;
+}
+
+//----------------------------------------------------------------------------
+// Procedure:	GetAdvantechBoardId
+//----------------------------------------------------------------------------
+
+static
+UINT16
+GetAdvantechBoardId (
+  VOID
+  )
+{
+  EFI_STATUS  Status        = EFI_SUCCESS;
+  UINT32            PciPchMmBase;
+  UINT32            PciData32;
+//  UINT8             ECIndex; 
+//  UINT8             ECData; 
+  UINT8	            ArrayPayloadData[DEFAULT_STRING_SIZE];
+  UINT8             BrdId = 0xFF; 
+  UINT8             i; 
+  UINT8             SioId[3]; 
+
+  //
+  // Init LPC pin setting
+  //
+  GpioPadConfigTable (sizeof (mGpioInitTblLPC) / sizeof (mGpioInitTblLPC[0]), (BXT_GPIO_PAD_INIT *)mGpioInitTblLPC);
+
+  //
+  // Set LPC IO decode
+  //
+  PciPchMmBase = MM_PCI_ADDRESS (0, 31, 0, 0);
+  PciData32 = MmioRead32 (PciPchMmBase);
+
+  PciData32 = MmioRead32 (PciPchMmBase+0x80);
+  PciData32 = 0x3F0F0000;
+  MmioWrite32 (PciPchMmBase+0x80,  PciData32);
+
+  PciData32 = MmioRead32 (PciPchMmBase+0x80);
+  DEBUG ((DEBUG_ERROR, "LPC 0x80: 0x%04X\n", PciData32));
+
+
+  PciData32 = MmioRead32 (PciPchMmBase+0x84);
+  PciData32 = 0x00FC0201;
+  MmioWrite32 (PciPchMmBase+0x84,  PciData32);
+
+  //
+  // Port 62/66 and Io space 0x200~0x2FF are actived
+  //
+//  ECIndex = IoRead8 (EC_CMD_PORT);
+//  ECData = IoRead8 (EC_DATA_PORT);
+//  DEBUG ((DEBUG_ERROR, "EC: 0x%02X ,0x%02X\n", ECIndex, ECData));
+
+  if ((IoRead8 (EC_CMD_PORT) == 0xFF) && (IoRead8 (EC_DATA_PORT) == 0xFF)) {
+    A9610Init (A9610InitTable, sizeof(A9610InitTable)/sizeof(SIO_INIT_DATA));
+    mBoardInfo.CfgIndex = 0x299;
+    mBoardInfo.CfgData = 0x29A;
+    mBoardInfo.EcIndex = 0x66;
+    mBoardInfo.EcData = 0x62;
+
+  } else {
+    mBoardInfo.CfgIndex = 0x29C;
+    mBoardInfo.CfgData = 0x29D;
+    mBoardInfo.EcIndex = 0x29A;
+    mBoardInfo.EcData = 0x299;
+  
+  }
+
+  Status = EcPmcReadRam (0x80, 0xFA, &SioId[0]);
+
+  IoWrite8 (0x80, SioId[0]);
+
+  Status = EcPmcReadRam (0x80, 0xFB, &SioId[1]);
+  Status = EcPmcReadRam (0x80, 0xFC, &SioId[2]);
+
+  for( i = 0; i < sizeof(SioChipTable)/sizeof(SIO_CHIP_DATA); i++ ) {
+//    if ((SioChipTable[i].VenderID == SioId[0]) && (SioChipTable[i].ChipID == SioId[1]) && (SioChipTable[i].CodeID == SioId[2])) {
+    if ((SioChipTable[i].VenderID == SioId[0]) && (SioChipTable[i].ChipID == SioId[1])) {
+
+      if (! ((SioId[0] == 0x52) && (SioId[1] == 0x10)))
+        mBoardInfo.SioChipIndex = i;
+
+      if ((SioId[0] == 0x52) && (SioId[1] == 0x10) && (SioChipTable[i].CodeID == SioId[2])) {
+        mBoardInfo.SioChipIndex = i;
+        mBoardInfo.Protocal = SioChipTable[i].CodeID;
+      } 
+      
+    }
+  }
+
+
+  ZeroMem (ArrayPayloadData, DEFAULT_STRING_SIZE);
+  
+  Status =  EcPmcRead(0x41, FIRMWARE_VERSION_IN_PROJECT, 8, ArrayPayloadData);
+
+
+  for (i = 0; i < sizeof(BoardIDTable)/sizeof(BOARD_ID_DATA); i++) {
+    if ((CompareMem (ArrayPayloadData, BoardIDTable[i].Brdstr, 0x8))  == 0)
+      mBoardInfo.BoardID =  BoardIDTable[i].BoardID;
+  }
+
+//  DEBUG ((DEBUG_ERROR, "Ec Info: %s \n", SioChipTable[mBoardInfo.SioChipIndex].Chip_name));
+
+  for (i = 0; i < sizeof(BoardIDTable)/sizeof(BOARD_ID_DATA); i++)
+    if (mBoardInfo.BoardID == BoardIDTable[i].BoardID)
+//    DEBUG ((DEBUG_ERROR, "BoardInfo.BoardID       = %s \n" ,BoardIDTable[i].Board_name));
+    DEBUG ((DEBUG_ERROR, "BoardName (%x/%x/%x): %s ; Ec: %s\n" ,SioId[0],SioId[1],SioId[2],BoardIDTable[i].Board_name,SioChipTable[mBoardInfo.SioChipIndex].Chip_name));
+//  DEBUG ((DEBUG_ERROR, "BoardInfo.BoardID       = %d \n" ,mBoardInfo.BoardID));
+//  DEBUG ((DEBUG_ERROR, "BoardInfo.SioChipIndex  = %d \n" ,mBoardInfo.SioChipIndex));
+//  DEBUG ((DEBUG_ERROR, "BoardInfo.CfgIndex      = 0x%04x \n" ,mBoardInfo.CfgIndex));
+//  DEBUG ((DEBUG_ERROR, "BoardInfo.CfgData       = 0x%04x \n" ,mBoardInfo.CfgData));
+//  DEBUG ((DEBUG_ERROR, "BoardInfo.EcIndex       = 0x%04x \n" ,mBoardInfo.EcIndex));
+//  DEBUG ((DEBUG_ERROR, "BoardInfo.EcData        = 0x%04x \n" ,mBoardInfo.EcData));
+//  DEBUG ((DEBUG_ERROR, "BoardInfo.Protocal      = %d \n" ,mBoardInfo.Protocal));
+
+//  CpuDeadLoop ();
+//  BrdId = 3;
+    BrdId = mBoardInfo.BoardID;
+  return BrdId;
+}
+// X001 <<<
+
 
 /**
   Read the board Id from the GPIO pins.
@@ -1321,6 +1855,10 @@ PlatformIdInitialize (
 {
   UINT16     PlatformId;
 
+// X001 >>>
+  PlatformId = GetAdvantechBoardId ();
+  if (PlatformId == 0xFF)
+// X001 <<<
   PlatformId = (UINT16)GetBoardIdFromGpioPins ();
 
   if (PlatformId != 0xFF) {

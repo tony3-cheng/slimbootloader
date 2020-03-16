@@ -145,7 +145,8 @@ class Board(BaseBoard):
             self.SPI_IAS1_SIZE    = 0x00150000
 
         self._CFGDATA_INT_FILE = ['CfgData_Int_LeafHill.dlt']
-        self._CFGDATA_EXT_FILE = ['CfgData_Ext_Gpmrb.dlt', 'CfgData_Ext_Up2.dlt','CfgData_Ext_OxbHill.dlt','CfgData_Ext_MB3.dlt','CfgData_Ext_JuniperHill.dlt']
+# X001        self._CFGDATA_EXT_FILE = ['CfgData_Ext_Gpmrb.dlt', 'CfgData_Ext_Up2.dlt','CfgData_Ext_OxbHill.dlt','CfgData_Ext_MB3.dlt','CfgData_Ext_JuniperHill.dlt']
+        self._CFGDATA_EXT_FILE = ['CfgData_Ext_Gpmrb.dlt', 'CfgData_Ext_Up2.dlt','CfgData_Ext_OxbHill.dlt','CfgData_Ext_MB3.dlt','CfgData_Ext_JuniperHill.dlt','CfgData_Ext_SOM2569.dlt','CfgData_Ext_SOM3569.dlt','CfgData_Ext_SOM6869.dlt','CfgData_Ext_SOM7569.dlt']
 
     def GetDscLibrarys (self, BuildPkgName = "BootLoaderCorePkg"):
         dsc_libs = {}
