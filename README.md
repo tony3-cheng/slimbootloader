@@ -3,15 +3,16 @@ Slim Bootloader support FOR Advantech
 
 Base on: commit faa172e67e4e43416732b0b2d4c17a8383348257
 
-Status:   
+Status
+------
 
-  *SOM-2569  Bringup   Todo: GPIOs, HSIO, SuperIO, GOP(VBT)
+  |Project Name|Bring up|GPIO|HSIO|Super IO|GOP(VBT)|
+  |----|----|----|----|----|----|
+  |SOM 2569|Done| | | | |
+  |SOM 3569|Done| | | | |
+  |SOM 6869|Done| | | | |
+  |SOM 7569|Done| | | | |
 
-  *SOM-3569  Bringup   Todo: GPIOs, HSIO, SuperIO, GOP(VBT)
-
-  *SOM-6869  Bringup   Todo: GPIOs, HSIO, SuperIO, GOP(VBT)
-
-  *SOM-7569  Bringup   Todo: GPIOs, HSIO, SuperIO, GOP(VBT)
 
 Build Environment
 -----------------

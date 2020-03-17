@@ -9,6 +9,7 @@
 :buildall
 python BuildLoader.py clean -d
 python BuildLoader.py build apl -r -p "OsLoader.efi:LLDR:Lz4;UEFIPAYLOAD_RELEASE.fd:UEFI:Lzma"
+::python BuildLoader.py build apl -r -p "OsLoader.efi:LLDR:Lz4;u-boot-dtb.bin:U-BT:Lzma"
 @goto buildstitch
 @goto exit
 
@@ -25,6 +26,7 @@ python Platform/ApollolakeBoardPkg/Script/StitchLoader.py -i Platform/Apollolake
 python Platform/ApollolakeBoardPkg/Script/StitchLoader.py -i Platform/ApollolakeBoardPkg/BiosBin/35690000I60V400.bin -s Outputs/apl/Stitch_Components.zip -o Build/35690010I60X001.bin -p AA000011
 python Platform/ApollolakeBoardPkg/Script/StitchLoader.py -i Platform/ApollolakeBoardPkg/BiosBin/68690000I60V300.bin -s Outputs/apl/Stitch_Components.zip -o Build/68690010I60X001.bin -p AA000012
 python Platform/ApollolakeBoardPkg/Script/StitchLoader.py -i Platform/ApollolakeBoardPkg/BiosBin/75690000I60V300.bin -s Outputs/apl/Stitch_Components.zip -o Build/75690010I60X001.bin -p AA000013
+::python Platform/ApollolakeBoardPkg/Script/StitchLoader.py -i Platform/ApollolakeBoardPkg/BiosBin/35690000I60V400.bin -s Outputs/apl/Stitch_Components.zip -o Build/35690010I60X001.bin -p AA000211
 @goto exit
 
 :helpmsg

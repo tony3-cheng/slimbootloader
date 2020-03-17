@@ -13,6 +13,7 @@
 PLATFORMID_CFG_DATA.PlatformId           | 0x0011
 PLAT_NAME_CFG_DATA.PlatformName          | 'SOM3569'
 
+# GEN_CFG_DATA.PayloadId                   | 'U-BT'
 GEN_CFG_DATA.PayloadId                   | 'UEFI'
 
 MEMORY_CFG_DATA.RmtMode                  | 0x0
