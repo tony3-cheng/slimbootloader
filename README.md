@@ -6,12 +6,21 @@ Base on: commit faa172e67e4e43416732b0b2d4c17a8383348257
 Status
 ------
 
-  |Project Name|Bring up|GPIO|HSIO|Super IO|GOP(VBT)|
-  |----|----|----|----|----|----|
-  |SOM 2569|Done| | | | |
-  |SOM 3569|Done| | | | |
-  |SOM 6869|Done| | | | |
-  |SOM 7569|Done| | | | |
+>Apollo Lake
+
+  |Project|BoardID|Bring up|GPIO|HSIO|Super IO|GOP(VBT)|
+  |----|----|----|----|----|----|----|
+  |SOM 2569|0x10|Done| | | | |
+  |SOM 3569|0x11|Done| | | | |
+  |SOM 6869|0x12|Done| | | | |
+  |SOM 7569|0x13|Done| | | | |
+
+
+>Coffee Lake
+
+  |Project|BoardID|Bring up|GPIO|HSIO|Super IO|GOP(VBT)|
+  |----|----|----|----|----|----|----|
+  |WHL-U ERB|0x14|Done| | | | |
 
 
 Build Environment
