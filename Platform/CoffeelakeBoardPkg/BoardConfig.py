@@ -134,7 +134,7 @@ class Board(BaseBoard):
 
         self.CFG_DATABASE_SIZE    = self.CFGDATA_SIZE + 0x4000
         self._CFGDATA_INT_FILE    = ['CfgDataInt_Cfls.dlt', 'CfgDataInt_Cflh.dlt', 'CfgDataInt_Whl.dlt']
-        self._CFGDATA_EXT_FILE    = ['CfgDataExt_Upx.dlt']
+        self._CFGDATA_EXT_FILE    = ['CfgDataExt_Upx.dlt', 'CfgDataExt_SOM6882.dlt']
 
     def GetDscLibrarys (self):
         dsc_libs = {}

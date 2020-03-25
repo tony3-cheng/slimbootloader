@@ -18,13 +18,14 @@ python BuildLoader.py clean -d
 
 :buildcfl
 ::python BuildLoader.py build cfl -r -p "OsLoader.efi:LLDR:Lz4;UEFIPAYLOAD_RELEASE.fd:UEFI:Lzma"
-python BuildLoader.py build cfl -p "OsLoader.efi:LLDR:Lz4;UEFIPAYLOAD_DEBUG.fd:UEFI:Lzma"
+python BuildLoader.py build cfl -p "OsLoader.efi:LLDR:Lz4"
 @goto cflback
 
 :buildcflstitch
 ::python Platform/CoffeelakeBoardPkg/Script/StitchLoader.py -i CRB.bin -s Outputs/cfl/Stitch_Components.zip -o Build/sbl_cfl_ifwi.bin
 ::python Platform/CoffeelakeBoardPkg/Script/StitchLoader.py -i CRB.bin -s Outputs/cfl/SlimBootloader.bin -o Build/sbl_cfl_ifwi.bin
-python Platform/CoffeelakeBoardPkg/Script/StitchLoader.py -i Platform/CoffeelakeBoardPkg/BiosBin/WHL_RVP_U_B_Cons_Prod.bin -s Outputs/cfl/SlimBootloader.bin -o Build/sbl_cfl_ifwib.bin
+::python Platform/CoffeelakeBoardPkg/Script/StitchLoader.py -i Platform/CoffeelakeBoardPkg/BiosBin/WHL_RVP_U_B_Cons_Prod.bin -s Outputs/cfl/SlimBootloader.bin -o Build/sbl_cfl_ifwib.bin
+python Platform/CoffeelakeBoardPkg/Script/StitchLoader.py -i Platform/CoffeelakeBoardPkg/BiosBin/6882000U160X010.bin -s Outputs/cfl/SlimBootloader.bin -o Build/6882001U160X010.bin -p AA000214
 @goto cflstitchback
 
 :apl

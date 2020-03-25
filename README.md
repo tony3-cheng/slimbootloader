@@ -8,19 +8,19 @@ Status
 
 >Apollo Lake
 
-  |Project|BoardID|Bring up|GPIO|HSIO|Super IO|GOP(VBT)|
-  |----|----|----|----|----|----|----|
-  |SOM 2569|0x10|Done| | | | |
-  |SOM 3569|0x11|Done| | | | |
-  |SOM 6869|0x12|Done| | | | |
-  |SOM 7569|0x13|Done| | | | |
+  |Project|BoardID|Bring up|GPIO|HSIO|Super IO|GOP(VBT)|Boot Payload|
+  |----|----|----|----|----|----|----|----|
+  |SOM 2569|0x10|Yes| | | |Yes|UEFI|
+  |SOM 3569|0x11|Yes| | | |Yes|UEFI|
+  |SOM 6869|0x12|Yes| | | |Yes|UEFI|
+  |SOM 7569|0x13|Yes| | | |Yes|UEFI|
 
 
 >Coffee Lake
 
-  |Project|BoardID|Bring up|GPIO|HSIO|Super IO|GOP(VBT)|
-  |----|----|----|----|----|----|----|
-  |WHL-U ERB|0x14|Done| | | | |
+  |Project|BoardID|Bring up|GPIO|HSIO|Super IO|GOP(VBT)|Boot Payload|
+  |----|----|----|----|----|----|----|----|
+  |SOM 6882(WHL-U ERB)|0x14|Yes| | |Yes|OsLoader|
 
 
 Build Environment
