@@ -127,11 +127,11 @@ SeedSanityCheck (
   // Get OStype/ Trusty Flag from Osbootoptionlist for index: 0
   // as its assumed that target OS should always be at index:0
   OsImageType = OsBootOptionList->OsBootOption[0].ImageType;
-  TrustyFlag  = (OsBootOptionList->OsBootOption[0].BootFlags & BOOT_FLAGS_TRUSTY) >> 2;
+  TrustyFlag  = (OsBootOptionList->OsBootOption[0].BootFlags & BOOT_FLAGS_PREOS) >> 2;
 
   // Get Os type/Trusty flag from current boot option
   CurrentOsImageType = CurrentBootOption->ImageType;
-  CurrentTrustyFlag = (CurrentBootOption->BootFlags & BOOT_FLAGS_TRUSTY) >> 2;
+  CurrentTrustyFlag = (CurrentBootOption->BootFlags & BOOT_FLAGS_PREOS) >> 2;
 
   // Compare OS type/Trusty flags of current bootoption with bootoption index 0
   if((OsImageType == CurrentOsImageType) && (TrustyFlag == CurrentTrustyFlag)) {
@@ -251,7 +251,7 @@ RpmbKeyProvisioning (
   }
 
   // Get manufacturing state
-  Eom = ((LoaderPlatformInfo->HwState & HWSTATE_IN_MANUFACTURING_MODE) == 0) ?TRUE:FALSE;
+  Eom = ((LoaderPlatformInfo->HwState & HWSTATE_IN_MANU_SECURE_DEBUG_MODE) == 0) ? TRUE : FALSE;
 
   // Proceed further only if its in production mode and if the verified boot is enabled
   if((Eom) || ((LoaderPlatformInfo->LdrFeatures & FEATURE_VERIFIED_BOOT) == FEATURE_VERIFIED_BOOT)) {

@@ -12,7 +12,7 @@
 #include <Library/MemoryAllocationLib.h>
 #include <Library/BaseMemoryLib.h>
 #include <Library/DebugLib.h>
-#include <Library/BootloaderCoreLib.h>
+#include <BootloaderCoreGlobal.h>
 
 #define   POOL_MIN_ALIGNMENT    0x10
 
@@ -27,8 +27,14 @@ InternalUpdateMemPoolTop (
   )
 {
   LOADER_GLOBAL_DATA  *LdrGlobal;
+  UINT32               PoolUsed;
 
   LdrGlobal = GetLoaderGlobalDataPointer();
+  PoolUsed = (LdrGlobal->MemPoolEnd - Top) +
+              (LdrGlobal->MemPoolCurrBottom - LdrGlobal->MemPoolStart);
+  if (LdrGlobal->MemPoolMaxUsed < PoolUsed) {
+    LdrGlobal->MemPoolMaxUsed = PoolUsed;
+  }
   ASSERT (Top >= LdrGlobal->MemPoolCurrBottom);
   LdrGlobal->MemPoolCurrTop = Top;
 }
@@ -44,8 +50,14 @@ InternalUpdateMemPoolBottom (
   )
 {
   LOADER_GLOBAL_DATA  *LdrGlobal;
+  UINT32               PoolUsed;
 
   LdrGlobal = GetLoaderGlobalDataPointer();
+  PoolUsed = (LdrGlobal->MemPoolEnd - LdrGlobal->MemPoolCurrTop) +
+              (Bottom - LdrGlobal->MemPoolStart);
+  if (LdrGlobal->MemPoolMaxUsed < PoolUsed) {
+    LdrGlobal->MemPoolMaxUsed = PoolUsed;
+  }
   ASSERT (LdrGlobal->MemPoolCurrTop >= Bottom);
   LdrGlobal->MemPoolCurrBottom = Bottom;
 }
@@ -55,7 +67,7 @@ InternalUpdateMemPoolBottom (
 
   Allocates the number bytes specified by AllocationSize of type EfiBootServicesData and returns a
   pointer to the allocated buffer.  If AllocationSize is 0, LdrGlobal->MemPoolCurrTop is returned.
-  If there is not enough memory remaining to satisfy the request, InternalUpdateMemPoolTop ASSERTS 
+  If there is not enough memory remaining to satisfy the request, InternalUpdateMemPoolTop ASSERTS
   and the function does not return.
 
   @param  AllocationSize        The number of bytes to allocate.
@@ -74,18 +86,18 @@ AllocatePool (
 
   LdrGlobal = GetLoaderGlobalDataPointer();
   Top  = LdrGlobal->MemPoolCurrTop;
-  Top -= AllocationSize;
+  Top -= (UINT32)AllocationSize;
   Top  = ALIGN_DOWN (Top, POOL_MIN_ALIGNMENT);
   InternalUpdateMemPoolTop (Top);
-  return (VOID *)Top;
+  return (VOID *)(UINTN)Top;
 }
 
 /**
   Allocates and zeros a buffer of type EfiBootServicesData.
 
   Allocates the number bytes specified by AllocationSize of type EfiBootServicesData, clears the
-  buffer with zeros, and returns a pointer to the allocated buffer.  If AllocationSize is 0, 
-  LdrGlobal->MemPoolCurrTop is returned. If there is not enough memory remaining to satisfy the 
+  buffer with zeros, and returns a pointer to the allocated buffer.  If AllocationSize is 0,
+  LdrGlobal->MemPoolCurrTop is returned. If there is not enough memory remaining to satisfy the
   request, InternalUpdateMemPoolTop ASSERTS and the function does not return.
 
   @param  AllocationSize        The number of bytes to allocate and zero.
@@ -112,8 +124,8 @@ AllocateZeroPool (
   Allocates one or more 4KB pages of type EfiBootServicesData.
 
   Allocates the number of 4KB pages of type EfiBootServicesData and returns a pointer to the
-  allocated buffer.  The buffer returned is aligned on a 4KB boundary.  If Pages is 0, then 
-  NULL is returned.  If there is not enough memory remaining to satisfy the request, 
+  allocated buffer.  The buffer returned is aligned on a 4KB boundary.  If Pages is 0, then
+  NULL is returned.  If there is not enough memory remaining to satisfy the request,
   InternalUpdateMemPoolTop ASSERTS and the function does not return.
 
   @param  Pages                 The number of 4 KB pages to allocate.
@@ -137,17 +149,17 @@ AllocatePages (
   LdrGlobal = GetLoaderGlobalDataPointer();
   Top  = LdrGlobal->MemPoolCurrTop;
   Top  = ALIGN_DOWN (Top, EFI_PAGE_SIZE);
-  Top -= Pages * EFI_PAGE_SIZE;
+  Top -= (UINT32)(Pages * EFI_PAGE_SIZE);
   InternalUpdateMemPoolTop (Top);
-  return (VOID *)Top;
+  return (VOID *)(UINTN)Top;
 }
 
 /**
   Allocates one or more 4KB pages of type EfiBootServicesData at a specified alignment.
 
   Allocates the number of 4KB pages specified by Pages of type EfiBootServicesData with an
-  alignment specified by Alignment.  The allocated buffer is returned.  If Pages is 0, then 
-  NULL is returned.  If there is not enough memory remaining to satisfy the request, 
+  alignment specified by Alignment.  The allocated buffer is returned.  If Pages is 0, then
+  NULL is returned.  If there is not enough memory remaining to satisfy the request,
   InternalUpdateMemPoolTop ASSERTS and the function does not return.
 
   If Alignment is not a power of two and Alignment is not zero, then ASSERT().
@@ -177,20 +189,20 @@ AllocateAlignedPages (
   LdrGlobal = GetLoaderGlobalDataPointer();
   Top  = LdrGlobal->MemPoolCurrTop;
   Top  = ALIGN_DOWN (Top, EFI_PAGE_SIZE);
-  Top -= Pages * EFI_PAGE_SIZE;
+  Top -= (UINT32)(Pages * EFI_PAGE_SIZE);
   if (Alignment > EFI_PAGE_SIZE) {
     Top  = ALIGN_DOWN (Top, Alignment);
   }
   Top  = ALIGN_DOWN (Top, EFI_PAGE_SIZE);
   InternalUpdateMemPoolTop (Top);
-  return (VOID *)Top;
+  return (VOID *)(UINTN)Top;
 }
 
 /**
   This function allocates temporary memory pool.
 
-  @param[in]  AllocationSize    The memory pool size to allocate. If AllocationSize is 0, 
-  LdrGlobal->MemPoolCurrBottom is returned. If there is not enough memory remaining to satisfy the 
+  @param[in]  AllocationSize    The memory pool size to allocate. If AllocationSize is 0,
+  LdrGlobal->MemPoolCurrBottom is returned. If there is not enough memory remaining to satisfy the
   request, InternalUpdateMemPoolBottom ASSERTS and the function does not return.
 
   @retval   A pointer to the allocated buffer or NULL if allocation fails.
@@ -209,9 +221,9 @@ AllocateTemporaryMemory (
   LdrGlobal = GetLoaderGlobalDataPointer();
   Bottom  = LdrGlobal->MemPoolCurrBottom;
   Bottom  = ALIGN_UP (Bottom, POOL_MIN_ALIGNMENT);
-  NewBottom = Bottom + AllocationSize;
+  NewBottom = Bottom + (UINT32)AllocationSize;
   InternalUpdateMemPoolBottom (NewBottom);
-  return (VOID *)Bottom;
+  return (VOID *)(UINTN)Bottom;
 }
 
 /**
@@ -233,7 +245,7 @@ FreeTemporaryMemory (
   if (Buffer == NULL) {
     LdrGlobal->MemPoolCurrBottom = LdrGlobal->MemPoolStart;
   } else {
-    NewBottom = (UINT32)Buffer;
+    NewBottom = (UINT32)(UINTN)Buffer;
     if (NewBottom < LdrGlobal->MemPoolCurrBottom) {
       InternalUpdateMemPoolBottom (NewBottom);
     }
@@ -286,4 +298,47 @@ FreePool (
   IN VOID   *Buffer
   )
 {
+}
+
+/**
+  Allocates one or more 4KB pages of type EfiRuntimeServicesData.
+
+  Allocates the number of 4KB pages of type EfiRuntimeServicesData and returns a pointer to the
+  allocated buffer.  The buffer returned is aligned on a 4KB boundary.  If Pages is 0, then NULL
+  is returned.  If there is not enough memory remaining to satisfy the request, then NULL is
+  returned.
+
+  @param  Pages                 The number of 4 KB pages to allocate.
+
+  @return A pointer to the allocated buffer or NULL if allocation fails.
+
+**/
+VOID *
+EFIAPI
+AllocateRuntimePages (
+  IN UINTN  Pages
+  )
+{
+  return NULL;
+}
+
+/**
+  Allocates a buffer of type EfiRuntimeServicesData.
+
+  Allocates the number bytes specified by AllocationSize of type EfiRuntimeServicesData and returns
+  a pointer to the allocated buffer.  If AllocationSize is 0, then a valid buffer of 0 size is
+  returned.  If there is not enough memory remaining to satisfy the request, then NULL is returned.
+
+  @param  AllocationSize        The number of bytes to allocate.
+
+  @return A pointer to the allocated buffer or NULL if allocation fails.
+
+**/
+VOID *
+EFIAPI
+AllocateRuntimePool (
+  IN UINTN  AllocationSize
+  )
+{
+  return NULL;
 }

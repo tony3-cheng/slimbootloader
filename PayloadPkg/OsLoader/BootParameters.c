@@ -1,6 +1,6 @@
 /** @file
 
-  Copyright (c) 2017 - 2018, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2017 - 2021, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -101,8 +101,9 @@ UpdateOsMemSize (
   }
 
   if ((MemLowerSize != 0) || (MemUpperSize != 0)) {
-    MbInfo->MemLower = (UINT32) (MemLowerSize / KB_ (1));
-    MbInfo->MemUpper = (UINT32) (MemUpperSize / KB_ (1));
+    // Convert to KB in size
+    MbInfo->MemLower = (UINT32) (RShiftU64 (MemLowerSize, 10));
+    MbInfo->MemUpper = (UINT32) (RShiftU64 (MemUpperSize, 10));
     MbInfo->Flags   |= MULTIBOOT_INFO_HAS_MEMORY;
   }
 
@@ -213,7 +214,7 @@ DEBUG_CODE_END ();
 
   @param[in]     CurrentBootOption Current boot option
   @param[in,out] LoadedImage       Normal OS boot image
-  @param[in,out] LoadedTrustyImage Trusty OS image
+  @param[in,out] LoadedPreOsImage  Pre-OS image
   @param[in,out] LoadedExtraImages Extra OS images
 
   @retval   RETURN_SUCCESS         If update OS parameter success
@@ -223,7 +224,7 @@ EFI_STATUS
 UpdateOsParameters (
   IN     OS_BOOT_OPTION      *CurrentBootOption,
   IN OUT LOADED_IMAGE        *LoadedImage,
-  IN OUT LOADED_IMAGE        *LoadedTrustyImage,
+  IN OUT LOADED_IMAGE        *LoadedPreOsImage,
   IN OUT LOADED_IMAGE        *LoadedExtraImages
   )
 {
@@ -281,35 +282,28 @@ UpdateOsParameters (
   }
 
   //
-  // Update Trusty image if it is loaded.
+  // Update PreOS image if it is loaded.
   //
-  if ((CurrentBootOption->BootFlags & BOOT_FLAGS_TRUSTY) != 0) {
+  if (((CurrentBootOption->BootFlags & BOOT_FLAGS_PREOS) != 0) && (LoadedPreOsImage != NULL)) {
     LoadedImage->Image.MultiBoot.CmdBufferSize       = CMDLINE_LENGTH_MAX;
-    if (LoadedTrustyImage != NULL) {
-      LoadedTrustyImage->Image.MultiBoot.CmdBufferSize = CMDLINE_LENGTH_MAX;
-      Status = SetupTrustyBoot (&LoadedTrustyImage->Image.MultiBoot, &LoadedImage->Image.MultiBoot);
+    if ((CurrentBootOption->PreOsImageType & EnumPreOsTypeTrustyOs) != 0) {
+      LoadedPreOsImage->Image.MultiBoot.CmdBufferSize = CMDLINE_LENGTH_MAX;
+      Status = SetupTrustyBoot (&LoadedPreOsImage->Image.MultiBoot, &LoadedImage->Image.MultiBoot);
       if (EFI_ERROR (Status)) {
-        DEBUG ((DEBUG_ERROR, "ERROR Setting up Trusty Boot!\n"));
+        DEBUG ((DEBUG_ERROR, "ERROR Setting up preOS Boot!\n"));
         return Status;
       }
-    } else {
-      DEBUG ((DEBUG_ERROR, "ERROR Setting up Trusty Boot!\n"));
-      return Status;
     }
-    UpdateOsMemMap (LoadedTrustyImage);
-    DEBUG ((DEBUG_INFO, "\nDump trusty image info:\n"));
-    DisplayInfo (LoadedTrustyImage);
+    UpdateOsMemMap (LoadedPreOsImage);
+    DEBUG ((DEBUG_INFO, "\nDump PreOs image info:\n"));
+    DisplayInfo (LoadedPreOsImage);
   }
 
   if ((CurrentBootOption->BootFlags & BOOT_FLAGS_EXTRA) != 0) {
-    //
-    // TODO:
-    // Extra image is loaded in LoadedExtraImages
-    // update OS boot parameter here.
-    //
-    DEBUG ((DEBUG_ERROR, "Warning: Extra image parameters are not handled yet.\n"));
-    if (LoadedExtraImages == NULL) {
-      DEBUG ((DEBUG_ERROR, "Warning: Extra image not loaded.\n"));
+    if ((LoadedExtraImages != NULL) && ((LoadedExtraImages->Flags & LOADED_IMAGE_RUN_EXTRA) != 0)) {
+      DEBUG ((DEBUG_INFO, "Extra image is loaded and will run before OS.\n"));
+    } else {
+      DEBUG ((DEBUG_ERROR, "Warning: Extra image not loaded, or need pass it to OS in boot parameter.\n"));
     }
   }
 

@@ -1,7 +1,7 @@
 /** @file
   Container library implementation.
 
-  Copyright (c) 2019, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2019 - 2020, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -56,6 +56,40 @@ GetContainerBySignature (
 }
 
 /**
+  This function returns the container header size.
+
+  @param[in] ContainerEntry    Container entry pointer.
+
+  @retval         Container header size.
+
+**/
+STATIC
+UINT32
+GetContainerHeaderSize (
+  IN  CONTAINER_HDR  *ContainerHdr
+  )
+{
+  INTN                  Offset;
+  UINT32                Index;
+  COMPONENT_ENTRY      *CompEntry;
+
+  Offset = 0;
+  if (ContainerHdr != NULL) {
+    CompEntry   = (COMPONENT_ENTRY *)&ContainerHdr[1];
+    for (Index = 0; Index < ContainerHdr->Count; Index++) {
+      CompEntry = (COMPONENT_ENTRY *)((UINT8 *)(CompEntry + 1) + CompEntry->HashSize);
+      Offset = (UINT8 *)CompEntry - (UINT8 *)ContainerHdr;
+      if ((Offset < 0) || (Offset >= ContainerHdr->DataOffset)) {
+        Offset = 0;
+        break;
+      }
+    }
+  }
+
+  return (UINT32)Offset;
+}
+
+/**
   This function registers a container.
 
   @param[in]  ContainerBase      Container base address to register.
@@ -78,13 +112,14 @@ RegisterContainerInternal (
   CONTAINER_ENTRY      *ContainerEntry;
   UINT32                Index;
   VOID                 *Buffer;
+  UINT32                MaxHdrSize;
 
   ContainerList = (CONTAINER_LIST *)GetContainerListPtr ();
   if (ContainerList == NULL) {
     return EFI_NOT_READY;
   }
 
-  ContainerHdr   = (CONTAINER_HDR *)ContainerBase;
+  ContainerHdr   = (CONTAINER_HDR *)(UINTN)ContainerBase;
   ContainerEntry = GetContainerBySignature (ContainerHdr->Signature);
   if (ContainerEntry != NULL) {
     return EFI_UNSUPPORTED;
@@ -95,15 +130,21 @@ RegisterContainerInternal (
     return EFI_BUFFER_TOO_SMALL;
   }
 
-  Buffer = AllocatePool (ContainerHdr->DataOffset);
+  MaxHdrSize = GetContainerHeaderSize (ContainerHdr) + SIGNATURE_AND_KEY_SIZE_MAX;
+  if (MaxHdrSize > ContainerHdr->DataOffset) {
+    MaxHdrSize = ContainerHdr->DataOffset;
+  }
+
+  Buffer  = AllocatePool (MaxHdrSize);
   if (Buffer == NULL) {
     return  EFI_OUT_OF_RESOURCES;
   }
 
   ContainerList->Entry[Index].Signature   = ContainerHdr->Signature;
-  ContainerList->Entry[Index].HeaderCache = (UINT32)Buffer;
+  ContainerList->Entry[Index].HeaderCache = (UINT32)(UINTN)Buffer;
+  ContainerList->Entry[Index].HeaderSize  = MaxHdrSize ;
   ContainerList->Entry[Index].Base        = ContainerBase;
-  CopyMem (Buffer, (VOID *)ContainerBase, ContainerHdr->DataOffset);
+  CopyMem (Buffer, (VOID *)(UINTN)ContainerBase, MaxHdrSize);
   ContainerList->Count++;
 
   return EFI_SUCCESS;
@@ -154,47 +195,13 @@ UnregisterContainer (
   }
 
   if (Index < ContainerList->Count) {
-    FreePool ((VOID *)ContainerList->Entry[Index].HeaderCache);
+    FreePool ((VOID *)(UINTN)ContainerList->Entry[Index].HeaderCache);
     ContainerList->Entry[Index] = ContainerList->Entry[LastIndex];
     ContainerList->Count--;
     Status = EFI_SUCCESS;
   }
 
   return Status;
-}
-
-/**
-  This function returns the container header size.
-
-  @param[in] ContainerEntry    Container entry pointer.
-
-  @retval         Container header size.
-
-**/
-STATIC
-UINT32
-GetContainerHeaderSize (
-  IN  CONTAINER_HDR  *ContainerHdr
-  )
-{
-  INT32                 Offset;
-  UINT32                Index;
-  COMPONENT_ENTRY      *CompEntry;
-
-  Offset = 0;
-  if (ContainerHdr != NULL) {
-    CompEntry   = (COMPONENT_ENTRY *)&ContainerHdr[1];
-    for (Index = 0; Index < ContainerHdr->Count; Index++) {
-      CompEntry = (COMPONENT_ENTRY *)((UINT8 *)(CompEntry + 1) + CompEntry->HashSize);
-      Offset = (UINT8 *)CompEntry - (UINT8 *)ContainerHdr;
-      if ((Offset < 0) || (Offset >= ContainerHdr->DataOffset)) {
-        Offset = 0;
-        break;
-      }
-    }
-  }
-
-  return (UINT32)Offset;
 }
 
 /**
@@ -206,8 +213,8 @@ GetContainerHeaderSize (
   @retval         Container header size.
 
 **/
-STATIC
 COMPONENT_ENTRY  *
+EFIAPI
 LocateComponentEntryFromContainer (
   IN  CONTAINER_HDR  *ContainerHdr,
   IN  UINT32          ComponentName
@@ -247,9 +254,11 @@ GetHashAlg(
 
   HashAlg = HASH_TYPE_NONE;
 
-  if((AuthType == AUTH_TYPE_SIG_RSA2048_SHA256) || (AuthType == AUTH_TYPE_SHA2_256)) {
+  if((AuthType == AUTH_TYPE_SIG_RSA2048_PKCSI1_SHA256)
+                  || (AuthType == AUTH_TYPE_SIG_RSA2048_PSS_SHA256) || (AuthType == AUTH_TYPE_SHA2_256)) {
     HashAlg = HASH_TYPE_SHA256;
-  } else if ((AuthType == AUTH_TYPE_SIG_RSA3072_SHA384) ||  (AuthType == AUTH_TYPE_SHA2_384)) {
+  } else if ((AuthType == AUTH_TYPE_SIG_RSA3072_PKCSI1_SHA384)
+            || (AuthType == AUTH_TYPE_SIG_RSA3072_PSS_SHA384) || (AuthType == AUTH_TYPE_SHA2_384)) {
     HashAlg = HASH_TYPE_SHA384;
   }
 
@@ -294,7 +303,8 @@ AuthenticateComponent (
       Status = DoHashVerify (Data, Length, Usage, HASH_TYPE_SHA256, HashData);
     } else if (AuthType == AUTH_TYPE_SHA2_384) {
       Status = DoHashVerify (Data, Length, Usage, HASH_TYPE_SHA384, HashData);
-    } else if ((AuthType == AUTH_TYPE_SIG_RSA2048_SHA256) || ( AuthType == AUTH_TYPE_SIG_RSA3072_SHA384)) {
+    } else if ((AuthType == AUTH_TYPE_SIG_RSA2048_PKCSI1_SHA256) || ( AuthType == AUTH_TYPE_SIG_RSA3072_PKCSI1_SHA384)
+           || (AuthType == AUTH_TYPE_SIG_RSA2048_PSS_SHA256) || ( AuthType == AUTH_TYPE_SIG_RSA3072_PSS_SHA384)) {
       SigPtr   = (UINT8 *) AuthData;
       SignHdr  = (SIGNATURE_HDR *) SigPtr;
       KeyPtr   = (UINT8 *)SignHdr + sizeof(SIGNATURE_HDR) + SignHdr->SigSize ;
@@ -323,11 +333,20 @@ GetContainerKeyUsageBySig (
   IN  UINT32    ContainerSig
   )
 {
-  if (ContainerSig == CONTAINER_BOOT_SIGNATURE) {
+  UINT8  Idx;
+
+  if (ContainerSig == CONTAINER_KEY_HASH_STORE_SIGNATURE) {
+    return HASH_USAGE_PUBKEY_MASTER;
+  } else if (ContainerSig == CONTAINER_BOOT_SIGNATURE) {
     return HASH_USAGE_PUBKEY_OS;
-  } else {
-    return HASH_USAGE_PUBKEY_CONTAINER_DEF;
+  } else if ((ContainerSig & 0x00FFFFFF) == CONTAINER_OEM_BASE_SIGNATURE) {
+    Idx = (ContainerSig >> 24) - '0';
+    if (Idx < 8) {
+      return HASH_USAGE_PUBKEY_OEM (Idx);
+    }
   }
+
+  return HASH_USAGE_PUBKEY_CONTAINER_DEF;
 }
 
 /**
@@ -365,7 +384,7 @@ AutheticateContainerInternal (
   Status = EFI_UNSUPPORTED;
   ContainerEntry   = GetContainerBySignature (ContainerHeader->Signature);
   if (ContainerEntry != NULL) {
-    ContainerHdr     = (CONTAINER_HDR *)ContainerEntry->HeaderCache;
+    ContainerHdr     = (CONTAINER_HDR *)(UINTN)ContainerEntry->HeaderCache;
     ContainerHdrSize = GetContainerHeaderSize (ContainerHdr);
     if (ContainerHdrSize > 0) {
       AuthType = ContainerHdr->AuthType;
@@ -401,12 +420,12 @@ AutheticateContainerInternal (
       for (Index = 0; Index < (UINT32)(ContainerHdr->Count - 1); Index++) {
         CompEntry = (COMPONENT_ENTRY *)((UINT8 *)(CompEntry + 1) + CompEntry->HashSize);
       }
-      CompData    = (UINT8 *)(ContainerEntry->Base + ContainerHdr->DataOffset + CompEntry->Offset);
+      CompData    = (UINT8 *)(UINTN)(ContainerEntry->Base + ContainerHdr->DataOffset + CompEntry->Offset);
       CompressHdr = (LOADER_COMPRESSED_HEADER *)CompData;
       if (CompressHdr->Signature == LZDM_SIGNATURE) {
         SignedDataLen = sizeof (LOADER_COMPRESSED_HEADER) + CompressHdr->CompressedSize;
         AuthData = CompData + ALIGN_UP(SignedDataLen, AUTH_DATA_ALIGN);
-        DataBuf  = (UINT8 *)(ContainerEntry->Base + ContainerHdr->DataOffset);
+        DataBuf  = (UINT8 *)(UINTN)(ContainerEntry->Base + ContainerHdr->DataOffset);
         DataLen  = CompEntry->Offset;
         Status   = AuthenticateComponent (DataBuf, DataLen, CompEntry->AuthType,
                                           AuthData, CompEntry->HashData, 0);
@@ -450,7 +469,7 @@ RegisterContainer (
   CONTAINER_HDR            *ContainerHdr;
   UINT64                    SignatureBuffer;
 
-  ContainerHdr     = (CONTAINER_HDR *)ContainerBase;
+  ContainerHdr     = (CONTAINER_HDR *)(UINTN)ContainerBase;
   SignatureBuffer  = ContainerHdr->Signature;
   DEBUG ((DEBUG_INFO, "Registering container %4a\n", (CHAR8 *)&SignatureBuffer));
 
@@ -500,6 +519,8 @@ LocateComponentEntry (
   UINT32                    ContainerBase;
   UINT32                    ContainerSize;
 
+  CompEntry = NULL;
+
   // Search container header from cache
   ContainerEntry = GetContainerBySignature (ContainerSig);
   if (ContainerEntry == NULL) {
@@ -523,10 +544,12 @@ LocateComponentEntry (
   }
 
   // Locate the component from the container header
-  ContainerHdr = (CONTAINER_HDR *)ContainerEntry->HeaderCache;
-  CompEntry = LocateComponentEntryFromContainer (ContainerHdr, ComponentName);
-  if (CompEntry == NULL) {
-    return EFI_NOT_FOUND;
+  ContainerHdr = (CONTAINER_HDR *)(UINTN)ContainerEntry->HeaderCache;
+  if (ComponentName != 0) {
+    CompEntry = LocateComponentEntryFromContainer (ContainerHdr, ComponentName);
+    if (CompEntry == NULL) {
+      return EFI_NOT_FOUND;
+    }
   }
 
   if (ContainerEntryPtr != NULL) {
@@ -576,32 +599,33 @@ GetNextAvailableComponent (
     return Status;
   }
 
-  ContainerHdr = (CONTAINER_HDR *)ContainerEntry->HeaderCache;
+  ContainerHdr = (CONTAINER_HDR *)(UINTN)ContainerEntry->HeaderCache;
   if (ContainerHdr->Count == 0) {
     return Status;
   }
 
   CurrEntry = (COMPONENT_ENTRY *)&ContainerHdr[1];
-  NextEntry = (COMPONENT_ENTRY *)((UINT8 *)(CurrEntry + 1) + CurrEntry->HashSize);
-  for (Index = 0; Index < (UINT32)(ContainerHdr->Count - 1); Index++) {
-    if ((CurrEntry->Attribute & COMPONENT_ENTRY_ATTR_RESERVED) == 0) {
-      if (*ComponentName == 0) {
-        *ComponentName = CurrEntry->Name;
-        Status = EFI_SUCCESS;
-        break;
-      } else if (*ComponentName == CurrEntry->Name) {
-        if ((NextEntry->Attribute & COMPONENT_ENTRY_ATTR_RESERVED) == 0) {
-          *ComponentName = NextEntry->Name;
-          Status = EFI_SUCCESS;
-          break;
-        } else {
-          NextEntry = (COMPONENT_ENTRY *)((UINT8 *)(NextEntry + 1) + NextEntry->HashSize);
-          continue;
+   if ((*ComponentName == 0) && ((CurrEntry->Attribute & COMPONENT_ENTRY_ATTR_RESERVED) == 0)){
+    *ComponentName = CurrEntry->Name;
+    Status = EFI_SUCCESS;
+  } else {
+    NextEntry = (COMPONENT_ENTRY *)((UINT8 *)(CurrEntry + 1) + CurrEntry->HashSize);
+    for (Index = 0; Index < (UINT32)(ContainerHdr->Count-1); Index++) {
+      if ((CurrEntry->Attribute & COMPONENT_ENTRY_ATTR_RESERVED) == 0) {
+        if (*ComponentName == CurrEntry->Name) {
+          if ((NextEntry->Attribute & COMPONENT_ENTRY_ATTR_RESERVED) == 0) {
+            *ComponentName = NextEntry->Name;
+            Status = EFI_SUCCESS;
+            break;
+          } else {
+            NextEntry = (COMPONENT_ENTRY *)((UINT8 *)(NextEntry + 1) + NextEntry->HashSize);
+            continue;
+          }
         }
       }
+      CurrEntry = NextEntry;
+      NextEntry = (COMPONENT_ENTRY *)((UINT8 *)(CurrEntry + 1) + CurrEntry->HashSize);
     }
-    CurrEntry = NextEntry;
-    NextEntry = (COMPONENT_ENTRY *)((UINT8 *)(CurrEntry + 1) + CurrEntry->HashSize);
   }
 
   return Status;
@@ -646,12 +670,16 @@ LocateComponent (
     return Status;
   }
 
-  ContainerHdr = (CONTAINER_HDR *)ContainerEntry->HeaderCache;
-  if (Buffer != NULL) {
-    *Buffer = (VOID *)(ContainerEntry->Base + ContainerHdr->DataOffset + CompEntry->Offset);
-  }
-  if (Length != NULL) {
-    *Length = CompEntry->Size;
+  if ((ContainerEntry != NULL) && (CompEntry != NULL)) {
+    ContainerHdr = (CONTAINER_HDR *)(UINTN)ContainerEntry->HeaderCache;
+    if (Buffer != NULL) {
+      *Buffer = (VOID *)(UINTN)(ContainerEntry->Base + ContainerHdr->DataOffset + CompEntry->Offset);
+    }
+    if (Length != NULL) {
+      *Length = CompEntry->Size;
+    }
+  } else {
+    Status = EFI_NOT_FOUND;
   }
 
   return Status;
@@ -700,6 +728,7 @@ LoadComponentWithCallback (
   UINT8                     AuthType;
   UINT32                    DecompressedLen;
   UINT32                    CompLen;
+  UINT32                    CompLoc;
   UINT32                    AllocLen;
   UINT32                    SignedDataLen;
   UINT32                    DstLen;
@@ -707,19 +736,29 @@ LoadComponentWithCallback (
   BOOLEAN                   IsInFlash;
   COMPONENT_CALLBACK_INFO   CbInfo;
   UINT32                    ComponentId;
+  UINT64                    ContainerIdBuf;
+  UINT64                    ComponentIdBuf;
 
   ComponentId = ContainerSig;
+  CompLoc = 0;
+
+  ComponentIdBuf = ComponentName;
+  if (ContainerSig < COMP_TYPE_INVALID) {
+    ContainerIdBuf = FLASH_MAP_SIG_HEADER;
+  } else {
+    ContainerIdBuf = ContainerSig;
+  }
+  DEBUG ((DEBUG_INFO, "Loading Component %4a:%4a\n", (CHAR8 *)&ContainerIdBuf, (CHAR8 *)&ComponentIdBuf));
 
   if (ContainerSig < COMP_TYPE_INVALID) {
     // Check if it is component type
     Usage        =  1 << ContainerSig;
     ContainerSig = 0;
-
-    Status = GetComponentInfo (ComponentName, (UINT32 *)&CompData,  &CompLen);
+    Status = GetComponentInfo (ComponentName, &CompLoc, &CompLen);
     if (EFI_ERROR (Status)) {
       return EFI_NOT_FOUND;
     }
-
+    CompData = (VOID *)(UINTN)CompLoc;
     if (FeaturePcdGet (PcdVerifiedBootEnabled)) {
       if(FixedPcdGet8(PcdCompSignHashAlg) == HASH_TYPE_SHA256) {
         AuthType = AUTH_TYPE_SHA2_256;
@@ -739,16 +778,20 @@ LoadComponentWithCallback (
       return Status;
     }
 
+    if ((ContainerEntry == NULL) || (CompEntry == NULL)) {
+      return EFI_NOT_FOUND;
+    }
+
     if ((CompEntry->Attribute & COMPONENT_ENTRY_ATTR_RESERVED) != 0) {
       return EFI_UNSUPPORTED;
     }
 
     // Collect component info
-    ContainerHdr = (CONTAINER_HDR *)ContainerEntry->HeaderCache;
+    ContainerHdr = (CONTAINER_HDR *)(UINTN)ContainerEntry->HeaderCache;
     AuthType  = CompEntry->AuthType;
     HashData  = CompEntry->HashData;
     Usage     = 0;
-    CompData  = (UINT8 *)(ContainerEntry->Base + ContainerHdr->DataOffset + CompEntry->Offset);
+    CompData  = (UINT8 *)(UINTN)(ContainerEntry->Base + ContainerHdr->DataOffset + CompEntry->Offset);
     CompLen   = CompEntry->Size;
   }
 
@@ -759,11 +802,21 @@ LoadComponentWithCallback (
   // Component must have LOADER_COMPRESSED_HEADER
   Status = EFI_UNSUPPORTED;
   CompressHdr  = (LOADER_COMPRESSED_HEADER *)CompData;
+  if (CompressHdr == NULL) {
+    return EFI_NOT_FOUND;
+  }
+
   if (IS_COMPRESSED (CompressHdr)) {
     SignedDataLen = sizeof (LOADER_COMPRESSED_HEADER) + CompressHdr->CompressedSize;
-    if (SignedDataLen <= CompLen) {
-      Status = DecompressGetInfo (CompressHdr->Signature, CompressHdr->Data,
-                                  CompressHdr->CompressedSize, &DstLen, &ScrLen);
+    if (CompressHdr->Size == 0) {
+      Status = EFI_SUCCESS;
+      DstLen = 0;
+      ScrLen = 0;
+    } else {
+      if (SignedDataLen <= CompLen) {
+        Status = DecompressGetInfo (CompressHdr->Signature, CompressHdr->Data,
+                                    CompressHdr->CompressedSize, &DstLen, &ScrLen);
+      }
     }
   }
   if (EFI_ERROR (Status)) {
@@ -828,6 +881,7 @@ LoadComponentWithCallback (
     } else {
       CompBase = ReqCompBase;
     }
+
     if (CompBase != NULL) {
       Status = Decompress (CompressHdr->Signature, CompressHdr->Data, CompressHdr->CompressedSize,
                            CompBase, ScrBuf);
@@ -840,7 +894,11 @@ LoadComponentWithCallback (
         }
       }
     } else {
-      Status = EFI_OUT_OF_RESOURCES;
+      if (CompressHdr->Size == 0) {
+        Status = EFI_BAD_BUFFER_SIZE;
+      } else {
+        Status = EFI_OUT_OF_RESOURCES;
+      }
     }
 
   } else {

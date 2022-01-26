@@ -8,11 +8,13 @@
 #ifndef _S3_SAVE_RESTORE_LIB_H_
 #define _S3_SAVE_RESTORE_LIB_H_
 
+#include <Guid/SmmS3CommunicationInfoGuid.h>
 
 #define BL_PLD_COMM_SIG       SIGNATURE_32('B', 'P', 'C', 'O')
 
 #define SMMBASE_INFO_COMM_ID  1
 #define S3_SAVE_REG_COMM_ID   2
+#define BL_SW_SMI_COMM_ID     3
 
 //
 // Format to share info between bootloader and payload.
@@ -80,22 +82,48 @@ typedef struct {
 } S3_SAVE_REG;
 
 typedef struct {
-  UINT32  ApicId;
-  UINT32  SmmBase;
-} CPU_SMMBASE;
-
-typedef struct {
   BL_PLD_COMM_HDR SmmBaseHdr;
   CPU_SMMBASE     SmmBase[];
 } SMMBASE_INFO;
 
+typedef struct {
+  BL_PLD_COMM_HDR BlSwSmiHdr;
+  UINT8           BlSwSmiHandlerInput;
+} BL_SW_SMI_INFO;
+
 #pragma pack()
+
+/**
+  Trigger Payload software SMI
+
+  This function triggers software SMI. SMI number will be obtained
+  from SMM communication area.
+
+  @param[in]  SwSmiNumber   Software smi number to be triggered.
+
+**/
+VOID
+TriggerPayloadSwSmi (
+  IN UINT8  SwSmiNumber
+);
+
+/**
+  This function clears TSEG area designated for S3
+  save/restore purpose.
+
+**/
+VOID
+EFIAPI
+ClearS3SaveRegion (
+  VOID
+);
 
 /**
   This function appends information in TSEG area
   designated for S3 save/restore purpose.
 
   @param    DataPtr               Address of the structure to be copied to TSEG
+  @param    IsHdrOnly             Reserve TotalSize, but populate only Header info
 
   @retval   EFI_OUT_OF_RESOURCES  If SmmSize is exceeding 4KiB
   @retval   EFI_OUT_OF_RESOURCES  If appeding new struct exceeds SmmSize
@@ -105,7 +133,8 @@ typedef struct {
 EFI_STATUS
 EFIAPI
 AppendS3Info (
-  IN  VOID    *DataPtr
+  IN  VOID     *DataPtr,
+  IN  BOOLEAN   IsHdrOnly
   );
 
 

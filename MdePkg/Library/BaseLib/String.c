@@ -8,135 +8,6 @@
 
 #include "BaseLibInternals.h"
 
-#ifndef DISABLE_NEW_DEPRECATED_INTERFACES
-
-/**
-  [ATTENTION] This function will be deprecated for security reason.
-
-  Copies one Null-terminated Unicode string to another Null-terminated Unicode
-  string and returns the new Unicode string.
-
-  This function copies the contents of the Unicode string Source to the Unicode
-  string Destination, and returns Destination. If Source and Destination
-  overlap, then the results are undefined.
-
-  If Destination is NULL, then ASSERT().
-  If Destination is not aligned on a 16-bit boundary, then ASSERT().
-  If Source is NULL, then ASSERT().
-  If Source is not aligned on a 16-bit boundary, then ASSERT().
-  If Source and Destination overlap, then ASSERT().
-  If PcdMaximumUnicodeStringLength is not zero, and Source contains more than
-  PcdMaximumUnicodeStringLength Unicode characters, not including the
-  Null-terminator, then ASSERT().
-
-  @param  Destination A pointer to a Null-terminated Unicode string.
-  @param  Source      A pointer to a Null-terminated Unicode string.
-
-  @return Destination.
-
-**/
-CHAR16 *
-EFIAPI
-StrCpy (
-  OUT     CHAR16                    *Destination,
-  IN      CONST CHAR16              *Source
-  )
-{
-  CHAR16                            *ReturnValue;
-
-  //
-  // Destination cannot be NULL
-  //
-  ASSERT (Destination != NULL);
-  ASSERT (((UINTN) Destination & BIT0) == 0);
-
-  //
-  // Destination and source cannot overlap
-  //
-  ASSERT ((UINTN)(Destination - Source) > StrLen (Source));
-  ASSERT ((UINTN)(Source - Destination) > StrLen (Source));
-
-  ReturnValue = Destination;
-  while (*Source != 0) {
-    *(Destination++) = *(Source++);
-  }
-  *Destination = 0;
-  return ReturnValue;
-}
-
-/**
-  [ATTENTION] This function will be deprecated for security reason.
-
-  Copies up to a specified length from one Null-terminated Unicode string  to
-  another Null-terminated Unicode string and returns the new Unicode string.
-
-  This function copies the contents of the Unicode string Source to the Unicode
-  string Destination, and returns Destination. At most, Length Unicode
-  characters are copied from Source to Destination. If Length is 0, then
-  Destination is returned unmodified. If Length is greater that the number of
-  Unicode characters in Source, then Destination is padded with Null Unicode
-  characters. If Source and Destination overlap, then the results are
-  undefined.
-
-  If Length > 0 and Destination is NULL, then ASSERT().
-  If Length > 0 and Destination is not aligned on a 16-bit boundary, then ASSERT().
-  If Length > 0 and Source is NULL, then ASSERT().
-  If Length > 0 and Source is not aligned on a 16-bit boundary, then ASSERT().
-  If Source and Destination overlap, then ASSERT().
-  If PcdMaximumUnicodeStringLength is not zero, and Length is greater than
-  PcdMaximumUnicodeStringLength, then ASSERT().
-  If PcdMaximumUnicodeStringLength is not zero, and Source contains more than
-  PcdMaximumUnicodeStringLength Unicode characters, not including the Null-terminator,
-  then ASSERT().
-
-  @param  Destination A pointer to a Null-terminated Unicode string.
-  @param  Source      A pointer to a Null-terminated Unicode string.
-  @param  Length      The maximum number of Unicode characters to copy.
-
-  @return Destination.
-
-**/
-CHAR16 *
-EFIAPI
-StrnCpy (
-  OUT     CHAR16                    *Destination,
-  IN      CONST CHAR16              *Source,
-  IN      UINTN                     Length
-  )
-{
-  CHAR16                            *ReturnValue;
-
-  if (Length == 0) {
-    return Destination;
-  }
-
-  //
-  // Destination cannot be NULL if Length is not zero
-  //
-  ASSERT (Destination != NULL);
-  ASSERT (((UINTN) Destination & BIT0) == 0);
-
-  //
-  // Destination and source cannot overlap
-  //
-  ASSERT ((UINTN)(Destination - Source) > StrLen (Source));
-  ASSERT ((UINTN)(Source - Destination) >= Length);
-
-  if (PcdGet32 (PcdMaximumUnicodeStringLength) != 0) {
-    ASSERT (Length <= PcdGet32 (PcdMaximumUnicodeStringLength));
-  }
-
-  ReturnValue = Destination;
-
-  while ((*Source != L'\0') && (Length > 0)) {
-    *(Destination++) = *(Source++);
-    Length--;
-  }
-
-  ZeroMem (Destination, Length * sizeof (*Destination));
-  return ReturnValue;
-}
-#endif
 
 /**
   Returns the length of a Null-terminated Unicode string.
@@ -320,121 +191,6 @@ StrnCmp (
   return *FirstString - *SecondString;
 }
 
-#ifndef DISABLE_NEW_DEPRECATED_INTERFACES
-
-/**
-  [ATTENTION] This function will be deprecated for security reason.
-
-  Concatenates one Null-terminated Unicode string to another Null-terminated
-  Unicode string, and returns the concatenated Unicode string.
-
-  This function concatenates two Null-terminated Unicode strings. The contents
-  of Null-terminated Unicode string Source are concatenated to the end of
-  Null-terminated Unicode string Destination. The Null-terminated concatenated
-  Unicode String is returned. If Source and Destination overlap, then the
-  results are undefined.
-
-  If Destination is NULL, then ASSERT().
-  If Destination is not aligned on a 16-bit boundary, then ASSERT().
-  If Source is NULL, then ASSERT().
-  If Source is not aligned on a 16-bit boundary, then ASSERT().
-  If Source and Destination overlap, then ASSERT().
-  If PcdMaximumUnicodeStringLength is not zero, and Destination contains more
-  than PcdMaximumUnicodeStringLength Unicode characters, not including the
-  Null-terminator, then ASSERT().
-  If PcdMaximumUnicodeStringLength is not zero, and Source contains more than
-  PcdMaximumUnicodeStringLength Unicode characters, not including the
-  Null-terminator, then ASSERT().
-  If PcdMaximumUnicodeStringLength is not zero, and concatenating Destination
-  and Source results in a Unicode string with more than
-  PcdMaximumUnicodeStringLength Unicode characters, not including the
-  Null-terminator, then ASSERT().
-
-  @param  Destination A pointer to a Null-terminated Unicode string.
-  @param  Source      A pointer to a Null-terminated Unicode string.
-
-  @return Destination.
-
-**/
-CHAR16 *
-EFIAPI
-StrCat (
-  IN OUT  CHAR16                    *Destination,
-  IN      CONST CHAR16              *Source
-  )
-{
-  StrCpy (Destination + StrLen (Destination), Source);
-
-  //
-  // Size of the resulting string should never be zero.
-  // PcdMaximumUnicodeStringLength is tested inside StrLen().
-  //
-  ASSERT (StrSize (Destination) != 0);
-  return Destination;
-}
-
-/**
-  [ATTENTION] This function will be deprecated for security reason.
-
-  Concatenates up to a specified length one Null-terminated Unicode to the end
-  of another Null-terminated Unicode string, and returns the concatenated
-  Unicode string.
-
-  This function concatenates two Null-terminated Unicode strings. The contents
-  of Null-terminated Unicode string Source are concatenated to the end of
-  Null-terminated Unicode string Destination, and Destination is returned. At
-  most, Length Unicode characters are concatenated from Source to the end of
-  Destination, and Destination is always Null-terminated. If Length is 0, then
-  Destination is returned unmodified. If Source and Destination overlap, then
-  the results are undefined.
-
-  If Destination is NULL, then ASSERT().
-  If Length > 0 and Destination is not aligned on a 16-bit boundary, then ASSERT().
-  If Length > 0 and Source is NULL, then ASSERT().
-  If Length > 0 and Source is not aligned on a 16-bit boundary, then ASSERT().
-  If Source and Destination overlap, then ASSERT().
-  If PcdMaximumUnicodeStringLength is not zero, and Length is greater than
-  PcdMaximumUnicodeStringLength, then ASSERT().
-  If PcdMaximumUnicodeStringLength is not zero, and Destination contains more
-  than PcdMaximumUnicodeStringLength Unicode characters, not including the
-  Null-terminator, then ASSERT().
-  If PcdMaximumUnicodeStringLength is not zero, and Source contains more than
-  PcdMaximumUnicodeStringLength Unicode characters, not including the
-  Null-terminator, then ASSERT().
-  If PcdMaximumUnicodeStringLength is not zero, and concatenating Destination
-  and Source results in a Unicode string with more than PcdMaximumUnicodeStringLength
-  Unicode characters, not including the Null-terminator, then ASSERT().
-
-  @param  Destination A pointer to a Null-terminated Unicode string.
-  @param  Source      A pointer to a Null-terminated Unicode string.
-  @param  Length      The maximum number of Unicode characters to concatenate from
-                      Source.
-
-  @return Destination.
-
-**/
-CHAR16 *
-EFIAPI
-StrnCat (
-  IN OUT  CHAR16                    *Destination,
-  IN      CONST CHAR16              *Source,
-  IN      UINTN                     Length
-  )
-{
-  UINTN   DestinationLen;
-
-  DestinationLen = StrLen (Destination);
-  StrnCpy (Destination + DestinationLen, Source, Length);
-  Destination[DestinationLen + Length] = L'\0';
-
-  //
-  // Size of the resulting string should never be zero.
-  // PcdMaximumUnicodeStringLength is tested inside StrLen().
-  //
-  ASSERT (StrSize (Destination) != 0);
-  return Destination;
-}
-#endif
 
 /**
   Returns the first occurrence of a Null-terminated Unicode sub-string
@@ -845,208 +601,6 @@ InternalAsciiIsHexaDecimalDigitCharacter (
     (Char >= 'a' && Char <= 'f'));
 }
 
-#ifndef DISABLE_NEW_DEPRECATED_INTERFACES
-
-/**
-  [ATTENTION] This function is deprecated for security reason.
-
-  Convert a Null-terminated Unicode string to a Null-terminated
-  ASCII string and returns the ASCII string.
-
-  This function converts the content of the Unicode string Source
-  to the ASCII string Destination by copying the lower 8 bits of
-  each Unicode character. It returns Destination.
-
-  The caller is responsible to make sure Destination points to a buffer with size
-  equal or greater than ((StrLen (Source) + 1) * sizeof (CHAR8)) in bytes.
-
-  If any Unicode characters in Source contain non-zero value in
-  the upper 8 bits, then ASSERT().
-
-  If Destination is NULL, then ASSERT().
-  If Source is NULL, then ASSERT().
-  If Source is not aligned on a 16-bit boundary, then ASSERT().
-  If Source and Destination overlap, then ASSERT().
-
-  If PcdMaximumUnicodeStringLength is not zero, and Source contains
-  more than PcdMaximumUnicodeStringLength Unicode characters, not including
-  the Null-terminator, then ASSERT().
-
-  If PcdMaximumAsciiStringLength is not zero, and Source contains more
-  than PcdMaximumAsciiStringLength Unicode characters, not including the
-  Null-terminator, then ASSERT().
-
-  @param  Source        A pointer to a Null-terminated Unicode string.
-  @param  Destination   A pointer to a Null-terminated ASCII string.
-
-  @return Destination.
-
-**/
-CHAR8 *
-EFIAPI
-UnicodeStrToAsciiStr (
-  IN      CONST CHAR16              *Source,
-  OUT     CHAR8                     *Destination
-  )
-{
-  CHAR8                               *ReturnValue;
-
-  ASSERT (Destination != NULL);
-
-  //
-  // ASSERT if Source is long than PcdMaximumUnicodeStringLength.
-  // Length tests are performed inside StrLen().
-  //
-  ASSERT (StrSize (Source) != 0);
-
-  //
-  // Source and Destination should not overlap
-  //
-  ASSERT ((UINTN) (Destination - (CHAR8 *) Source) >= StrSize (Source));
-  ASSERT ((UINTN) ((CHAR8 *) Source - Destination) > StrLen (Source));
-
-
-  ReturnValue = Destination;
-  while (*Source != '\0') {
-    //
-    // If any Unicode characters in Source contain
-    // non-zero value in the upper 8 bits, then ASSERT().
-    //
-    ASSERT (*Source < 0x100);
-    *(Destination++) = (CHAR8) *(Source++);
-  }
-
-  *Destination = '\0';
-
-  //
-  // ASSERT Original Destination is less long than PcdMaximumAsciiStringLength.
-  // Length tests are performed inside AsciiStrLen().
-  //
-  ASSERT (AsciiStrSize (ReturnValue) != 0);
-
-  return ReturnValue;
-}
-
-/**
-  [ATTENTION] This function will be deprecated for security reason.
-
-  Copies one Null-terminated ASCII string to another Null-terminated ASCII
-  string and returns the new ASCII string.
-
-  This function copies the contents of the ASCII string Source to the ASCII
-  string Destination, and returns Destination. If Source and Destination
-  overlap, then the results are undefined.
-
-  If Destination is NULL, then ASSERT().
-  If Source is NULL, then ASSERT().
-  If Source and Destination overlap, then ASSERT().
-  If PcdMaximumAsciiStringLength is not zero and Source contains more than
-  PcdMaximumAsciiStringLength ASCII characters, not including the Null-terminator,
-  then ASSERT().
-
-  @param  Destination A pointer to a Null-terminated ASCII string.
-  @param  Source      A pointer to a Null-terminated ASCII string.
-
-  @return Destination
-
-**/
-CHAR8 *
-EFIAPI
-AsciiStrCpy (
-  OUT     CHAR8                     *Destination,
-  IN      CONST CHAR8               *Source
-  )
-{
-  CHAR8                             *ReturnValue;
-
-  //
-  // Destination cannot be NULL
-  //
-  ASSERT (Destination != NULL);
-
-  //
-  // Destination and source cannot overlap
-  //
-  ASSERT ((UINTN)(Destination - Source) > AsciiStrLen (Source));
-  ASSERT ((UINTN)(Source - Destination) > AsciiStrLen (Source));
-
-  ReturnValue = Destination;
-  while (*Source != 0) {
-    *(Destination++) = *(Source++);
-  }
-  *Destination = 0;
-  return ReturnValue;
-}
-
-/**
-  [ATTENTION] This function will be deprecated for security reason.
-
-  Copies up to a specified length one Null-terminated ASCII string to another
-  Null-terminated ASCII string and returns the new ASCII string.
-
-  This function copies the contents of the ASCII string Source to the ASCII
-  string Destination, and returns Destination. At most, Length ASCII characters
-  are copied from Source to Destination. If Length is 0, then Destination is
-  returned unmodified. If Length is greater that the number of ASCII characters
-  in Source, then Destination is padded with Null ASCII characters. If Source
-  and Destination overlap, then the results are undefined.
-
-  If Destination is NULL, then ASSERT().
-  If Source is NULL, then ASSERT().
-  If Source and Destination overlap, then ASSERT().
-  If PcdMaximumAsciiStringLength is not zero, and Length is greater than
-  PcdMaximumAsciiStringLength, then ASSERT().
-  If PcdMaximumAsciiStringLength is not zero, and Source contains more than
-  PcdMaximumAsciiStringLength ASCII characters, not including the Null-terminator,
-  then ASSERT().
-
-  @param  Destination A pointer to a Null-terminated ASCII string.
-  @param  Source      A pointer to a Null-terminated ASCII string.
-  @param  Length      The maximum number of ASCII characters to copy.
-
-  @return Destination
-
-**/
-CHAR8 *
-EFIAPI
-AsciiStrnCpy (
-  OUT     CHAR8                     *Destination,
-  IN      CONST CHAR8               *Source,
-  IN      UINTN                     Length
-  )
-{
-  CHAR8                             *ReturnValue;
-
-  if (Length == 0) {
-    return Destination;
-  }
-
-  //
-  // Destination cannot be NULL
-  //
-  ASSERT (Destination != NULL);
-
-  //
-  // Destination and source cannot overlap
-  //
-  ASSERT ((UINTN)(Destination - Source) > AsciiStrLen (Source));
-  ASSERT ((UINTN)(Source - Destination) >= Length);
-
-  if (PcdGet32 (PcdMaximumAsciiStringLength) != 0) {
-    ASSERT (Length <= PcdGet32 (PcdMaximumAsciiStringLength));
-  }
-
-  ReturnValue = Destination;
-
-  while (*Source != 0 && Length > 0) {
-    *(Destination++) = *(Source++);
-    Length--;
-  }
-
-  ZeroMem (Destination, Length * sizeof (*Destination));
-  return ReturnValue;
-}
-#endif
 
 /**
   Returns the length of a Null-terminated ASCII string.
@@ -1329,114 +883,6 @@ AsciiStrnCmp (
   return *FirstString - *SecondString;
 }
 
-#ifndef DISABLE_NEW_DEPRECATED_INTERFACES
-
-/**
-  [ATTENTION] This function will be deprecated for security reason.
-
-  Concatenates one Null-terminated ASCII string to another Null-terminated
-  ASCII string, and returns the concatenated ASCII string.
-
-  This function concatenates two Null-terminated ASCII strings. The contents of
-  Null-terminated ASCII string Source are concatenated to the end of Null-
-  terminated ASCII string Destination. The Null-terminated concatenated ASCII
-  String is returned.
-
-  If Destination is NULL, then ASSERT().
-  If Source is NULL, then ASSERT().
-  If PcdMaximumAsciiStringLength is not zero and Destination contains more than
-  PcdMaximumAsciiStringLength ASCII characters, not including the Null-terminator,
-  then ASSERT().
-  If PcdMaximumAsciiStringLength is not zero and Source contains more than
-  PcdMaximumAsciiStringLength ASCII characters, not including the Null-terminator,
-  then ASSERT().
-  If PcdMaximumAsciiStringLength is not zero and concatenating Destination and
-  Source results in a ASCII string with more than PcdMaximumAsciiStringLength
-  ASCII characters, then ASSERT().
-
-  @param  Destination A pointer to a Null-terminated ASCII string.
-  @param  Source      A pointer to a Null-terminated ASCII string.
-
-  @return Destination
-
-**/
-CHAR8 *
-EFIAPI
-AsciiStrCat (
-  IN OUT CHAR8    *Destination,
-  IN CONST CHAR8  *Source
-  )
-{
-  AsciiStrCpy (Destination + AsciiStrLen (Destination), Source);
-
-  //
-  // Size of the resulting string should never be zero.
-  // PcdMaximumUnicodeStringLength is tested inside StrLen().
-  //
-  ASSERT (AsciiStrSize (Destination) != 0);
-  return Destination;
-}
-
-/**
-  [ATTENTION] This function will be deprecated for security reason.
-
-  Concatenates up to a specified length one Null-terminated ASCII string to
-  the end of another Null-terminated ASCII string, and returns the
-  concatenated ASCII string.
-
-  This function concatenates two Null-terminated ASCII strings. The contents
-  of Null-terminated ASCII string Source are concatenated to the end of Null-
-  terminated ASCII string Destination, and Destination is returned. At most,
-  Length ASCII characters are concatenated from Source to the end of
-  Destination, and Destination is always Null-terminated. If Length is 0, then
-  Destination is returned unmodified. If Source and Destination overlap, then
-  the results are undefined.
-
-  If Length > 0 and Destination is NULL, then ASSERT().
-  If Length > 0 and Source is NULL, then ASSERT().
-  If Source and Destination overlap, then ASSERT().
-  If PcdMaximumAsciiStringLength is not zero, and Length is greater than
-  PcdMaximumAsciiStringLength, then ASSERT().
-  If PcdMaximumAsciiStringLength is not zero, and Destination contains more than
-  PcdMaximumAsciiStringLength ASCII characters, not including the Null-terminator,
-  then ASSERT().
-  If PcdMaximumAsciiStringLength is not zero, and Source contains more than
-  PcdMaximumAsciiStringLength ASCII characters, not including the Null-terminator,
-  then ASSERT().
-  If PcdMaximumAsciiStringLength is not zero, and concatenating Destination and
-  Source results in a ASCII string with more than PcdMaximumAsciiStringLength
-  ASCII characters, not including the Null-terminator, then ASSERT().
-
-  @param  Destination A pointer to a Null-terminated ASCII string.
-  @param  Source      A pointer to a Null-terminated ASCII string.
-  @param  Length      The maximum number of ASCII characters to concatenate from
-                      Source.
-
-  @return Destination
-
-**/
-CHAR8 *
-EFIAPI
-AsciiStrnCat (
-  IN OUT  CHAR8                     *Destination,
-  IN      CONST CHAR8               *Source,
-  IN      UINTN                     Length
-  )
-{
-  UINTN   DestinationLen;
-
-  DestinationLen = AsciiStrLen (Destination);
-  AsciiStrnCpy (Destination + DestinationLen, Source, Length);
-  Destination[DestinationLen + Length] = '\0';
-
-  //
-  // Size of the resulting string should never be zero.
-  // PcdMaximumUnicodeStringLength is tested inside StrLen().
-  //
-  ASSERT (AsciiStrSize (Destination) != 0);
-  return Destination;
-}
-#endif
 
 /**
   Returns the first occurrence of a Null-terminated ASCII sub-string
@@ -1684,117 +1130,10 @@ AsciiStrHexToUint64 (
   return Result;
 }
 
-#ifndef DISABLE_NEW_DEPRECATED_INTERFACES
-
-/**
-  [ATTENTION] This function is deprecated for security reason.
-
-  Convert one Null-terminated ASCII string to a Null-terminated
-  Unicode string and returns the Unicode string.
-
-  This function converts the contents of the ASCII string Source to the Unicode
-  string Destination, and returns Destination.  The function terminates the
-  Unicode string Destination by appending a Null-terminator character at the end.
-  The caller is responsible to make sure Destination points to a buffer with size
-  equal or greater than ((AsciiStrLen (Source) + 1) * sizeof (CHAR16)) in bytes.
-
-  If Destination is NULL, then ASSERT().
-  If Destination is not aligned on a 16-bit boundary, then ASSERT().
-  If Source is NULL, then ASSERT().
-  If Source and Destination overlap, then ASSERT().
-  If PcdMaximumAsciiStringLength is not zero, and Source contains more than
-  PcdMaximumAsciiStringLength ASCII characters not including the Null-terminator,
-  then ASSERT().
-  If PcdMaximumUnicodeStringLength is not zero, and Source contains more than
-  PcdMaximumUnicodeStringLength ASCII characters not including the
-  Null-terminator, then ASSERT().
-
-  @param  Source        A pointer to a Null-terminated ASCII string.
-  @param  Destination   A pointer to a Null-terminated Unicode string.
-
-  @return Destination.
-
-**/
-CHAR16 *
-EFIAPI
-AsciiStrToUnicodeStr (
-  IN      CONST CHAR8               *Source,
-  OUT     CHAR16                    *Destination
-  )
-{
-  CHAR16                            *ReturnValue;
-
-  ASSERT (Destination != NULL);
-
-  //
-  // ASSERT Source is less long than PcdMaximumAsciiStringLength
-  //
-  ASSERT (AsciiStrSize (Source) != 0);
-
-  //
-  // Source and Destination should not overlap
-  //
-  ASSERT ((UINTN) ((CHAR8 *) Destination - Source) > AsciiStrLen (Source));
-  ASSERT ((UINTN) (Source - (CHAR8 *) Destination) >= (AsciiStrSize (Source) * sizeof (CHAR16)));
-
-
-  ReturnValue = Destination;
-  while (*Source != '\0') {
-    *(Destination++) = (CHAR16)(UINT8) *(Source++);
-  }
-  //
-  // End the Destination with a NULL.
-  //
-  *Destination = '\0';
-
-  //
-  // ASSERT Original Destination is less long than PcdMaximumUnicodeStringLength
-  //
-  ASSERT (StrSize (ReturnValue) != 0);
-
-  return ReturnValue;
-}
-
-#endif
-
-//
-// The basis for Base64 encoding is RFC 4686 https://tools.ietf.org/html/rfc4648
-//
-// RFC 4686 has a number of MAY and SHOULD cases.  This implementation chooses
-// the more restrictive versions for security concerns (see RFC 4686 section 3.3).
-//
-// A invalid character, if encountered during the decode operation, causes the data
-// to be rejected. In addition, the '=' padding character is only allowed at the end
-// of the Base64 encoded string.
-//
-#define BAD_V  99
 
 STATIC CHAR8 EncodingTable[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
                                 "abcdefghijklmnopqrstuvwxyz"
                                 "0123456789+/";
-
-STATIC UINT8 DecodingTable[] = {
-  //
-  // Valid characters ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/
-  // Also, set '=' as a zero for decoding
-  // 0  ,            1,           2,           3,            4,           5,            6,           7,           8,            9,           a,            b,            c,           d,            e,            f
-  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,   //   0
-  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,   //  10
-  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,     62,  BAD_V,  BAD_V,  BAD_V,     63,   //  20
-     52,     53,     54,     55,     56,     57,     58,     59,     60,     61,  BAD_V,  BAD_V,  BAD_V,      0,  BAD_V,  BAD_V,   //  30
-  BAD_V,      0,      1,      2,      3,      4,      5,      6,      7,      8,      9,     10,     11,     12,     13,     14,   //  40
-     15,     16,     17,     18,     19,     20,     21,     22,     23,     24,     25,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,   //  50
-  BAD_V,     26,     27,     28,     29,     30,     31,     32,     33,     34,     35,     36,     37,     38,     39,     40,   //  60
-     41,     42,     43,     44,     45,     46,     47,     48,     49,     50,     51,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,   //  70
-  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,   //  80
-  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,   //  90
-  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,   //  a0
-  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,   //  b0
-  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,   //  c0
-  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,   //  d0
-  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,   //  d0
-  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V,  BAD_V    //  f0
-};
 
 /**
   Convert binary data to a Base64 encoded ascii string based on RFC4648.
@@ -1918,174 +1257,342 @@ Base64Encode (
 }
 
 /**
-  Convert Base64 ascii string to binary data based on RFC4648.
+  Decode Base64 ASCII encoded data to 8-bit binary representation, based on
+  RFC4648.
 
-  Produce Null-terminated binary data in the output buffer specified by Destination and DestinationSize.
-  The binary data is produced by converting the Base64 ascii string specified by Source and SourceLength.
+  Decoding occurs according to "Table 1: The Base 64 Alphabet" in RFC4648.
 
-  @param Source            Input ASCII characters
-  @param SourceLength      Number of ASCII characters
-  @param Destination       Pointer to output buffer
-  @param DestinationSize   Caller is responsible for passing in buffer of at least DestinationSize.
-                           Set 0 to get the size needed. Set to bytes stored on return.
+  Whitespace is ignored at all positions:
+  - 0x09 ('\t') horizontal tab
+  - 0x0A ('\n') new line
+  - 0x0B ('\v') vertical tab
+  - 0x0C ('\f') form feed
+  - 0x0D ('\r') carriage return
+  - 0x20 (' ')  space
 
-  @retval RETURN_SUCCESS             When binary buffer is filled in.
-  @retval RETURN_INVALID_PARAMETER   If Source is NULL or DestinationSize is NULL.
-  @retval RETURN_INVALID_PARAMETER   If SourceLength or DestinationSize is bigger than (MAX_ADDRESS -(UINTN)Destination ).
-  @retval RETURN_INVALID_PARAMETER   If there is any invalid character in input stream.
-  @retval RETURN_BUFFER_TOO_SMALL    If buffer length is smaller than required buffer size.
- **/
+  The minimum amount of required padding (with ASCII 0x3D, '=') is tolerated
+  and enforced at the end of the Base64 ASCII encoded data, and only there.
+
+  Other characters outside of the encoding alphabet cause the function to
+  reject the Base64 ASCII encoded data.
+
+  @param[in] Source               Array of CHAR8 elements containing the Base64
+                                  ASCII encoding. May be NULL if SourceSize is
+                                  zero.
+
+  @param[in] SourceSize           Number of CHAR8 elements in Source.
+
+  @param[out] Destination         Array of UINT8 elements receiving the decoded
+                                  8-bit binary representation. Allocated by the
+                                  caller. May be NULL if DestinationSize is
+                                  zero on input. If NULL, decoding is
+                                  performed, but the 8-bit binary
+                                  representation is not stored. If non-NULL and
+                                  the function returns an error, the contents
+                                  of Destination are indeterminate.
+
+  @param[in,out] DestinationSize  On input, the number of UINT8 elements that
+                                  the caller allocated for Destination. On
+                                  output, if the function returns
+                                  RETURN_SUCCESS or RETURN_BUFFER_TOO_SMALL,
+                                  the number of UINT8 elements that are
+                                  required for decoding the Base64 ASCII
+                                  representation. If the function returns a
+                                  value different from both RETURN_SUCCESS and
+                                  RETURN_BUFFER_TOO_SMALL, then DestinationSize
+                                  is indeterminate on output.
+
+  @retval RETURN_SUCCESS            SourceSize CHAR8 elements at Source have
+                                    been decoded to on-output DestinationSize
+                                    UINT8 elements at Destination. Note that
+                                    RETURN_SUCCESS covers the case when
+                                    DestinationSize is zero on input, and
+                                    Source decodes to zero bytes (due to
+                                    containing at most ignored whitespace).
+
+  @retval RETURN_BUFFER_TOO_SMALL   The input value of DestinationSize is not
+                                    large enough for decoding SourceSize CHAR8
+                                    elements at Source. The required number of
+                                    UINT8 elements has been stored to
+                                    DestinationSize.
+
+  @retval RETURN_INVALID_PARAMETER  DestinationSize is NULL.
+
+  @retval RETURN_INVALID_PARAMETER  Source is NULL, but SourceSize is not zero.
+
+  @retval RETURN_INVALID_PARAMETER  Destination is NULL, but DestinationSize is
+                                    not zero on input.
+
+  @retval RETURN_INVALID_PARAMETER  Source is non-NULL, and (Source +
+                                    SourceSize) would wrap around MAX_ADDRESS.
+
+  @retval RETURN_INVALID_PARAMETER  Destination is non-NULL, and (Destination +
+                                    DestinationSize) would wrap around
+                                    MAX_ADDRESS, as specified on input.
+
+  @retval RETURN_INVALID_PARAMETER  None of Source and Destination are NULL,
+                                    and CHAR8[SourceSize] at Source overlaps
+                                    UINT8[DestinationSize] at Destination, as
+                                    specified on input.
+
+  @retval RETURN_INVALID_PARAMETER  Invalid CHAR8 element encountered in
+                                    Source.
+**/
 RETURN_STATUS
 EFIAPI
 Base64Decode (
-  IN  CONST CHAR8  *Source,
-  IN        UINTN   SourceLength,
-  OUT       UINT8  *Destination   OPTIONAL,
-  IN OUT    UINTN  *DestinationSize
+  IN     CONST CHAR8 *Source          OPTIONAL,
+  IN     UINTN       SourceSize,
+  OUT    UINT8       *Destination     OPTIONAL,
+  IN OUT UINTN       *DestinationSize
   )
 {
+  BOOLEAN PaddingMode;
+  UINTN   SixBitGroupsConsumed;
+  UINT32  Accumulator;
+  UINTN   OriginalDestinationSize;
+  UINTN   SourceIndex;
+  CHAR8   SourceChar;
+  UINT32  Base64Value;
+  UINT8   DestinationOctet;
 
-  UINT32   Value;
-  CHAR8    Chr;
-  INTN     BufferSize;
-  UINTN    SourceIndex;
-  UINTN    DestinationIndex;
-  UINTN    Index;
-  UINTN    ActualSourceLength;
-
-  //
-  // Check pointers are not NULL
-  //
-  if ((Source == NULL) || (DestinationSize == NULL)) {
+  if (DestinationSize == NULL) {
     return RETURN_INVALID_PARAMETER;
   }
 
   //
-  // Check if SourceLength or  DestinationSize is valid
+  // Check Source array validity.
   //
-  if ((SourceLength >= (MAX_ADDRESS - (UINTN)Source)) || (*DestinationSize >= (MAX_ADDRESS - (UINTN)Destination))){
+  if (Source == NULL) {
+    if (SourceSize > 0) {
+      //
+      // At least one CHAR8 element at NULL Source.
+      //
+      return RETURN_INVALID_PARAMETER;
+    }
+  } else if (SourceSize > MAX_ADDRESS - (UINTN)Source) {
+    //
+    // Non-NULL Source, but it wraps around.
+    //
     return RETURN_INVALID_PARAMETER;
   }
 
-  ActualSourceLength = 0;
-  BufferSize = 0;
+  //
+  // Check Destination array validity.
+  //
+  if (Destination == NULL) {
+    if (*DestinationSize > 0) {
+      //
+      // At least one UINT8 element at NULL Destination.
+      //
+      return RETURN_INVALID_PARAMETER;
+    }
+  } else if (*DestinationSize > MAX_ADDRESS - (UINTN)Destination) {
+    //
+    // Non-NULL Destination, but it wraps around.
+    //
+    return RETURN_INVALID_PARAMETER;
+  }
 
   //
-  // Determine the actual number of valid characters in the string.
-  // All invalid characters except selected white space characters,
-  // will cause the Base64 string to be rejected. White space to allow
-  // properly formatted XML will be ignored.
+  // Check for overlap.
   //
-  // See section 3.3 of RFC 4648.
+  if (Source != NULL && Destination != NULL) {
+    //
+    // Both arrays have been provided, and we know from earlier that each array
+    // is valid in itself.
+    //
+    if ((UINTN)Source + SourceSize <= (UINTN)Destination) {
+      //
+      // Source array precedes Destination array, OK.
+      //
+    } else if ((UINTN)Destination + *DestinationSize <= (UINTN)Source) {
+      //
+      // Destination array precedes Source array, OK.
+      //
+    } else {
+      //
+      // Overlap.
+      //
+      return RETURN_INVALID_PARAMETER;
+    }
+  }
+
   //
-  for (SourceIndex = 0; SourceIndex < SourceLength; SourceIndex++) {
+  // Decoding loop setup.
+  //
+  PaddingMode             = FALSE;
+  SixBitGroupsConsumed    = 0;
+  Accumulator             = 0;
+  OriginalDestinationSize = *DestinationSize;
+  *DestinationSize        = 0;
+
+  //
+  // Decoding loop.
+  //
+  for (SourceIndex = 0; SourceIndex < SourceSize; SourceIndex++) {
+    SourceChar = Source[SourceIndex];
 
     //
-    // '=' is part of the quantum
+    // Whitespace is ignored at all positions (regardless of padding mode).
     //
-    if (Source[SourceIndex] == '=') {
-      ActualSourceLength++;
-      BufferSize--;
+    if (SourceChar == '\t' || SourceChar == '\n' || SourceChar == '\v' ||
+        SourceChar == '\f' || SourceChar == '\r' || SourceChar == ' ') {
+      continue;
+    }
 
+    //
+    // If we're in padding mode, accept another padding character, as long as
+    // that padding character completes the quantum. This completes case (2)
+    // from RFC4648, Chapter 4. "Base 64 Encoding":
+    //
+    // (2) The final quantum of encoding input is exactly 8 bits; here, the
+    //     final unit of encoded output will be two characters followed by two
+    //     "=" padding characters.
+    //
+    if (PaddingMode) {
+      if (SourceChar == '=' && SixBitGroupsConsumed == 3) {
+        SixBitGroupsConsumed = 0;
+        continue;
+      }
+      return RETURN_INVALID_PARAMETER;
+    }
+
+    //
+    // When not in padding mode, decode Base64Value based on RFC4648, "Table 1:
+    // The Base 64 Alphabet".
+    //
+    if ('A' <= SourceChar && SourceChar <= 'Z') {
+      Base64Value = SourceChar - 'A';
+    } else if ('a' <= SourceChar && SourceChar <= 'z') {
+      Base64Value = 26 + (SourceChar - 'a');
+    } else if ('0' <= SourceChar && SourceChar <= '9') {
+      Base64Value = 52 + (SourceChar - '0');
+    } else if (SourceChar == '+') {
+      Base64Value = 62;
+    } else if (SourceChar == '/') {
+      Base64Value = 63;
+    } else if (SourceChar == '=') {
       //
-      // Only two '=' characters can be valid.
+      // Enter padding mode.
       //
-      if (BufferSize < -2) {
+      PaddingMode = TRUE;
+
+      if (SixBitGroupsConsumed == 2) {
+        //
+        // If we have consumed two 6-bit groups from the current quantum before
+        // encountering the first padding character, then this is case (2) from
+        // RFC4648, Chapter 4. "Base 64 Encoding". Bump SixBitGroupsConsumed,
+        // and we'll enforce another padding character.
+        //
+        SixBitGroupsConsumed = 3;
+      } else if (SixBitGroupsConsumed == 3) {
+        //
+        // If we have consumed three 6-bit groups from the current quantum
+        // before encountering the first padding character, then this is case
+        // (3) from RFC4648, Chapter 4. "Base 64 Encoding". The quantum is now
+        // complete.
+        //
+        SixBitGroupsConsumed = 0;
+      } else {
+        //
+        // Padding characters are not allowed at the first two positions of a
+        // quantum.
+        //
         return RETURN_INVALID_PARAMETER;
       }
-    }
-    else {
-      Chr = Source[SourceIndex];
-      if (BAD_V != DecodingTable[(UINT8) Chr]) {
 
-        //
-        // The '=' characters are only valid at the end, so any
-        // valid character after an '=', will be flagged as an error.
-        //
-        if (BufferSize < 0) {
-          return RETURN_INVALID_PARAMETER;
-        }
-          ActualSourceLength++;
+      //
+      // Wherever in a quantum we enter padding mode, we enforce the padding
+      // bits pending in the accumulator -- from the last 6-bit group just
+      // preceding the padding character -- to be zero. Refer to RFC4648,
+      // Chapter 3.5. "Canonical Encoding".
+      //
+      if (Accumulator != 0) {
+        return RETURN_INVALID_PARAMETER;
       }
-        else {
 
-        //
-        // The reset of the decoder will ignore all invalid characters allowed here.
-        // Ignoring selected white space is useful.  In this case, the decoder will
-        // ignore ' ', '\t', '\n', and '\r'.
-        //
-        if ((Chr != ' ') &&(Chr != '\t') &&(Chr != '\n') &&(Chr != '\r')) {
-          return RETURN_INVALID_PARAMETER;
-        }
-      }
+      //
+      // Advance to the next source character.
+      //
+      continue;
+    } else {
+      //
+      // Other characters outside of the encoding alphabet are rejected.
+      //
+      return RETURN_INVALID_PARAMETER;
     }
+
+    //
+    // Feed the bits of the current 6-bit group of the quantum to the
+    // accumulator.
+    //
+    Accumulator = (Accumulator << 6) | Base64Value;
+    SixBitGroupsConsumed++;
+    switch (SixBitGroupsConsumed) {
+    case 1:
+      //
+      // No octet to spill after consuming the first 6-bit group of the
+      // quantum; advance to the next source character.
+      //
+      continue;
+    case 2:
+      //
+      // 12 bits accumulated (6 pending + 6 new); prepare for spilling an
+      // octet. 4 bits remain pending.
+      //
+      DestinationOctet = (UINT8)(Accumulator >> 4);
+      Accumulator &= 0xF;
+      break;
+    case 3:
+      //
+      // 10 bits accumulated (4 pending + 6 new); prepare for spilling an
+      // octet. 2 bits remain pending.
+      //
+      DestinationOctet = (UINT8)(Accumulator >> 2);
+      Accumulator &= 0x3;
+      break;
+    default:
+      ASSERT (SixBitGroupsConsumed == 4);
+      //
+      // 8 bits accumulated (2 pending + 6 new); prepare for spilling an octet.
+      // The quantum is complete, 0 bits remain pending.
+      //
+      DestinationOctet = (UINT8)Accumulator;
+      Accumulator = 0;
+      SixBitGroupsConsumed = 0;
+      break;
+    }
+
+    //
+    // Store the decoded octet if there's room left. Increment
+    // (*DestinationSize) unconditionally.
+    //
+    if (*DestinationSize < OriginalDestinationSize) {
+      ASSERT (Destination != NULL);
+      Destination[*DestinationSize] = DestinationOctet;
+    }
+    (*DestinationSize)++;
+
+    //
+    // Advance to the next source character.
+    //
   }
 
   //
-  // The Base64 character string must be a multiple of 4 character quantums.
+  // If Source terminates mid-quantum, then Source is invalid.
   //
-  if (ActualSourceLength % 4 != 0) {
+  if (SixBitGroupsConsumed != 0) {
     return RETURN_INVALID_PARAMETER;
   }
 
-  BufferSize += ActualSourceLength / 4 * 3;
-    if (BufferSize < 0) {
-      return RETURN_INVALID_PARAMETER;
-  }
-
   //
-  // BufferSize is >= 0
+  // Done.
   //
-  if ((Destination == NULL) || (*DestinationSize < (UINTN) BufferSize)) {
-    *DestinationSize = BufferSize;
-    return RETURN_BUFFER_TOO_SMALL;
-  }
-
-  //
-  // If no decodable characters, return a size of zero. RFC 4686 test vector 1.
-  //
-  if (ActualSourceLength == 0) {
-    *DestinationSize = 0;
+  if (*DestinationSize <= OriginalDestinationSize) {
     return RETURN_SUCCESS;
   }
-
-  //
-  // Input data is verified to be a multiple of 4 valid charcters.  Process four
-  // characters at a time. Uncounted (ie. invalid)  characters will be ignored.
-  //
-  for (SourceIndex = 0, DestinationIndex = 0; (SourceIndex < SourceLength) && (DestinationIndex < *DestinationSize); ) {
-    Value = 0;
-
-    //
-    // Get 24 bits of data from 4 input characters, each character representing 6 bits
-    //
-    for (Index = 0; Index < 4; Index++) {
-      do {
-      Chr = DecodingTable[(UINT8) Source[SourceIndex++]];
-      } while (Chr == BAD_V);
-      Value <<= 6;
-      Value |= (UINT32)Chr;
-    }
-
-    //
-    // Store 3 bytes of binary data (24 bits)
-    //
-    *Destination++ = (UINT8) (Value >> 16);
-    DestinationIndex++;
-
-    //
-    // Due to the '=' special cases for the two bytes at the end,
-    // we have to check the length and not store the padding data
-    //
-    if (DestinationIndex++ < *DestinationSize) {
-      *Destination++ = (UINT8) (Value >>  8);
-    }
-    if (DestinationIndex++ < *DestinationSize) {
-      *Destination++ = (UINT8) Value;
-    }
-  }
-
-  return RETURN_SUCCESS;
+  return RETURN_BUFFER_TOO_SMALL;
 }
 
 /**

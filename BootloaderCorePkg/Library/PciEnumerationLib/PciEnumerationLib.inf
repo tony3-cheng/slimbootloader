@@ -1,6 +1,6 @@
 ## @file
 #
-#  Copyright (c) 2017, Intel Corporation. All rights reserved.<BR>
+#  Copyright (c) 2017 - 2020, Intel Corporation. All rights reserved.<BR>
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 ##
@@ -21,6 +21,13 @@
 
 [Sources]
   InternalPciEnumerationLib.h
+  PciCommand.h
+  PciAri.h
+  PciIov.h
+  InternalPciEnumerationLib.c
+  PciCommand.c
+  PciAri.c
+  PciIov.c
   PciEnumerationLib.c
 
 [Packages]
@@ -34,11 +41,19 @@
   DebugLib
   PciExpressLib
   SortLib
+  HobLib
 
 [Guids]
   gFspNonVolatileStorageHobGuid
+  gLoaderPciRootBridgeInfoGuid
 
 [Pcd]
   gEfiMdePkgTokenSpaceGuid.PcdPciExpressBaseAddress  ## CONSUMES
   gPlatformModuleTokenSpaceGuid.PcdPciResourceIoBase
   gPlatformModuleTokenSpaceGuid.PcdPciResourceMem32Base
+  gPlatformModuleTokenSpaceGuid.PcdPciEnumPolicyInfo
+  gPlatformModuleTokenSpaceGuid.PcdPciResourceMem64Base
+  gPlatformModuleTokenSpaceGuid.PcdAriSupport
+  gPlatformModuleTokenSpaceGuid.PcdSrIovSupport
+  gPlatformModuleTokenSpaceGuid.PcdPciResAllocTableBase
+  gPlatformModuleTokenSpaceGuid.PcdPciEnumHookProc

@@ -25,7 +25,6 @@
 #
 
 [Sources]
-  PreOsChecker.h
   BlockIoTest.h
   OsLoader.h
   OsLoader.c
@@ -36,7 +35,9 @@
   BootParameters.c
   BlockIoTest.c
   KeyManagement.c
-  PreOsChecker.c
+  PreOsSupport.c
+  ModService.c
+  ExtraModSupport.c
 
 [Packages]
   MdePkg/MdePkg.dec
@@ -76,10 +77,11 @@
   TrustyBootLib
   UsbInitLib
   UsbKbLib
-  ElfLib
+  UniversalPayloadLib
   LiteFvLib
   LinuxLib
   ContainerLib
+  StringSupportLib
 
 [Guids]
   gOsConfigDataGuid
@@ -94,6 +96,7 @@
   gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel
   gPayloadTokenSpaceGuid.PcdPayloadHobList
   gPayloadTokenSpaceGuid.PcdPayloadStackSize
+  gPayloadTokenSpaceGuid.PcdPayloadModuleEnabled
   gEfiMdePkgTokenSpaceGuid.PcdPlatformBootTimeOut
   gPlatformCommonLibTokenSpaceGuid.PcdMeasuredBootEnabled
   gPlatformCommonLibTokenSpaceGuid.PcdVerifiedBootEnabled
@@ -106,8 +109,8 @@
   gPlatformCommonLibTokenSpaceGuid.PcdFrameBufferMaxConsoleHeight
   gPayloadTokenSpaceGuid.PcdGrubBootCfgEnabled
   gPlatformCommonLibTokenSpaceGuid.PcdContainerBootEnabled
-  gPlatformCommonLibTokenSpaceGuid.PcdPreOsCheckerEnabled
   gPlatformCommonLibTokenSpaceGuid.PcdMeasuredBootHashMask
+  gPayloadTokenSpaceGuid.PcdRtcmRsvdSize
 
 [Depex]
   TRUE

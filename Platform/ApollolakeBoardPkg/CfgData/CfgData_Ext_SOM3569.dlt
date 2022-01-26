@@ -11,7 +11,7 @@
 #
 
 PLATFORMID_CFG_DATA.PlatformId           | 0x0011
-PLAT_NAME_CFG_DATA.PlatformName          | 'SOM3569'
+PLAT_NAME_CFG_DATA.PlatformName          | 'SOM-3569'
 
 # GEN_CFG_DATA.PayloadId                   | 'U-BT'
 GEN_CFG_DATA.PayloadId                   | 'UEFI'

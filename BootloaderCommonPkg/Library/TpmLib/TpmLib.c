@@ -18,6 +18,7 @@
 #include <Pi/PiBootMode.h>
 #include <IndustryStandard/Tpm2Acpi.h>
 #include <Library/SecureBootLib.h>
+#include <Library/ResetSystemLib.h>
 #include "Tpm2CommandLib.h"
 #include "Tpm2DeviceLib.h"
 #include "TpmLibInternal.h"
@@ -461,8 +462,9 @@ TpmInit(
       DEBUG ((DEBUG_INFO, "Attempting TPM_Startup with TPM_SU_STATE. \n"));
       Status = Tpm2Startup (TPM_SU_STATE);
       if (EFI_ERROR (Status)) {
-        DEBUG ((DEBUG_WARN, "TPM_Startup(TPM_SU_STATE) failed !!. Attempting TPM_Startup(TPM_SU_CLEAR).\n"));
-        Status = Tpm2Startup (TPM_SU_CLEAR);
+        //  As per PC Client spec, SRTM should perform a host platform reset.
+        ResetSystem(EfiResetCold);
+        CpuDeadLoop ();
       }
     } else {
       Status = Tpm2Startup (TPM_SU_CLEAR);
@@ -731,9 +733,41 @@ TpmExtendPcrAndLogEvent (
   return Status;
 }
 
+/**
+  Measure and log launch of FirmwareDebugger, and extend the measurement result into a specific PCR.
+
+  @param[in] FwDebugEnabled    Firmware Debug Mode.
+
+  @retval EFI_SUCCESS           Operation completed successfully.
+  @retval EFI_OUT_OF_RESOURCES  Out of memory.
+  @retval EFI_DEVICE_ERROR      The operation was unsuccessful.
+
+**/
+RETURN_STATUS
+MeasureLaunchOfFirmwareDebugger (
+  IN  UINT8 FwDebugEnabled
+  )
+{
+  EFI_STATUS                        Status;
+
+  Status = EFI_SUCCESS;
+
+  if (FwDebugEnabled) {
+    DEBUG((DEBUG_INFO, "Measure firmware Debugger \n"));
+    // Extend to PCR[7]
+    Status = TpmHashAndExtendPcrEventLog (7, (UINT8 *) FIRMWARE_DEBUGGER_EVENT_STRING,
+                                           sizeof (FIRMWARE_DEBUGGER_EVENT_STRING)-1,
+                                           EV_EFI_ACTION,
+                                           sizeof (FIRMWARE_DEBUGGER_EVENT_STRING),
+                                           (UINT8*) FIRMWARE_DEBUGGER_EVENT_STRING);
+  }
+
+  return Status;
+}
+
 
 /**
-  Extend VerifiedBootPolicy in PCR 7.
+  Extend VerifiedBootPolicy in PCR [7].
 
   @retval RETURN_SUCCESS      Operation completed successfully.
   @retval Others              Unable to extend PCR.
@@ -777,6 +811,8 @@ TpmChangePlatformAuth (
     NewPlatformAuth.size = SHA512_DIGEST_SIZE;
   } else if (PcrBankActive & HASH_ALG_SM3_256){
     NewPlatformAuth.size = SM3_DIGEST_SIZE;
+  } else {
+    return RETURN_INVALID_PARAMETER;
   }
 
   if ((GetRandomBytes(NewPlatformAuth.buffer, NewPlatformAuth.size) == 0) &&
@@ -804,21 +840,38 @@ TpmChangePlatformAuth (
   randomize platform auth, add EV_SEPARATOR event etc) as indicated in
   PC Client Specific Firmware Profile specification.
 
+  @param[in] FwDebugEnabled    Firmware Debug Mode enabled/disabled.
+
   @retval RETURN_SUCCESS   Operation completed successfully.
   @retval Others           Unable to finish handling ReadyToBoot events.
 **/
 RETURN_STATUS
 TpmIndicateReadyToBoot (
-  VOID
+  IN UINT8 FwDebugEnabled
   )
 {
-  if ( (TpmExtendSecureBootPolicy () != EFI_SUCCESS) ||
-       (MeasureSeparatorEvent (0) != EFI_SUCCESS) ||
-       (TpmChangePlatformAuth () != EFI_SUCCESS)) {
-      DEBUG ((DEBUG_ERROR, "FAILED to complete TPM ReadyToBoot actions. \n"));
-      return EFI_DEVICE_ERROR;
+  EFI_STATUS Status;
+
+  Status = EFI_SUCCESS;
+
+  if (MeasureLaunchOfFirmwareDebugger (FwDebugEnabled) != EFI_SUCCESS) {
+    DEBUG ((DEBUG_ERROR, "FAILED to measure firmware debugger.\n"));
+    Status =  EFI_DEVICE_ERROR;
   }
-  return EFI_SUCCESS;
+  if (TpmExtendSecureBootPolicy () != EFI_SUCCESS) {
+    DEBUG ((DEBUG_ERROR, "FAILED to extend secureboot policy.\n"));
+    Status =  EFI_DEVICE_ERROR;
+  }
+  if (MeasureSeparatorEvent (0) != EFI_SUCCESS) {
+    DEBUG ((DEBUG_ERROR, "FAILED to measure seperator events.\n"));
+    Status =  EFI_DEVICE_ERROR;
+  }
+  if (TpmChangePlatformAuth () != EFI_SUCCESS) {
+    DEBUG ((DEBUG_ERROR, "FAILED to change TPM Platform Auth.\n"));
+    Status =  EFI_DEVICE_ERROR;
+  }
+
+  return Status;
 }
 
 

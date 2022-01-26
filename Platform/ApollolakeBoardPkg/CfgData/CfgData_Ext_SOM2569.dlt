@@ -11,7 +11,7 @@
 #
 
 PLATFORMID_CFG_DATA.PlatformId           | 0x0010
-PLAT_NAME_CFG_DATA.PlatformName          | 'SOM2569'
+PLAT_NAME_CFG_DATA.PlatformName          | 'SOM-2569'
 
 GEN_CFG_DATA.PayloadId                   | 'UEFI'
 

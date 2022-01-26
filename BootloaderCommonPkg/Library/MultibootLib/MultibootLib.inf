@@ -29,6 +29,10 @@
 [Sources.IA32]
   Ia32/MultibootJump.nasm
 
+[Sources.X64]
+  X64/BootJump.c
+  X64/MultibootJump.nasm
+
 [Packages]
   MdePkg/MdePkg.dec
   BootloaderCommonPkg/BootloaderCommonPkg.dec
@@ -39,6 +43,7 @@
   DebugLib
   MemoryAllocationLib
   ElfLib
+  ThunkLib
 
 [Guids]
 

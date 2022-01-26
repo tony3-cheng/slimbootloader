@@ -79,6 +79,58 @@ GetFspReservedMemoryFromGuid (
 }
 
 /**
+  This function retrieves a top of low and high memory address.
+
+  @param  HobListPtr    A HOB list pointer.
+  @param  TopOfHighMem  A pointer to receive the top of high memory.
+
+  @retval              Top of low memory.
+
+**/
+UINT32
+EFIAPI
+GetSystemTopOfMemeory (
+  CONST VOID     *HobListPtr,
+  UINT64         *TopOfHighMem  OPTIONAL
+  )
+{
+  EFI_PEI_HOB_POINTERS    Hob;
+  UINT32                  Tolm;
+  UINT64                  Tohm;
+  EFI_PHYSICAL_ADDRESS    EndAddr;
+
+  // Get the HOB list for processing
+  Hob.Raw = (VOID *)HobListPtr;
+
+  // Collect memory ranges
+  Tolm = 0;
+  Tohm = SIZE_4GB;
+  while (!END_OF_HOB_LIST (Hob)) {
+    if (Hob.Header->HobType == EFI_HOB_TYPE_RESOURCE_DESCRIPTOR) {
+      if (Hob.ResourceDescriptor->ResourceType == EFI_RESOURCE_SYSTEM_MEMORY) {
+        EndAddr = Hob.ResourceDescriptor->PhysicalStart + Hob.ResourceDescriptor->ResourceLength;
+        if (EndAddr < SIZE_4GB) {
+          if (EndAddr > Tolm) {
+            Tolm = (UINT32) EndAddr;
+          }
+        } else {
+          if (EndAddr > Tohm) {
+            Tohm = EndAddr;
+          }
+        }
+      }
+    }
+    Hob.Raw = GET_NEXT_HOB (Hob);
+  }
+
+  if (TopOfHighMem != NULL) {
+    *TopOfHighMem = Tohm;
+  }
+
+  return Tolm;
+}
+
+/**
   This function traverses each memory resource hob type and calls the handler.
 
   @param  HobListPtr         A HOB list pointer.
@@ -113,4 +165,39 @@ TraverseMemoryResourceHob (
     }
     Hob.Raw = GET_NEXT_HOB (Hob);
   }
+}
+
+/**
+  Dump FSP memory resource
+
+  @param  HobListPtr         A HOB list pointer.
+
+**/
+VOID
+EFIAPI
+DumpFspResourceHob (
+  IN  CONST VOID            *HobListPtr
+  )
+{
+  EFI_PEI_HOB_POINTERS    Hob;
+
+  // Get the HOB list for processing
+  Hob.Raw = (VOID *)HobListPtr;
+
+  DEBUG ((DEBUG_INFO, "    FSP Resource HOB Range        Type       Owner\n"));
+  DEBUG ((DEBUG_INFO, "================================= ==== ====================================\n"));
+
+  // Collect memory ranges
+  while (!END_OF_HOB_LIST (Hob)) {
+    if (Hob.Header->HobType == EFI_HOB_TYPE_RESOURCE_DESCRIPTOR) {
+      DEBUG ((DEBUG_INFO, "%016lx-%016lx  %02x  %g\n",
+              Hob.ResourceDescriptor->PhysicalStart,
+              Hob.ResourceDescriptor->PhysicalStart + Hob.ResourceDescriptor->ResourceLength,
+              Hob.ResourceDescriptor->ResourceType,
+              &(Hob.ResourceDescriptor->Owner)
+              ));
+    }
+    Hob.Raw = GET_NEXT_HOB (Hob);
+  }
+  DEBUG ((DEBUG_INFO, "\n"));
 }

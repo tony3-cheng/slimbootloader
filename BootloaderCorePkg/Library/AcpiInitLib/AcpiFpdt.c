@@ -1,6 +1,6 @@
 /** @file
 
-  Copyright (c) 2019, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2019 - 2020, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -106,8 +106,8 @@ GetFpdtS3Table (
   UINT8                                        Index;
   BOOT_PERFORMANCE_TABLE                       *BootTable;
 
-  Rsdp = (EFI_ACPI_5_0_ROOT_SYSTEM_DESCRIPTION_POINTER *) AcpiTableBase;
-  Rsdt = (EFI_ACPI_DESCRIPTION_HEADER *) (UINTN) Rsdp->RsdtAddress;
+  Rsdp = (EFI_ACPI_5_0_ROOT_SYSTEM_DESCRIPTION_POINTER *)(UINTN)AcpiTableBase;
+  Rsdt = (EFI_ACPI_DESCRIPTION_HEADER *)(UINTN)Rsdp->RsdtAddress;
 
   NumEntries = (Rsdt->Length - sizeof(EFI_ACPI_DESCRIPTION_HEADER)) / sizeof(UINT32);
   RsdtEntry  = (UINT32 *) ((UINT8 *)Rsdt + sizeof (EFI_ACPI_DESCRIPTION_HEADER));
@@ -183,13 +183,15 @@ UpdateFpdtS3Table (
   Update Firmware Performance Data Table (FPDT).
 
   @param[in] Table          Pointer of ACPI FPDT Table.
+  @param[out] ExtraSize     Extra size the table needed.
 
   @retval EFI_SUCCESS       Update ACPI FPDT table successfully.
   @retval Others            Failed to update FPDT table.
  **/
 EFI_STATUS
 UpdateFpdt (
-  IN VOID                             *Table
+  IN  UINT8                           *Table,
+  OUT UINT32                          *ExtraSize
   )
 {
   FIRMWARE_PERFORMANCE_TABLE          *Fpdt;
@@ -214,8 +216,10 @@ UpdateFpdt (
     CopyMem (S3PerfTable, &mS3PerformanceTableTemplate, sizeof (mS3PerformanceTableTemplate));
     UpdateFpdtBootTable (BootPerfTable);
 
-    // Fixup FPDT table length
-    Fpdt->Header.Length = sizeof (INTERNAL_FIRMWARE_PERFORMANCE_TABLE);
+    if (ExtraSize != NULL) {
+      *ExtraSize = (UINT32)((UINT8 *) (S3PerfTable + 1) - Table - Fpdt->Header.Length);
+    }
+
   }
 
   return  EFI_SUCCESS;

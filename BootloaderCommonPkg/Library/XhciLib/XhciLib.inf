@@ -42,3 +42,5 @@
   TimerLib
   BaseMemoryLib
   MemoryAllocationLib
+  IoMmuLib
+  TimeStampLib

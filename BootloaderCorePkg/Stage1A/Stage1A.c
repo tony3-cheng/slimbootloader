@@ -13,7 +13,7 @@ CONST CDATA_BLOB mCfgBlobTmpl = {
   CFG_DATA_SIGNATURE,
   sizeof (CDATA_BLOB),
   0,
-  0,
+  {0},
   sizeof (CDATA_BLOB),
   FixedPcdGet32 (PcdCfgDatabaseSize)
 };
@@ -27,6 +27,30 @@ CONST DEBUG_LOG_BUFFER_HEADER mLogBufHdrTmpl = {
   FixedPcdGet32 (PcdEarlyLogBufferSize)
 };
 
+//
+// Global Descriptor Table (GDT)
+//
+STATIC
+CONST IA32_SEGMENT_DESCRIPTOR
+mGdtEntries[STAGE_GDT_ENTRY_COUNT] = {
+  /* selector { Global Segment Descriptor                              } */
+  /* 0x00 */  {{0,      0,  0,  0,    0,  0,  0,  0,    0,  0, 0,  0,  0}}, //null descriptor
+  /* 0x08 */  {{0xffff, 0,  0,  0x2,  1,  0,  1,  0xf,  0,  0, 1,  1,  0}}, //linear data segment descriptor
+  /* 0x10 */  {{0xffff, 0,  0,  0xb,  1,  0,  1,  0xf,  0,  0, 1,  1,  0}}, //linear code segment descriptor
+  /* 0x18 */  {{0xffff, 0,  0,  0x3,  1,  0,  1,  0xf,  0,  0, 1,  1,  0}}, //system data segment descriptor
+  /* 0x20 */  {{0xffff, 0,  0,  0xb,  1,  0,  1,  0xf,  0,  1, 0,  1,  0}}, //linear code (64-bit) segment descriptor
+  /* 0x28 */  {{0xffff, 0,  0,  0xb,  1,  0,  1,  0x0,  0,  0, 0,  0,  0}}, //16-bit code segment descriptor
+  /* 0x30 */  {{0xffff, 0,  0,  0x2,  1,  0,  1,  0x0,  0,  0, 0,  0,  0}}, //16-bit data segment descriptor
+};
+
+//
+// IA32 Gdt register
+//
+STATIC
+CONST IA32_DESCRIPTOR mGdt = {
+  sizeof (mGdtEntries) - 1,
+  (UINTN) mGdtEntries
+  };
 
 /**
   Get flash map info.
@@ -48,12 +72,12 @@ GetFlashMapBufInfo (
 
   FlashMap      = NULL;
   Stage1aFvBase = PcdGet32 (PcdStage1AFdBase) + PcdGet32 (PcdFSPTSize);
-  FlashMapBase  = (* (UINT32 *)(UINT32)(Stage1aFvBase + PcdGet32 (PcdStage1AFvSize) + FLASH_MAP_ADDRESS));
+  FlashMapBase  = (* (UINT32 *)(UINTN)(Stage1aFvBase + PcdGet32 (PcdStage1AFvSize) + FLASH_MAP_ADDRESS));
   if ( (FlashMapBase > Stage1aFvBase) && \
        (FlashMapBase + sizeof(FLASH_MAP) < Stage1aFvBase + PcdGet32 (PcdStage1AFvSize) - 1) ) {
     // Verify FLASH_MAP is valid before access
-    if (((FLASH_MAP *) FlashMapBase)->Signature == FLASH_MAP_SIG_HEADER) {
-      FlashMap = (FLASH_MAP *) FlashMapBase;
+    if (((FLASH_MAP *)(UINTN)FlashMapBase)->Signature == FLASH_MAP_SIG_HEADER) {
+      FlashMap = (FLASH_MAP *)(UINTN)FlashMapBase;
       BufInfo->SrcBase   = FlashMap;
       BufInfo->AllocLen  = FlashMap->Length;
     }
@@ -97,7 +121,7 @@ AllocateCopyBuffer (
 
   if (BufPtr != NULL) {
     Stage1aParam->AllocDataLen  = AllocLen;
-    Stage1aParam->AllocDataBase = (UINT32) BufPtr;
+    Stage1aParam->AllocDataBase = (UINT32)(UINTN)BufPtr;
 
     // Copy buffer if required
     BufInfo = Stage1aParam->BufInfo;
@@ -166,10 +190,10 @@ PrepareStage1B (
 
   Src = Dst;
   Dst = Exe;
-  Hdr = (LOADER_COMPRESSED_HEADER *) Src;
+  Hdr = (LOADER_COMPRESSED_HEADER *)(UINTN)Src;
 
   // Verify Stage 1B
-  if (FixedPcdGet32(PcdVerifiedBootHashMask) & (1 << COMP_TYPE_STAGE_1B)) {
+  if (FeaturePcdGet (PcdVerifiedBootEnabled)  && FixedPcdGetBool(PcdVerifiedBootStage1B)) {
     if (IS_COMPRESSED (Src)) {
       Length = sizeof (LOADER_COMPRESSED_HEADER) + Hdr->CompressedSize;
     }
@@ -177,9 +201,11 @@ PrepareStage1B (
       SignHashAlg = HASH_TYPE_SHA256;
     } else if(PcdGet8(PcdCompSignHashAlg) == HASH_TYPE_SHA384){
       SignHashAlg = HASH_TYPE_SHA384;
+    } else {
+      SignHashAlg = HASH_TYPE_NONE;
     }
 
-    Status = DoHashVerify ((CONST UINT8 *)Src, Length, HASH_USAGE_STAGE_1B, SignHashAlg, NULL);
+    Status = DoHashVerify ((CONST UINT8 *)(UINTN)Src, Length, HASH_USAGE_STAGE_1B, SignHashAlg, NULL);
     AddMeasurePoint (0x10A0);
     if (EFI_ERROR (Status)) {
       if (Status != RETURN_NOT_FOUND) {
@@ -190,7 +216,7 @@ PrepareStage1B (
 
   if (!FeaturePcdGet (PcdStage1BXip)) {
     // Decompress Stage 1B
-    Status = Decompress (Hdr->Signature, Hdr->Data, Hdr->CompressedSize, (VOID *)Dst, NULL);
+    Status = Decompress (Hdr->Signature, Hdr->Data, Hdr->CompressedSize, (VOID *)(UINTN)Dst, NULL);
     AddMeasurePoint (0x10B0);
     if (EFI_ERROR (Status)) {
       Dst = 0;
@@ -238,6 +264,7 @@ SecStartup2 (
   HASH_STORE_TABLE         *HashStoreTable;
   SERVICES_LIST            *ServiceList;
   BUF_INFO                 *BufInfo;
+  CONTAINER_LIST           *ContainerList;
 
   Stage1aFvBase = PcdGet32 (PcdStage1AFdBase) + PcdGet32 (PcdFSPTSize);
   PeCoffFindAndReportImageInfo ((UINT32) (UINTN) GET_STAGE_MODULE_BASE (Stage1aFvBase));
@@ -255,13 +282,13 @@ SecStartup2 (
 
   // Ver Info
   BufInfo = &Stage1aParam.BufInfo[EnumBufVerInfo];
-  BufInfo->SrcBase   = (VOID *)PcdGet32 (PcdVerInfoBase);
+  BufInfo->SrcBase   = (VOID *)(UINTN)PcdGet32 (PcdVerInfoBase);
   BufInfo->AllocLen  = sizeof (BOOT_LOADER_VERSION);
   BufInfo->DstBase   = &LdrGlobal->VerInfoPtr;
 
   // Hash Store
   BufInfo = &Stage1aParam.BufInfo[EnumBufHashStore];
-  HashStoreTable     = (HASH_STORE_TABLE *)PcdGet32 (PcdHashStoreBase);
+  HashStoreTable     = (HASH_STORE_TABLE *)(UINTN)PcdGet32 (PcdHashStoreBase);
   BufInfo->SrcBase   = HashStoreTable;
   BufInfo->AllocLen  = PcdGet32 (PcdHashStoreSize);
   BufInfo->CopyLen   = HashStoreTable->UsedLength;
@@ -280,7 +307,7 @@ SecStartup2 (
 
   // Pcd Database, only copy initialized data
   BufInfo = &Stage1aParam.BufInfo[EnumBufPcdData];
-  PcdDatabaseBin = (PEI_PCD_DATABASE *)PcdGet32 (PcdFileDataBase);
+  PcdDatabaseBin = (PEI_PCD_DATABASE *)(UINTN)PcdGet32 (PcdFileDataBase);
   BufInfo->SrcBase   = (VOID *)PcdDatabaseBin;
   BufInfo->AllocLen  = PcdDatabaseBin->Length + PcdDatabaseBin->UninitDataBaseSize;
   BufInfo->CopyLen   = PcdDatabaseBin->Length;
@@ -293,11 +320,16 @@ SecStartup2 (
 
   // Config data
   BufInfo = &Stage1aParam.BufInfo[EnumBufCfgData];
-  PcdDatabaseBin = (PEI_PCD_DATABASE *)PcdGet32 (PcdFileDataBase);
+  PcdDatabaseBin = (PEI_PCD_DATABASE *)(UINTN)PcdGet32 (PcdFileDataBase);
   BufInfo->SrcBase   = (VOID *)&mCfgBlobTmpl;
   BufInfo->AllocLen  = PcdGet32 (PcdCfgDatabaseSize);
   BufInfo->CopyLen   = sizeof(CDATA_BLOB);
   BufInfo->DstBase   = &LdrGlobal->CfgDataPtr;
+
+  // Container list
+  BufInfo = &Stage1aParam.BufInfo[EnumBufCtnList];
+  BufInfo->AllocLen  = PcdGet32 (PcdContainerMaxNumber) * sizeof (CONTAINER_ENTRY) + sizeof (CONTAINER_LIST);
+  BufInfo->DstBase   = &LdrGlobal->ContainerList;
 
   // Log Buffer
   BufInfo = &Stage1aParam.BufInfo[EnumBufLogBuf];
@@ -317,18 +349,27 @@ SecStartup2 (
     if (HashStoreTable != NULL) {
       HashStoreTable->TotalLength = PcdGet32 (PcdHashStoreSize);
     }
+    ContainerList = (CONTAINER_LIST *) LdrGlobal->ContainerList;
+    if (ContainerList != NULL) {
+      BufInfo = &Stage1aParam.BufInfo[EnumBufCtnList];
+      ContainerList->Signature   = CONTAINER_LIST_SIGNATURE;
+      ContainerList->TotalLength = BufInfo->AllocLen;
+    }
     BufInfo = &Stage1aParam.BufInfo[EnumBufPcdData];
     SetLibraryData (PcdGet8 (PcdPcdLibId), LdrGlobal->PcdDataPtr, BufInfo->AllocLen);
   }
 
   // Extra initialization
   if (FlashMap != NULL) {
-    SetCurrentBootPartition((FlashMap->Attributes & FLASH_MAP_ATTRIBUTES_BACKUP_REGION)? 1 : 0);
+    SetCurrentBootPartition ((FlashMap->Attributes & FLASH_MAP_ATTRIBUTES_BACKUP_REGION) ? 1 : 0);
   }
 
   // Call board hook to enable debug
   BoardInit (PostTempRamInit);
   AddMeasurePoint (0x1040);
+
+  // Set DebugPrintErrorLevel to default PCD.
+  SetDebugPrintErrorLevel (PcdGet32 (PcdDebugPrintErrorLevel));
 
   if (DebugCodeEnabled()) {
     DEBUG ((DEBUG_INFO, "\n============= %a STAGE1A =============\n",mBootloaderName));
@@ -360,15 +401,15 @@ SecStartup2 (
     // Need to relocate itself into temporary memory
     Dst = PcdGet32 (PcdStage1ALoadBase);
     Src = PcdGet32 (PcdStage1AFdBase) + PcdGet32 (PcdFSPTSize);
-    CopyMem ((VOID *)Dst, (VOID *)Src, PcdGet32 (PcdStage1AFvSize));
+    CopyMem ((VOID *)(UINTN)Dst, (VOID *)(UINTN)Src, PcdGet32 (PcdStage1AFvSize));
     Delta    = Dst - Src;
-    StageHdr = (STAGE_HDR *)Dst;
+    StageHdr = (STAGE_HDR *)(UINTN)Dst;
     StageHdr->Entry += Delta;
     StageHdr->Base  += Delta;
     Status = PeCoffRelocateImage (StageHdr->Base);
     if (!EFI_ERROR (Status)) {
       EnableCodeExecution ();
-      ContinueEntry = (STAGE_ENTRY) ((UINT32)ContinueFunc + Delta);
+      ContinueEntry = (STAGE_ENTRY)(UINTN)((UINT32)(Delta + (UINTN)ContinueFunc));
     } else {
       CpuHalt ("Relocation failed!\n");
     }
@@ -400,26 +441,30 @@ SecStartup (
 {
   LOADER_GLOBAL_DATA        LdrGlobalData;
   STAGE_IDT_TABLE           IdtTable;
+  STAGE_GDT_TABLE           GdtTable;
   LOADER_GLOBAL_DATA       *LdrGlobal;
   STAGE1A_ASM_PARAM        *Stage1aAsmParam;
   UINT32                    StackTop;
+  UINT32                    PageTblSize;
   UINT64                    TimeStamp;
 
-  TimeStamp     = ReadTimeStamp ();
+  TimeStamp   = ReadTimeStamp ();
   Stage1aAsmParam = (STAGE1A_ASM_PARAM *)Params;
 
   // Init global data
+  PageTblSize = IS_X64 ? 8 * EFI_PAGE_SIZE : 0;
   LdrGlobal = &LdrGlobalData;
   ZeroMem (LdrGlobal, sizeof (LOADER_GLOBAL_DATA));
   StackTop = (UINT32)(UINTN)Params + sizeof (STAGE1A_ASM_PARAM);
   LdrGlobal->Signature             = LDR_GDATA_SIGNATURE;
   LdrGlobal->LoaderStage           = LOADER_STAGE_1A;
   LdrGlobal->StackTop              = StackTop;
-  LdrGlobal->MemPoolEnd            = StackTop + PcdGet32 (PcdStage1DataSize);
+  LdrGlobal->MemPoolEnd            = StackTop + PcdGet32 (PcdStage1DataSize) - PageTblSize;
   LdrGlobal->MemPoolStart          = StackTop;
   LdrGlobal->MemPoolCurrTop        = LdrGlobal->MemPoolEnd;
   LdrGlobal->MemPoolCurrBottom     = LdrGlobal->MemPoolStart;
-  LdrGlobal->DebugPrintErrorLevel  = PcdGet32 (PcdDebugPrintErrorLevel);
+  LdrGlobal->MemPoolMaxUsed        = 0;
+  LdrGlobal->DebugPrintErrorLevel  = 0;
   LdrGlobal->PerfData.PerfIndex    = 2;
   LdrGlobal->PerfData.FreqKhz      = GetTimeStampFrequency ();
   LdrGlobal->PerfData.TimeStamp[0] = Stage1aAsmParam->TimeStamp | 0x1000000000000000ULL;
@@ -428,8 +473,12 @@ SecStartup (
   // Any platform (board init lib) can update these according to
   // the config data passed in or these defaults remain
   LdrGlobal->LdrFeatures           = FEATURE_MEASURED_BOOT | FEATURE_ACPI;
+  // TempRam Base and Size
+  LdrGlobal->CarBase               = Stage1aAsmParam->CarBase;
+  LdrGlobal->CarSize               = Stage1aAsmParam->CarTop - LdrGlobal->CarBase;
 
-  LoadIdt (&IdtTable, (UINT32)LdrGlobal);
+  LoadGdt (&GdtTable, (IA32_DESCRIPTOR *)&mGdt);
+  LoadIdt (&IdtTable, (UINT32)(UINTN)LdrGlobal);
   SetLoaderGlobalDataPointer (LdrGlobal);
 
   InitializeDebugAgent (DEBUG_AGENT_INIT_PREMEM_SEC, Params, SecStartup2);
@@ -465,7 +514,8 @@ ContinueFunc (
   AddMeasurePoint (0x1060);
 
   if (!FeaturePcdGet (PcdStage1AXip)) {
-    PostStageRelocation ();
+    // Update exception handler in IDT
+    UpdateExceptionHandler (NULL);
   }
 
   // Migrate data from Stage1A Param to Stage1B Param
@@ -487,18 +537,19 @@ ContinueFunc (
           VerInfoTbl->ImageVersion.BuildNumber));
 
   DEBUG ((DEBUG_INFO,  "SVER: %016lX%a\n"
-          "FDBG: BLD(%c) FSP(%c)\n",
+          "FDBG: BLD(%c %a) FSP(%c)\n",
           VerInfoTbl->SourceVersion,
           VerInfoTbl->ImageVersion.Dirty ? "-dirty" : "",
           VerInfoTbl->ImageVersion.BldDebug ? 'D' : 'R',
+          sizeof(UINTN) == sizeof(UINT32) ? "IA32" : "X64",
           VerInfoTbl->ImageVersion.FspDebug ? 'D' : 'R'));
 
   // Print FSP version
-  FspInfoHdr = (FSP_INFO_HEADER *) (PcdGet32 (PcdFSPTBase) + FSP_INFO_HEADER_OFF);
+  FspInfoHdr = (FSP_INFO_HEADER *)(UINTN)(PcdGet32 (PcdFSPTBase) + FSP_INFO_HEADER_OFF);
   CopyMem (ImageId, &FspInfoHdr->ImageId, sizeof (UINT64));
   DEBUG ((DEBUG_INFO, "FSPV: ID(%a) REV(%08X)\n", ImageId, FspInfoHdr->ImageRevision));
 
-  DEBUG ((DEBUG_INFO, "Loader global data @ 0x%08X\n", (UINT32)LdrGlobal));
+  DEBUG ((DEBUG_INFO, "Loader global data @ 0x%08X\n", (UINT32)(UINTN)LdrGlobal));
   DEBUG ((DEBUG_INFO, "Run  STAGE1A @ 0x%08X\n", PcdGet32 (PcdStage1ALoadBase)));
 
   // Load Stage 1B if required
@@ -506,7 +557,7 @@ ContinueFunc (
 
   // Jump into Stage 1B entry
   if (StageBase != 0) {
-    PeCoffFindAndReportImageInfo ((UINT32) GET_STAGE_MODULE_BASE (StageBase));
+    PeCoffFindAndReportImageInfo ((UINT32)(UINTN)GET_STAGE_MODULE_BASE (StageBase));
     StageEntry = (STAGE_ENTRY) GET_STAGE_MODULE_ENTRY (StageBase);
     if (StageEntry != NULL) {
       Stage1aParam->Stage1BBase = StageBase;

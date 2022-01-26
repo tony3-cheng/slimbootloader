@@ -11,7 +11,8 @@
 #
 
 PLATFORMID_CFG_DATA.PlatformId           | 0x0013
-PLAT_NAME_CFG_DATA.PlatformName          | 'SOM7569'
+PLAT_NAME_CFG_DATA.PlatformName          | 'SOM-7569'
+
 
 GEN_CFG_DATA.PayloadId                   | 'UEFI'
 

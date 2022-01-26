@@ -1,12 +1,12 @@
 /** @file
 
-  Copyright (c) 2017 - 2019, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2017 - 2021, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
 
-#ifndef __LINUX_LOADER_H__
-#define __LINUX_LOADER_H__
+#ifndef __OS_LOADER_H__
+#define __OS_LOADER_H__
 
 #include <Library/LiteFvLib.h>
 #include <Library/PartitionLib.h>
@@ -44,8 +44,11 @@
 #include <Library/UsbInitLib.h>
 #include <Library/UsbKbLib.h>
 #include <Library/ElfLib.h>
+#include <Library/UniversalPayloadLib.h>
 #include <Library/LinuxLib.h>
+#include <Library/ThunkLib.h>
 #include <Library/ContainerLib.h>
+#include <Library/DebugLogBufferLib.h>
 #include <Guid/SeedInfoHobGuid.h>
 #include <Guid/OsConfigDataHobGuid.h>
 #include <Guid/OsBootOptionGuid.h>
@@ -57,32 +60,38 @@
 #include <Service/PlatformService.h>
 #include <IndustryStandard/Mbr.h>
 #include <Uefi/UefiGpt.h>
+#include <PayloadModule.h>
 #include "BlockIoTest.h"
 #include <ConfigDataCommonDefs.h>
-#include "PreOsChecker.h"
+#include <Register/Intel/Msr/ArchitecturalMsr.h>
+#include <Library/StringSupportLib.h>
+#include <PreOsHeader.h>
+
 
 #define MKHI_BOOTLOADER_SEED_LEN       64
 
 #define DEFAULT_COMMAND_LINE     "console=ttyS0,115200\0"
 
-#define BOOT_PARAMS_BASE         0x00090000
-#define LINUX_KERNEL_BASE        0x00100000
-#define CMDLINE_OFFSET           0xF000
-#define CMDLINE_LENGTH_MAX       0x800
 #define EOF                      "<eof>"
 #define GPT_PART_ENTRIES_MAX     4
 
+// For LOADED_IMAGE Flags
 #define LOADED_IMAGE_IAS         BIT0
 #define LOADED_IMAGE_MULTIBOOT   BIT1
 #define LOADED_IMAGE_LINUX       BIT2
-#define LOADED_IMAGE_PE32        BIT3
+#define LOADED_IMAGE_PE          BIT3
 #define LOADED_IMAGE_FV          BIT4
 #define LOADED_IMAGE_CONTAINER   BIT5
+#define LOADED_IMAGE_COMPONENT   BIT6
+#define LOADED_IMAGE_RUN_EXTRA   BIT7
+#define LOADED_IMAGE_ELF         BIT8
 
 #define MAX_EXTRA_FILE_NUMBER    16
 
 #define MAX_BOOT_MENU_ENTRY      8
 #define MAX_STR_SLICE_LEN        16
+
+#define PLD_EXTRA_MOD_RTCM       SIGNATURE_32('R', 'T', 'C', 'M')
 
 typedef struct {
   UINT32       Pos;
@@ -129,10 +138,10 @@ typedef union {
 } LOADED_IMAGE_TYPE;
 
 typedef struct {
-  UINT8                   Flags;
+  UINT16                  Flags;
   UINT8                   LoadImageType;
-  UINT16                  Reserved;
-  IMAGE_DATA              IasImage;
+  UINT8                   Reserved;
+  IMAGE_DATA              ImageData;
   EFI_HANDLE              HwPartHandle;
   LOADED_IMAGE_TYPE       Image;
   UINT8                   ImageHash[HASH_DIGEST_MAX];
@@ -222,13 +231,15 @@ GetLoadedImageByType (
 
   This function will clean up all temporary resources used to load Boot Image.
 
-  @param[in]  LoadedImageHandle Loaded Image handle
-
+  @param[in]  LoadedImageHandle   Loaded Image handle.
+  @param[in]  KeepRootNode        TRUE,  do not free memory for LOADED_IMAGES_INFO root node.
+                                  FALSE, free memory for LOADED_IMAGES_INFO root node.
 **/
 VOID
 EFIAPI
 UnloadBootImages (
-  IN  EFI_HANDLE       LoadedImageHandle
+  IN  EFI_HANDLE       LoadedImageHandle,
+  IN  BOOLEAN          KeepRootNode
   );
 
 /**
@@ -318,7 +329,7 @@ GetFromConfigFile (
 
   @param[in]     BootOption        Current boot option
   @param[in,out] LoadedImage       Normal OS boot image
-  @param[in,out] LoadedTrustyImage Trusty OS image
+  @param[in,out] LoadedPreOsImage  Pre OS image
   @param[in,out] LoadedExtraImages Extra OS images
 
   @retval   RETURN_SUCCESS         If update OS parameter success
@@ -328,7 +339,7 @@ EFI_STATUS
 UpdateOsParameters (
   IN     OS_BOOT_OPTION      *BootOption,
   IN OUT LOADED_IMAGE        *LoadedImage,
-  IN OUT LOADED_IMAGE        *LoadedTrustyImage,
+  IN OUT LOADED_IMAGE        *LoadedPreOsImage,
   IN OUT LOADED_IMAGE        *LoadedExtraImages
   );
 
@@ -465,6 +476,96 @@ UINT32
 GetLinuxBootOption (
   CHAR8                    *CfgBuffer,
   LINUX_BOOT_CFG           *LinuxBootCfg
+  );
+
+/**
+  Initialize platform lcoal console.
+
+  @param[in]  ForceFbConsole   Force to enable framebuffer.
+
+  @retval  EFI_NOT_FOUND    No additional console was found.
+  @retval  EFI_SUCCESS      Console has been initialized successfully.
+  @retval  Others           There is error during console initialization.
+**/
+EFI_STATUS
+LocalConsoleInit (
+  IN  BOOLEAN   ForceFbConsole
+);
+
+/**
+  Get a function pointer from the function name.
+
+  @param[in]      FuncName    Function name
+
+  @retval   Function pointer for the given funciton name.
+  @retval   NULL   Failed to get the function address.
+
+**/
+VOID *
+EFIAPI
+GetProcAddress (
+  IN CHAR8     *FuncName
+  );
+
+/**
+  Initialize payload module serivce table and paramters.
+
+  @param[in]      PldModParam   Payload module parameter pointer
+  @param[in]      ModuleName    Payload module name
+
+**/
+VOID
+EFIAPI
+PayloadModuleInit (
+  IN  PLD_MOD_PARAM       *PldModParam,
+  IN  CHAR8               *ModuleName
+  );
+
+/**
+  Print the stack/HOB and heap usage information.
+
+**/
+VOID
+EFIAPI
+PrintStackHeapInfo (
+  VOID
+  );
+
+/**
+  Start preOS boot image
+
+  This function will call into preOS entry point with OS information as parameter.
+
+  @param[in]  LoadedPreOsImage  Loaded PreOS image information.
+  @param[in]  LoadedImage       Loaded OS image information.
+
+  @retval  RETURN_SUCCESS       boot image is return after boot
+  @retval  Others               There is error when checking boot image
+**/
+EFI_STATUS
+StartPreOsBooting (
+  IN LOADED_IMAGE            *LoadedPreOsImage,
+  IN LOADED_IMAGE            *LoadedImage
+  );
+
+
+/**
+  Call into an extra image entrypoint.
+
+  Detect and call into the image entrypoint. If required, handle thunk call
+  as well.
+
+  @param[in]  ModSignature      Module signature.
+  @param[in]  LoadedImage       Loaded Image information, expected to be PE32 format.
+
+  @retval  EFI_SUCCESS          Image returns successfully
+  @retval  Others               There is error during the module call.
+
+**/
+EFI_STATUS
+CallExtraModule (
+  IN   UINT32           ModSignature,
+  IN   LOADED_IMAGE    *LoadedImage
   );
 
 #endif

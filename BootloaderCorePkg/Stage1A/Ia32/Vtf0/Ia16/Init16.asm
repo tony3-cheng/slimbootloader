@@ -15,14 +15,14 @@ BITS    16
 ;
 EarlyBspInitReal16:
     mov     di, 'BP'
-    jmp     short Main16
+    jmp     Main16
 
 ;
 ; @param[out] DI    'AP' to indicate application processor
 ;
 EarlyApInitReal16:
     mov     di, 'AP'
-    jmp     short Main16
+    jmp     Main16
 
 ;
 ; Modified:  EAX
@@ -35,7 +35,7 @@ EarlyInit16:
     ;
     ; ESP -  Initial value of the EAX register (BIST: Built-in Self Test)
     ;
-    movd     mm0, eax    
+    movd     mm0, eax
 
     OneTimeCallRet EarlyInit16
 

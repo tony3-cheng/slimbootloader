@@ -32,94 +32,9 @@
 #include <Service/PlatformService.h>
 #include <Service/HeciService.h>
 #include <Library/ResetSystemLib.h>
+#include <ScRegs/RegsPmc.h>
 
 #define FLASH_MAP_IN_FV_OFFSET   0xA4
-
-SPI_FLASH_SERVICE   *mFwuSpiService = NULL;
-
-/**
-  This function initialized boot media.
-
-  It initializes SPI services and SPI Flash size information.
-
-**/
-VOID
-EFIAPI
-InitializeBootMedia (
-  VOID
-  )
-{
-  mFwuSpiService = (SPI_FLASH_SERVICE *)GetServiceBySignature (SPI_FLASH_SERVICE_SIGNATURE);
-  if (mFwuSpiService == NULL) {
-    return;
-  }
-
-  mFwuSpiService->SpiInit ();
-}
-
-/**
-  This function reads blocks from the SPI device.
-
-  @param[in]  Address             The block address in the FlashRegionAll to read from on the SPI.
-  @param[in]  ByteCount           Size of the Buffer in bytes.
-  @param[out] Buffer              Pointer to caller-allocated buffer containing the data received during the SPI cycle.
-
-  @retval EFI_SUCCESS             Read completes successfully.
-  @retval others                  Device error, the command aborts abnormally.
-
-**/
-EFI_STATUS
-EFIAPI
-BootMediaRead (
-  IN     UINT64                  Address,
-  IN     UINT32                  ByteCount,
-  OUT    UINT8                   *Buffer
-  )
-{
-  return mFwuSpiService->SpiRead (FlashRegionBios, (UINT32)Address, ByteCount, Buffer);
-}
-
-/**
-  This function writes blocks from the SPI device.
-
-  @param[in]   Address            The block address in the FlashRegionAll to read from on the SPI.
-  @param[in]   ByteCount          Size of the Buffer in bytes.
-  @param[out]  Buffer             Pointer to the data to write.
-
-  @retval EFI_SUCCESS             Write completes successfully.
-  @retval others                  Device error, the command aborts abnormally.
-
-**/
-EFI_STATUS
-EFIAPI
-BootMediaWrite (
-  IN     UINT64                  Address,
-  IN     UINT32                  ByteCount,
-  OUT    UINT8                   *Buffer
-  )
-{
-  return mFwuSpiService->SpiWrite (FlashRegionBios, (UINT32)Address, ByteCount, Buffer);
-}
-
-/**
-  This function erases blocks from the SPI device.
-
-  @param[in]  Address             The block address in the FlashRegionAll to read from on the SPI.
-  @param[in]  ByteCount           Size of the region to erase in bytes.
-
-  @retval EFI_SUCCESS             Erase completes successfully.
-  @retval others                  Device error, the command aborts abnormally.
-
-**/
-EFI_STATUS
-EFIAPI
-BootMediaErase (
-  IN     UINT64                  Address,
-  IN     UINT32                  ByteCount
-  )
-{
-  return mFwuSpiService->SpiErase (FlashRegionBios, (UINT32)Address, ByteCount);
-}
 
 /**
   Initializes input structure for csme update driver.
@@ -223,7 +138,7 @@ PlatformGetStage1AOffset (
     return EFI_INVALID_PARAMETER;
   }
 
-  Status = mFwuSpiService->SpiGetRegion (FlashRegionBios, &RgnBase, &RgnSize);
+  Status = BootMediaGetRegion (FlashRegionBios, &RgnBase, &RgnSize);
   if (EFI_ERROR (Status)) {
     return EFI_NOT_AVAILABLE_YET;
   }
@@ -246,7 +161,7 @@ PlatformGetStage1AOffset (
     for (Index = 0; Index < MaxEntries; Index++) {
       EntryDesc = FlashMapPtr->EntryDesc[Index];
       if (EntryDesc.Signature == FLASH_MAP_SIG_STAGE1A) {
-        *Base  = (UINT32)(Ptr + EntryDesc.Offset);
+        *Base  = (UINT32)(UINTN)(Ptr + EntryDesc.Offset);
         *Size  = EntryDesc.Size;
         Status = EFI_SUCCESS;
         break;
@@ -309,7 +224,7 @@ GetFirmwareUpdateInfo (
 
   UpdatePartition->RegionCount   = 2;
 
-  Status = mFwuSpiService->SpiGetRegion (FlashRegionBios, &RgnBase, &RgnSize);
+  Status = BootMediaGetRegion (FlashRegionBios, &RgnBase, &RgnSize);
   if (EFI_ERROR (Status)) {
     DEBUG ((DEBUG_ERROR, "GetPartitionSize Status = 0x%x\n", Status));
     return Status;
@@ -457,7 +372,7 @@ PrepareRegionsUpdate (
 **/
 EFI_STATUS
 EFIAPI
-EndFirmwareUpdate (
+PlatformEndFirmwareUpdate (
   VOID
   )
 {
@@ -494,19 +409,83 @@ EndFirmwareUpdate (
   return EFI_SUCCESS;
 }
 
+
 /**
   Platform hook point to clear firmware update trigger.
 
   This function is responsible for clearing firmware update trigger.
 
-  @retval  EFI_SUCCESS        Update successfully.
-
 **/
-EFI_STATUS
+VOID
 EFIAPI
 ClearFwUpdateTrigger (
   VOID
   )
 {
-  return EFI_SUCCESS;
+  // Clear platform firmware update trigger.
+  MmioAnd32 (PMC_BASE_ADDRESS + R_PMC_BIOS_SCRATCHPAD, 0xFF00FFFF);
+}
+
+
+/**
+  Flash descriptor region lock
+
+  This function will do some command buffer parsing and check
+  for additional parameters
+
+  @param[in]  CmdDataBuf    Pointer to command buffer.
+  @param[in]  CmdDataSize   size of command data.
+
+  @retval  EFI_SUCCESS      Flash descriptor lock successfully.
+  @retval  others           Error happening when updating.
+
+**/
+EFI_STATUS
+EFIAPI
+SetFlashDescriptorLock (
+  IN  CHAR8      *CmdDataBuf,
+  IN  UINTN      CmdDataSize
+  )
+{
+  return EFI_UNSUPPORTED;
+}
+
+/**
+  Anti Rollback Svn Commit
+
+  @param[in]  CmdDataBuf    Pointer to command buffer.
+  @param[in]  CmdDataSize   size of command data.
+
+  @retval  EFI_SUCCESS      Svn commit successfully.
+  @retval  others           Error happening when updating.
+
+**/
+EFI_STATUS
+EFIAPI
+SetArbSvnCommit (
+   IN  CHAR8     *CmdDataBuf,
+   IN  UINTN     CmdDataSize
+   )
+{
+  return EFI_UNSUPPORTED;
+}
+
+/**
+  Oem Key Revocation
+
+  @param[in]  CmdDataBuf    Pointer to command buffer.
+  @param[in]  CmdDataSize   size of command data.
+
+  @retval  EFI_SUCCESS      Oem Key Revocation is successful.
+  @retval  others           Error happening when updating.
+
+**/
+EFI_STATUS
+EFIAPI
+SetOemKeyRevocation (
+   IN  CHAR8     *CmdDataBuf,
+   IN  UINTN     CmdDataSize
+   )
+{
+  return EFI_UNSUPPORTED;
 }

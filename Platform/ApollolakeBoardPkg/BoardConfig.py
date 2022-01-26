@@ -1,7 +1,7 @@
 ## @file
 # This file is used to provide board specific image information.
 #
-#  Copyright (c) 2017 - 2018, Intel Corporation. All rights reserved.<BR>
+#  Copyright (c) 2017 - 2020, Intel Corporation. All rights reserved.<BR>
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -15,7 +15,33 @@ import sys
 sys.dont_write_bytecode = True
 sys.path.append (os.path.join('..', '..'))
 from BuildLoader import FLASH_MAP, BaseBoard, STITCH_OPS
-from BuildLoader import IPP_CRYPTO_OPTIMIZATION_MASK, IPP_CRYPTO_ALG_MASK
+from BuildLoader import IPP_CRYPTO_OPTIMIZATION_MASK, IPP_CRYPTO_ALG_MASK, HASH_USAGE
+
+#
+#    Temporary Memory Layout for APL
+#
+#  FF000000 +--------------------------+
+#           |        Stage1B           |
+#           |     (Decompressed)       |
+#  FEF80000 +--------------------------+
+#           |     Stage1 Heap/Stack    |
+#  FEF70000 +--------------------------+
+#           |        Not Used          |
+#           +-------------+------------+
+#           |           Free           |
+#           |             |------------|
+#           +-------------+   MRC NVS  |
+#           |             |            |
+#  FEF40000 +-  Stage1B  -+------------+
+#           |  Compressed |  FSP Mem   |
+#  FEF16000 |             +------------+
+#           |             |            |
+#  FEF10000 --------------+------------+
+#           |     N/A (Don't use)      |
+#  FEF08000 +--------------------------+
+#           |        Stage1A           |
+#  FEF00000 +--------------------------+
+#
 
 class Board(BaseBoard):
     def __init__(self, *args, **kwargs):
@@ -32,8 +58,10 @@ class Board(BaseBoard):
         self.BOARD_PKG_NAME       = 'ApollolakeBoardPkg'
         self.SILICON_PKG_NAME     = 'ApollolakePkg'
 
+        self._PCI_ENUM_DOWNGRADE_PMEM64 = 1
         self.PCI_IO_BASE          = 0x00001000
         self.PCI_MEM32_BASE       = 0x80000000
+        self.PCI_MEM64_BASE       = 0x400000000
 
         self.FLASH_SIZE           = 0x800000
         self.FLASH_BASE           = self.FLASH_LAYOUT_START - self.FLASH_SIZE
@@ -43,6 +71,7 @@ class Board(BaseBoard):
         self.HAVE_MEASURED_BOOT   = 0
         self.HAVE_SEED_LIST       = 0
         self.HAVE_PSD_TABLE       = 1
+        self.ENABLE_SMBIOS        = 1
 
         self.ENABLE_FSP_LOAD_IMAGE    = 0
         self.ENABLE_VTD               = 1
@@ -50,6 +79,8 @@ class Board(BaseBoard):
         self.ENABLE_SPLASH            = 1
         self.ENABLE_FRAMEBUFFER_INIT  = 1
         self.ENABLE_GRUB_CONFIG       = 1
+        self.ENABLE_DMA_PROTECTION    = 0
+        self.ENABLE_SMM_REBASE        = 2
 
         # G9 for 384 | W7 Opt for SHA384| Ni  Opt for SHA256| V8 Opt for SHA256
         self.ENABLE_CRYPTO_SHA_OPT    = IPP_CRYPTO_OPTIMIZATION_MASK['SHA256_NI']
@@ -75,17 +106,13 @@ class Board(BaseBoard):
         # EXT | FAT
         self.FILE_SYSTEM_SUPPORT_MASK  = 3
 
-        # FWU_PLD | PLD | Stage2 | Stage1B
-        # Stage1B is verified by CSE
-        self.VERIFIED_BOOT_HASH_MASK  = 0x000000E        # Stage1B is verified by CSE
-
         # Verify required minimum FSP version
         self.MIN_FSP_REVISION     = 0x01040301
         # Verify FSP image ID. Empty string means skipping verification
         self.FSP_IMAGE_ID         = '$APLFSP$'
 
         self.STAGE1A_SIZE         = 0x00008000
-        self.STAGE1B_SIZE         = 0x00035000
+        self.STAGE1B_SIZE         = 0x00036000
         if self.ENABLE_SOURCE_DEBUG:
             self.STAGE1B_SIZE += 0x2000
         self.STAGE2_SIZE          = 0x00032000
@@ -105,15 +132,16 @@ class Board(BaseBoard):
             self.STAGE2_SIZE  += 0x0000F000
 
         self.STAGE1A_XIP          = 0
-        self.STAGE1A_LOAD_BASE    = 0xFEF80000
-
+        self.STAGE1A_LOAD_BASE    = 0xFEF00000
         self.STAGE1B_XIP          = 0
-        self.STAGE1B_LOAD_BASE    = 0xFEF40000
-        self.STAGE1B_FD_BASE      = 0xFEF88000
+        self.STAGE1B_LOAD_BASE    = 0xFEF10000
+        self.STAGE1B_FD_BASE      = 0xFEF80000
         self.STAGE1B_FD_SIZE      = 0x0006B000
+        if self.ENABLE_SOURCE_DEBUG:
+            self.STAGE1B_FD_SIZE += 0x00001000
         if self.RELEASE_MODE == 0:
             self.STAGE1B_FD_SIZE += 0x00002000
-            self.PAYLOAD_SIZE    += 0x00004000
+            self.PAYLOAD_SIZE    += 0x00007000
         # For Stage2, it is always compressed.
         # if STAGE2_LOAD_HIGH is 1, STAGE2_FD_BASE will be ignored
         self.STAGE2_FD_BASE       = 0x01000000
@@ -121,7 +149,9 @@ class Board(BaseBoard):
         self.STAGE2_LOAD_BASE     = 0x00100000
 
         self.STAGE1_STACK_SIZE    = 0x00002000
-        self.STAGE1_DATA_SIZE     = 0x00006000
+        self.STAGE1_DATA_SIZE     = 0x0000E000
+        # Offset is relative to the temporary memory base 0xFEF00000
+        self.STAGE1_STACK_BASE_OFFSET = 0x00080000 - (self.STAGE1_STACK_SIZE + self.STAGE1_DATA_SIZE)
 
         # To support large payload such as UEFI
         self.LOADER_RSVD_MEM_SIZE = 0x00B8C000
@@ -145,13 +175,20 @@ class Board(BaseBoard):
             self.SPI_IAS1_SIZE    = 0x00150000
 
         self._CFGDATA_INT_FILE = ['CfgData_Int_LeafHill.dlt']
-# X001        self._CFGDATA_EXT_FILE = ['CfgData_Ext_Gpmrb.dlt', 'CfgData_Ext_Up2.dlt','CfgData_Ext_OxbHill.dlt','CfgData_Ext_MB3.dlt','CfgData_Ext_JuniperHill.dlt']
+# SOM7569        self._CFGDATA_EXT_FILE = ['CfgData_Ext_Gpmrb.dlt', 'CfgData_Ext_Up2.dlt','CfgData_Ext_OxbHill.dlt','CfgData_Ext_MB3.dlt','CfgData_Ext_JuniperHill.dlt']
         self._CFGDATA_EXT_FILE = ['CfgData_Ext_Gpmrb.dlt', 'CfgData_Ext_Up2.dlt','CfgData_Ext_OxbHill.dlt','CfgData_Ext_MB3.dlt','CfgData_Ext_JuniperHill.dlt','CfgData_Ext_SOM2569.dlt','CfgData_Ext_SOM3569.dlt','CfgData_Ext_SOM6869.dlt','CfgData_Ext_SOM7569.dlt']
 
-    def GetDscLibrarys (self, BuildPkgName = "BootLoaderCorePkg"):
-        dsc_libs = {}
-        # These libraries will be added into the DSC files
-        dsc_libs['IA32'] = [
+        # If mulitple VBT table support is required, list them as:
+        #   {VbtImageId1 : VbtFileName1, VbtImageId2 : VbtFileName2, ...}
+        # VbtImageId is ID to identify a VBT image. It is a UINT32 number to match
+        #   the ImageId field in the VBT container.
+        # VbtFileName is the VBT file name. It needs to be located under platform
+        #   VbtBin folder.
+        self._MULTI_VBT_FILE      = {1:'Vbt.dat', 2:'Vbt_Up2.dat'}
+
+    def GetPlatformDsc (self):
+        dsc = {}
+        common_libs = [
             'LoaderLib|Platform/$(BOARD_PKG_NAME)/Library/LoaderLib/LoaderLib.inf',
             'SerialPortLib|Silicon/$(SILICON_PKG_NAME)/Library/SerialPortLib/SerialPortLib.inf',
             'SocInfoLib|Silicon/$(SILICON_PKG_NAME)/Library/SocInfoLib/SocInfoLib.inf',
@@ -163,16 +200,20 @@ class Board(BaseBoard):
             'IgdOpRegionLib|Silicon/$(SILICON_PKG_NAME)/Library/IgdOpRegionLib/IgdOpRegionLib.inf',
             'IocIpcLib|Platform/$(BOARD_PKG_NAME)/Library/IocIpcLib/IocIpcLib.inf',
             'BootGuardLib|Silicon/$(SILICON_PKG_NAME)/Library/BootGuardLib20/BootGuardLib20.inf',
-            'HeciLib|Silicon/ApollolakePkg/Library/HeciLib/HeciLib.inf',
+            'HeciLib|Silicon/CommonSocPkg/Library/HeciLib/HeciLib.inf',
+            'MeChipsetLib|Silicon/ApollolakePkg/Library/MeChipsetLib/MeChipsetLib.inf',
             'PsdLib|Silicon/ApollolakePkg/Library/PsdLib/PsdLib.inf',
             'ShellExtensionLib|Platform/$(BOARD_PKG_NAME)/Library/ShellExtensionLib/ShellExtensionLib.inf',
             'BootMediaLib|Silicon/ApollolakePkg/Library/BootMediaLib/BootMediaLib.inf',
             'FlashDescriptorLib|Silicon/ApollolakePkg/Library/FlashDescriptorLib/FlashDescriptorLib.inf',
             'VtdLib|Silicon/$(SILICON_PKG_NAME)/Library/VtdLib/VtdLib.inf',
             'SmbusLib|Silicon/$(SILICON_PKG_NAME)/Library/SmbusLib/SmbusLib.inf',
-            'HdaLib|Platform/$(BOARD_PKG_NAME)/Library/HdaLib/HdaLib.inf'
+            'HdaLib|Platform/$(BOARD_PKG_NAME)/Library/HdaLib/HdaLib.inf',
+            'VtdPmrLib|Silicon/CommonSocPkg/Library/VtdPmrLib/VtdPmrLib.inf',
+            'BaseIpcLib|Silicon/$(SILICON_PKG_NAME)/Library/BaseIpcLib/BaseIpcLib.inf'
         ]
-        return dsc_libs
+        dsc['LibraryClasses.%s' % self.BUILD_ARCH] = common_libs
+        return dsc
 
     def GetFlashMapList (self):
         img_list  = self.GetImageLayout ()
@@ -202,10 +243,37 @@ class Board(BaseBoard):
         # define extra images that will be copied to output folder
         img_list = ['SlimBootloader.txt',
                     'CfgDataStitch.py',
-                    'CfgDataDef.dsc',
+                    'CfgDataDef.yaml',
                     'CfgDataInt.bin'
                     ]
         return img_list
+
+    def GetKeyHashList (self):
+        # Define a set of new key used for different purposes
+        # The key is either key id or public key PEM format or private key PEM format
+        pub_key_list = [
+          (
+            # Key for verifying Config data blob
+            HASH_USAGE['PUBKEY_CFG_DATA'],
+            'KEY_ID_CFGDATA' + '_' + self._RSA_SIGN_TYPE
+          ),
+          (
+            # Key for verifying firmware update
+            HASH_USAGE['PUBKEY_FWU'],
+            'KEY_ID_FIRMWAREUPDATE' + '_' + self._RSA_SIGN_TYPE
+          ),
+          (
+            # Key for verifying container header
+            HASH_USAGE['PUBKEY_CONT_DEF'],
+            'KEY_ID_CONTAINER' + '_' + self._RSA_SIGN_TYPE
+          ),
+          (
+            # key for veryfying OS image.
+            HASH_USAGE['PUBKEY_OS'],
+            'KEY_ID_OS1_PUBLIC' + '_' + self._RSA_SIGN_TYPE
+          ),
+        ]
+        return pub_key_list
 
     def GetImageLayout (self):
         ias1_flag = 0 if self.SPI_IAS1_SIZE > 0 else STITCH_OPS.MODE_FILE_IGNOR

@@ -33,19 +33,22 @@ def RunCommand(WorkDir=None, *Args, **kwargs):
     if "stderr" not in kwargs:
         kwargs["stderr"] = subprocess.STDOUT
     if "stdout" not in kwargs:
-        kwargs["stdout"] = sys.stdout
+        kwargs["stdout"] = subprocess.PIPE
     p = subprocess.Popen(Args, cwd=WorkDir, stderr=kwargs["stderr"], stdout=kwargs["stdout"])
     stdout, stderr = p.communicate()
     message = ""
     if stdout is not None:
-        message = stdout.decode(encoding='utf-8', errors='ignore') #for compatibility in python 2 and 3
+        message = stdout.decode(errors='ignore') #for compatibility in python 2 and 3
 
     if p.returncode != 0:
         raise RuntimeError("Error while execute command \'{0}\' in direcotry {1}\n{2}".format(" ".join(Args), WorkDir, message))
 
     output_lock.acquire(True)
     print("execute command \"{0}\" in directory {1}".format(" ".join(Args), WorkDir))
-    print(message)
+    try:
+        print(message)
+    except:
+        pass
     output_lock.release()
 
     return p.returncode, stdout
@@ -104,7 +107,7 @@ class ThreadControl(object):
         while len(self.running) > 0:
             time.sleep(0.1)
         if self.error:
-            print("subprocess not exit sucessfully")
+            print("subprocess not exit successfully")
             print(self.errorMsg)
 
     def startTask(self):

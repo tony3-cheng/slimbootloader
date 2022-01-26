@@ -1,7 +1,7 @@
 /** @file
   This file contains the implementation of FirmwareUpdateLib library.
 
-  Copyright (c) 2017 - 2019, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2017 - 2020, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -12,106 +12,20 @@
 #include <Uefi/UefiBaseType.h>
 #include <Library/BaseLib.h>
 #include <Library/DebugLib.h>
-#include <Library/PciLib.h>
 #include <Library/BaseMemoryLib.h>
 #include <Library/MemoryAllocationLib.h>
 #include <Library/TimerLib.h>
-#include <Service/SpiFlashService.h>
+#include <Service/HeciService.h>
 #include <Library/FirmwareUpdateLib.h>
 #include <Library/BootloaderCommonLib.h>
 #include <Library/PchSbiAccessLib.h>
 #include <Library/PchPcrLib.h>
+#include <Library/PciLib.h>
 #include <Library/HeciLib.h>
 #include <CsmeUpdateDriver.h>
 
-SPI_FLASH_SERVICE   *mFwuSpiService = NULL;
-
 #define FWU_BOOT_MODE_OFFSET   0x40
 #define FWU_BOOT_MODE_VALUE    0x5A
-
-/**
-  This function initialized boot media.
-
-  It initializes SPI services and SPI Flash size information.
-
-**/
-VOID
-EFIAPI
-InitializeBootMedia(
-  VOID
-  )
-{
-  mFwuSpiService = (SPI_FLASH_SERVICE *)GetServiceBySignature (SPI_FLASH_SERVICE_SIGNATURE);
-  if (mFwuSpiService == NULL) {
-    return;
-  }
-
-  mFwuSpiService->SpiInit ();
-}
-
-/**
-  This function reads blocks from the SPI device.
-
-  @param[in]  Address             The block address in the FlashRegionAll to read from on the SPI.
-  @param[in]  ByteCount           Size of the Buffer in bytes.
-  @param[out] Buffer              Pointer to caller-allocated buffer containing the data received during the SPI cycle.
-
-  @retval EFI_SUCCESS             Read completes successfully.
-  @retval others                  Device error, the command aborts abnormally.
-
-**/
-EFI_STATUS
-EFIAPI
-BootMediaRead (
-  IN     UINT64   Address,
-  IN     UINT32   ByteCount,
-  OUT    UINT8    *Buffer
-  )
-{
-  return mFwuSpiService->SpiRead (FlashRegionBios, (UINT32)Address, ByteCount, Buffer);
-}
-
-/**
-  This function writes blocks from the SPI device.
-
-  @param[in]   Address            The block address in the FlashRegionAll to read from on the SPI.
-  @param[in]   ByteCount          Size of the Buffer in bytes.
-  @param[out]  Buffer             Pointer to the data to write.
-
-  @retval EFI_SUCCESS             Write completes successfully.
-  @retval others                  Device error, the command aborts abnormally.
-
-**/
-EFI_STATUS
-EFIAPI
-BootMediaWrite (
-  IN     UINT64   Address,
-  IN     UINT32   ByteCount,
-  OUT    UINT8    *Buffer
-  )
-{
-  return mFwuSpiService->SpiWrite (FlashRegionBios, (UINT32)Address, ByteCount, Buffer);
-}
-
-/**
-  This function erases blocks from the SPI device.
-
-  @param[in]  Address             The block address in the FlashRegionAll to read from on the SPI.
-  @param[in]  ByteCount           Size of the region to erase in bytes.
-
-  @retval EFI_SUCCESS             Erase completes successfully.
-  @retval others                  Device error, the command aborts abnormally.
-
-**/
-EFI_STATUS
-EFIAPI
-BootMediaErase (
-  IN     UINT64   Address,
-  IN     UINT32   ByteCount
-  )
-{
-  return mFwuSpiService->SpiErase (FlashRegionBios, (UINT32)Address, ByteCount);
-}
 
 /**
   Initializes input structure for csme update driver.
@@ -130,20 +44,34 @@ InitCsmeUpdInputData (
   )
 {
   CSME_UPDATE_DRIVER_INPUT    *CsmeUpdDriverInput;
+  HECI_SERVICE                *HeciService;
+
+  HeciService = NULL;
+  HeciService = (HECI_SERVICE *)GetServiceBySignature (HECI_SERVICE_SIGNATURE);
 
   CsmeUpdDriverInput = (CSME_UPDATE_DRIVER_INPUT *)AllocateZeroPool (sizeof(CSME_UPDATE_DRIVER_INPUT));
 
-  CsmeUpdDriverInput->AllocatePool     = (VOID *)((UINT32)AllocatePool);
-  CsmeUpdDriverInput->AllocateZeroPool = (VOID *)((UINT32)AllocateZeroPool);
-  CsmeUpdDriverInput->FreePool         = (VOID *)((UINT32)FreePool);
-  CsmeUpdDriverInput->CopyMem          = (VOID *)((UINT32)CopyMem);
-  CsmeUpdDriverInput->SetMem           = (VOID *)((UINT32)SetMem);
-  CsmeUpdDriverInput->CompareMem       = (VOID *)((UINT32)CompareMem);
-  CsmeUpdDriverInput->Stall            = (VOID *)((UINT32)MicroSecondDelay);
-  CsmeUpdDriverInput->PciRead          = (VOID *)((UINT32)PciReadBuffer);
-  CsmeUpdDriverInput->HeciReadMessage  = (VOID *)((UINT32)HeciReceive);
-  CsmeUpdDriverInput->HeciSendMessage  = (VOID *)((UINT32)HeciSend);
-  CsmeUpdDriverInput->HeciReset        = (VOID *)((UINT32)ResetHeciInterface);
+  if (CsmeUpdDriverInput != NULL) {
+    CsmeUpdDriverInput->AllocatePool     = (VOID *)((UINTN)AllocatePool);
+    CsmeUpdDriverInput->AllocateZeroPool = (VOID *)((UINTN)AllocateZeroPool);
+    CsmeUpdDriverInput->FreePool         = (VOID *)((UINTN)FreePool);
+    CsmeUpdDriverInput->CopyMem          = (VOID *)((UINTN)CopyMem);
+    CsmeUpdDriverInput->SetMem           = (VOID *)((UINTN)SetMem);
+    CsmeUpdDriverInput->CompareMem       = (VOID *)((UINTN)CompareMem);
+    CsmeUpdDriverInput->Stall            = (VOID *)((UINTN)MicroSecondDelay);
+    CsmeUpdDriverInput->PciRead          = (VOID *)((UINTN)PciReadBuffer);
+    if (HeciService != NULL) {
+      CsmeUpdDriverInput->HeciReadMessage  = (VOID *)((UINTN)HeciService->HeciReceive);
+      CsmeUpdDriverInput->HeciSendMessage  = (VOID *)((UINTN)HeciService->HeciSend);
+      CsmeUpdDriverInput->HeciReset        = (VOID *)((UINTN)HeciService->HeciResetInterface);
+    }
+
+    if ((CsmeUpdDriverInput->HeciReadMessage == NULL) ||
+        (CsmeUpdDriverInput->HeciSendMessage == NULL) ||
+        (CsmeUpdDriverInput->HeciReset == NULL)) {
+      return NULL;
+    }
+  }
 
   return CsmeUpdDriverInput;
 }
@@ -217,42 +145,7 @@ PlatformGetStage1AOffset (
   OUT UINT32     *Size
   )
 {
-  EFI_STATUS                Status;
-  FLASH_MAP                 *FlashMap;
-
-  if ((Base == NULL) || (Size == NULL)) {
-    return EFI_INVALID_PARAMETER;
-  }
-
-  FlashMap = GetFlashMapPtr();
-  if (FlashMap == NULL) {
-    return EFI_NOT_FOUND;
-  }
-
-  //
-  // Get stage 1A base and size
-  //
-  Status = GetComponentInfoByPartition (FLASH_MAP_SIG_STAGE1A, IsBackupPartition, Base, Size);
-  if (IsBackupPartition && (Status == EFI_NOT_FOUND)) {
-    Status = GetComponentInfoByPartition (FLASH_MAP_SIG_STAGE1A, FALSE, Base, Size);
-  }
-  if (EFI_ERROR(Status)) {
-    DEBUG((DEBUG_ERROR, "Could not get component information from flash map \n"));
-    return Status;
-  }
-
-  //
-  // Convert base address to offset in the BIOS region
-  //
-  *Base = (UINT32)(FlashMap->RomSize - (0x100000000ULL - *Base));
-
-  //
-  // Calculate base address of the component in the capsule image
-  // Capsule image address + bios region offset + offset of the component
-  //
-  *Base  = (UINT32)((UINTN)ImageHdr + sizeof(EFI_FW_MGMT_CAP_IMAGE_HEADER) + *Base);
-
-  return EFI_SUCCESS;
+  return EFI_UNSUPPORTED;
 }
 
 /**
@@ -324,11 +217,6 @@ GetFirmwareUpdateInfo (
     if (EFI_ERROR(Status)) {
       DEBUG ((DEBUG_INFO, "No SBL component found !"));
       return Status;
-    }
-
-    if (ImageHdr->UpdateImageSize & 0xFFF) {
-      DEBUG ((DEBUG_INFO, "capsule payload size is not block aligned!"));
-      return EFI_UNSUPPORTED;
     }
 
     if (ImageHdr->UpdateImageSize > CompSize) {
@@ -406,7 +294,7 @@ GetFirmwareUpdateInfo (
       UpdateRegion                  = &UpdatePartition->FwRegion[2];
       UpdateRegion->ToUpdateAddress = NonRedundantRegionOffset;
       UpdateRegion->UpdateSize      = NonRedundantRegionSize;
-      UpdateRegion->SourceAddress   = (UINT8 *)((UINT32)ImageHdr + sizeof(EFI_FW_MGMT_CAP_IMAGE_HEADER) + NonRedundantRegionOffset);
+      UpdateRegion->SourceAddress   = (UINT8 *)((UINTN)ImageHdr + sizeof(EFI_FW_MGMT_CAP_IMAGE_HEADER) + NonRedundantRegionOffset);
       UpdatePartition->RegionCount += 1;
     }
   }
@@ -449,18 +337,14 @@ PrepareRegionsUpdate (
 
   This function is responsible for clearing firmware update trigger.
 
-  @retval  EFI_SUCCESS        Update successfully.
-
 **/
-EFI_STATUS
+VOID
 EFIAPI
 ClearFwUpdateTrigger (
   VOID
   )
 {
   IoAnd32(ACPI_BASE_ADDRESS + R_ACPI_IO_OC_WDT_CTL, 0xFF00FFFF);
-
-  return EFI_SUCCESS;
 }
 
 /**
@@ -476,9 +360,73 @@ ClearFwUpdateTrigger (
 **/
 EFI_STATUS
 EFIAPI
-EndFirmwareUpdate (
+PlatformEndFirmwareUpdate (
   VOID
   )
 {
   return EFI_SUCCESS;
+}
+
+
+/**
+  Flash descriptor region lock
+
+  This function will do some command buffer parsing and check
+  for additional parameters
+
+  @param[in]  CmdDataBuf    Pointer to command buffer.
+  @param[in]  CmdDataSize   size of command data.
+
+  @retval  EFI_SUCCESS      Flash descriptor lock successfully.
+  @retval  others           Error happening when updating.
+
+**/
+EFI_STATUS
+EFIAPI
+SetFlashDescriptorLock (
+  IN  CHAR8      *CmdDataBuf,
+  IN  UINTN      CmdDataSize
+  )
+{
+  return EFI_UNSUPPORTED;
+}
+
+/**
+  Anti Rollback Svn Commit
+
+  @param[in]  CmdDataBuf    Pointer to command buffer.
+  @param[in]  CmdDataSize   size of command data.
+
+  @retval  EFI_SUCCESS      Svn commit successfully.
+  @retval  others           Error happening when updating.
+
+**/
+EFI_STATUS
+EFIAPI
+SetArbSvnCommit (
+   IN  CHAR8     *CmdDataBuf,
+   IN  UINTN     CmdDataSize
+   )
+{
+  return EFI_UNSUPPORTED;
+}
+
+/**
+  Oem Key Revocation
+
+  @param[in]  CmdDataBuf    Pointer to command buffer.
+  @param[in]  CmdDataSize   size of command data.
+
+  @retval  EFI_SUCCESS      Oem Key Revocation is successful.
+  @retval  others           Error happening when updating.
+
+**/
+EFI_STATUS
+EFIAPI
+SetOemKeyRevocation (
+   IN  CHAR8     *CmdDataBuf,
+   IN  UINTN     CmdDataSize
+   )
+{
+  return EFI_UNSUPPORTED;
 }

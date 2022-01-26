@@ -6,6 +6,9 @@
 **/
 
 #include "Stage2BoardInitLib.h"
+#include <Library/PrintLib.h>
+#include <VerInfo.h>
+#include <Library/SmbiosInitLib.h>
 
 #define  VBT_OFFSET            36
 
@@ -95,6 +98,163 @@ CreateNhltAcpiTable (
   NhltAcpiHeaderConstructor (Table, TableLength);
 
   return PlatformService->AcpiTableUpdate ((UINT8 *)Table, Table->Header.Length);
+}
+
+/**
+  Add a Smbios type string into a buffer
+
+**/
+STATIC
+EFI_STATUS
+AddSmbiosTypeString (
+  SMBIOS_TYPE_STRINGS  *Dest,
+  UINT8                 Type,
+  UINT8                 Index,
+  CHAR8                *String
+  )
+{
+  UINTN   Length;
+
+  Dest->Type    = Type;
+  Dest->Idx     = Index;
+  if (String != NULL) {
+    Length = AsciiStrLen (String);
+
+    Dest->String  = (CHAR8 *)AllocateZeroPool (Length + 1);
+    if (Dest->String == NULL) {
+      return EFI_OUT_OF_RESOURCES;
+    }
+    CopyMem (Dest->String, String, Length);
+  }
+
+  return EFI_SUCCESS;
+}
+
+/**
+  Initialize necessary information for Smbios
+
+  @retval EFI_SUCCESS             Initialized necessary information successfully
+  @retval EFI_OUT_OF_RESOURCES    Failed to allocate memory for Smbios info
+
+**/
+EFI_STATUS
+InitializeSmbiosInfo (
+  VOID
+  )
+{
+  CHAR8                 TempStrBuf[SMBIOS_STRING_MAX_LENGTH];
+  UINT16                Index;
+  UINT16                PlatformId;
+  UINTN                 Length;
+  SMBIOS_TYPE_STRINGS  *TempSmbiosStrTbl;
+  BOOT_LOADER_VERSION  *VerInfoTbl;
+  VOID                 *SmbiosStringsPtr;
+
+  Index         = 0;
+  PlatformId    = GetPlatformId ();
+  TempSmbiosStrTbl  = (SMBIOS_TYPE_STRINGS *) AllocateTemporaryMemory (0);
+  VerInfoTbl    = GetVerInfoPtr ();
+
+  //
+  // SMBIOS_TYPE_BIOS_INFORMATION
+  //
+  AddSmbiosTypeString (&TempSmbiosStrTbl[Index++], SMBIOS_TYPE_BIOS_INFORMATION,
+    1, "Intel Corporation");
+  if (VerInfoTbl != NULL) {
+    AsciiSPrint (TempStrBuf, sizeof (TempStrBuf),
+      "SBL:%03d.%03d.%03d.%03d.%03d.%05d.%c-%016lX%a\0",
+      VerInfoTbl->ImageVersion.SecureVerNum,
+      VerInfoTbl->ImageVersion.CoreMajorVersion,
+      VerInfoTbl->ImageVersion.CoreMinorVersion,
+      VerInfoTbl->ImageVersion.ProjMajorVersion,
+      VerInfoTbl->ImageVersion.ProjMinorVersion,
+      VerInfoTbl->ImageVersion.BuildNumber,
+      VerInfoTbl->ImageVersion.BldDebug ? 'D' : 'R',
+      VerInfoTbl->SourceVersion,
+      VerInfoTbl->ImageVersion.Dirty ? "-dirty" : "");
+  } else {
+    AsciiSPrint (TempStrBuf, sizeof (TempStrBuf), "%a\0", "Unknown");
+  }
+  AddSmbiosTypeString (&TempSmbiosStrTbl[Index++], SMBIOS_TYPE_BIOS_INFORMATION,
+    2, TempStrBuf);
+  AddSmbiosTypeString (&TempSmbiosStrTbl[Index++], SMBIOS_TYPE_BIOS_INFORMATION,
+    3, "Unknown date");
+
+  //
+  // SMBIOS_TYPE_SYSTEM_INFORMATION
+  //
+  AddSmbiosTypeString (&TempSmbiosStrTbl[Index++], SMBIOS_TYPE_SYSTEM_INFORMATION,
+    1, "Intel Corporation");
+  if (PlatformId == PLATFORM_ID_OXH) {
+    AsciiSPrint (TempStrBuf, sizeof (TempStrBuf), "%a\0", "Oxbow Hill CRB Client Platform");
+  } else if(PlatformId == PLATFORM_ID_LFH){
+    AsciiSPrint (TempStrBuf, sizeof (TempStrBuf), "%a\0", "Leaf Hill CRB Client Platform");
+  } else if(PlatformId == PLATFORM_ID_JNH){
+    AsciiSPrint (TempStrBuf, sizeof (TempStrBuf), "%a\0", "Juniper Hill CRB Client Platform");
+  } else if(PlatformId == PLATFORM_ID_UP2){
+    AsciiSPrint (TempStrBuf, sizeof (TempStrBuf), "%a\0", "UP Squared Client Platform");
+  } else if(PlatformId == PLATFORM_ID_GPMRB){
+    AsciiSPrint (TempStrBuf, sizeof (TempStrBuf), "%a\0", "Gordon Peak MRB Client Platform");
+  } else if(PlatformId == PLATFORM_ID_MB3){
+    AsciiSPrint (TempStrBuf, sizeof (TempStrBuf), "%a\0", "MinnowBoad 3 Client Platform");
+  } else {
+    AsciiSPrint (TempStrBuf, sizeof (TempStrBuf), "%a\0", "Unknown");
+  }
+  AddSmbiosTypeString (&TempSmbiosStrTbl[Index++], SMBIOS_TYPE_SYSTEM_INFORMATION,
+    2, TempStrBuf);
+  AddSmbiosTypeString (&TempSmbiosStrTbl[Index++], SMBIOS_TYPE_SYSTEM_INFORMATION,
+    3, "0.1");
+  AddSmbiosTypeString (&TempSmbiosStrTbl[Index++], SMBIOS_TYPE_SYSTEM_INFORMATION,
+    4, "System Serial Number");
+  AddSmbiosTypeString (&TempSmbiosStrTbl[Index++], SMBIOS_TYPE_SYSTEM_INFORMATION,
+    5, "System SKU Number");
+  AddSmbiosTypeString (&TempSmbiosStrTbl[Index++], SMBIOS_TYPE_SYSTEM_INFORMATION,
+    6, "ApolloLake Client System");
+
+  //
+  // SMBIOS_TYPE_BASEBOARD_INFORMATION
+  //
+  AddSmbiosTypeString (&TempSmbiosStrTbl[Index++], SMBIOS_TYPE_BASEBOARD_INFORMATION,
+    1, "Intel Corporation");
+  if (PlatformId == PLATFORM_ID_OXH) {
+    AsciiSPrint (TempStrBuf, sizeof (TempStrBuf), "%a\0", "Oxbow Hill CRB Board");
+  } else if(PlatformId == PLATFORM_ID_LFH){
+    AsciiSPrint (TempStrBuf, sizeof (TempStrBuf), "%a\0", "Leaf Hill CRB Board");
+  } else if(PlatformId == PLATFORM_ID_JNH){
+    AsciiSPrint (TempStrBuf, sizeof (TempStrBuf), "%a\0", "Juniper Hill CRB Board");
+  } else if(PlatformId == PLATFORM_ID_UP2){
+    AsciiSPrint (TempStrBuf, sizeof (TempStrBuf), "%a\0", "UP Squared Board");
+  } else if(PlatformId == PLATFORM_ID_GPMRB){
+    AsciiSPrint (TempStrBuf, sizeof (TempStrBuf), "%a\0", "Gordon Peak MRB Board");
+  } else if(PlatformId == PLATFORM_ID_MB3){
+    AsciiSPrint (TempStrBuf, sizeof (TempStrBuf), "%a\0", "MinnowBoad 3 Board");
+  } else {
+    AsciiSPrint (TempStrBuf, sizeof (TempStrBuf), "%a\0", "Unknown");
+  }
+  AddSmbiosTypeString (&TempSmbiosStrTbl[Index++], SMBIOS_TYPE_BASEBOARD_INFORMATION,
+    2, TempStrBuf);
+  AddSmbiosTypeString (&TempSmbiosStrTbl[Index++], SMBIOS_TYPE_BASEBOARD_INFORMATION,
+    3, "1");
+  AddSmbiosTypeString (&TempSmbiosStrTbl[Index++], SMBIOS_TYPE_BASEBOARD_INFORMATION,
+    4, "Board Serial Number");
+
+  //
+  // SMBIOS_TYPE_END_OF_TABLE
+  //
+  AddSmbiosTypeString (&TempSmbiosStrTbl[Index++], SMBIOS_TYPE_END_OF_TABLE,
+    0, NULL);
+
+  Length = sizeof (SMBIOS_TYPE_STRINGS) * Index;
+  SmbiosStringsPtr = AllocatePool (Length);
+  if (SmbiosStringsPtr == NULL) {
+    return EFI_OUT_OF_RESOURCES;
+  }
+
+  CopyMem (SmbiosStringsPtr, TempSmbiosStrTbl, Length);
+  (VOID) PcdSet32S (PcdSmbiosStringsPtr, (UINT32)(UINTN)SmbiosStringsPtr);
+  (VOID) PcdSet16S (PcdSmbiosStringsCnt, Index);
+
+  return EFI_SUCCESS;
 }
 
 /**
@@ -295,7 +455,12 @@ ResetSystemIocIpc (
   UINT32                    PciBar;
   UINT32                    Data32;
 
-  if (ResetType == EfiResetCold) {
+  if (ResetType == EfiResetWarm) {
+    //
+    // Flush the cache in case the changes are needed in next boot.
+    //
+    AsmWbinvd ();
+  } else if (ResetType == EfiResetCold) {
     IocUartData = (IOC_UART_CFG_DATA *)FindConfigDataByTag (CDATA_IOC_UART_TAG);
     if (IocUartData == NULL) {
       DEBUG ((DEBUG_WARN, "CDATA_IOC_UART_TAG Not Found\n"));
@@ -306,7 +471,7 @@ ResetSystemIocIpc (
     ASSERT (IocUartData->DeviceIndex < 4);
     ASSERT (IocUartData->DeviceIndex != 2);
 
-    PciBar = GetUartBaseAddress (IocUartData->DeviceIndex);
+    PciBar = (UINT32)GetUartBaseAddress (IocUartData->DeviceIndex);
     ASSERT (PciBar != 0xFFFFFFFF);
 
     MmioWrite32 (PciBar + R_LPSS_IO_MEM_RESETS, 0);
@@ -366,7 +531,7 @@ AssignPciIrqs (
   VOID
   )
 {
-  UINT32 PciBase;
+  UINTN  PciBase;
   UINT8  Bus;
   UINT8  Function;
   UINT8  IntPin;
@@ -401,7 +566,7 @@ SaveOtgRole (
   VOID
   )
 {
-  UINT32                            XhciPciBase;
+  UINTN                             XhciPciBase;
   UINT32                            XhciBar;
   UINT8                             BootMode;
 
@@ -496,7 +661,7 @@ RestoreOtgRole (
   VOID
   )
 {
-  UINT32                            XhciPciBase;
+  UINTN                             XhciPciBase;
   UINT32                            XhciBar;
   UINT32                            DualRoleCfg0;
   UINT8                             BootMode;
@@ -516,63 +681,16 @@ RestoreOtgRole (
 }
 
 /**
-  Set framebuffer range as WC using MTRR to improve performance.
-
-  The BSP MTRR needs to be programmed before FspSiliconInit() API so that
-  all APs' MTRRs will be syned up during FspSiliconInit() call.
+  Set IA Untrust mode at the end.
 
 **/
 VOID
-SetFrameBufferWriteCombining (
-  VOID
-)
-{
-  UINT32             MsrIdx;
-  UINT32             MsrMax;
-  UINT32             Base;
-
-  // Enable Framebuffer as WC.
-  MsrMax = EFI_MSR_CACHE_VARIABLE_MTRR_BASE +
-           (2 * (UINT32)(AsmReadMsr64(EFI_MSR_IA32_MTRR_CAP) & B_EFI_MSR_IA32_MTRR_CAP_VARIABLE_SUPPORT));
-  for (MsrIdx = EFI_MSR_CACHE_VARIABLE_MTRR_BASE; MsrIdx < MsrMax; MsrIdx += 2) {
-    // Try to find a free MTRR pair
-    if ((AsmReadMsr64(MsrIdx + 1) & B_EFI_MSR_CACHE_MTRR_VALID) == 0) {
-      break;
-    }
-  }
-
-  if (MsrIdx < MsrMax) {
-    // Framebuffer belongs to PMEM32 in PCI resource allocation.
-    // The 1st 256MB from PcdPciResourceMem32Base will be consumed by MEM32 resource.
-    // And framebuffer should be allocated to the next 256MB aligned address.
-    Base = (PcdGet32 (PcdPciResourceMem32Base) + SIZE_256MB)  &  ~(SIZE_256MB - 1);
-    AsmWriteMsr64 (MsrIdx,     Base | CACHE_WRITECOMBINING);
-    AsmWriteMsr64 (MsrIdx + 1, 0xF00000000ULL + B_EFI_MSR_CACHE_MTRR_VALID + (UINT32)(~(SIZE_256MB - 1)));
-  } else {
-    DEBUG ((DEBUG_WARN, "Failed to find a free MTRR pair for framebuffer!\n"));
-  }
-}
-
-/**
-  Clear FSP HOB data
-
-**/
-VOID
-ClearFspHob (
+EFIAPI
+EnterIaUnTrustMode (
   VOID
   )
 {
-  LOADER_GLOBAL_DATA          *LdrGlobal;
-  EFI_HOB_HANDOFF_INFO_TABLE  *HandOffHob;
-  UINT32                      Length;
-
-  LdrGlobal  = (LOADER_GLOBAL_DATA *)GetLoaderGlobalDataPointer ();
-  HandOffHob = (EFI_HOB_HANDOFF_INFO_TABLE  *) LdrGlobal->FspHobList;
-  if (HandOffHob != NULL) {
-    Length     = (UINT8 *) (UINTN) HandOffHob->EfiEndOfHobList - (UINT8 *)HandOffHob;
-    ZeroMem (HandOffHob, Length);
-    LdrGlobal->FspHobList = NULL;
-  }
+  AsmMsrOr64 (EFI_MSR_POWER_MISC, B_EFI_MSR_POWER_MISC_ENABLE_IA_UNTRUSTED_MODE);
 }
 
 /**
@@ -590,19 +708,9 @@ ProgramSecuritySetting (
 
   // Set the BIOS Lock Enable and EISS bits
   MmioOr8 (SpiBaseAddress + R_SPI_BCR, (UINT8) (B_SPI_BCR_BLE | B_SPI_BCR_EISS));
-}
 
-/**
-  Set IA Untrust mode at the end.
-
-**/
-VOID
-EFIAPI
-EnterIaUnTrustMode (
-  VOID
-  )
-{
-  AsmMsrOr64 (EFI_MSR_POWER_MISC, B_EFI_MSR_POWER_MISC_ENABLE_IA_UNTRUSTED_MODE);
+  // Enter untrust mode
+  EnterIaUnTrustMode ();
 }
 
 /**
@@ -657,7 +765,7 @@ UpdatePayloadId (
     PlatCfgData = (PLATFORM_CFG_DATA *)FindConfigDataByTag (CDATA_PLATFORM_TAG);
     if ((PlatCfgData != NULL) && (PlatCfgData->PayloadSelGpio.Enable != 0)) {
       // The default GPIOSet to Pull Up 20K
-      GpioGetInputValue (PlatCfgData->PayloadSelGpio.PadInfo, 0x0C, &GpioLevel);
+      GpioGetInputValueWithTerm (PlatCfgData->PayloadSelGpio.PadInfo, 0x0C, &GpioLevel);
       if (GpioLevel != 0) {
         PayloadId = 0;
       } else {
@@ -671,6 +779,67 @@ UpdatePayloadId (
 }
 
 /**
+  Build VT-d information to prepare PMR program
+
+**/
+STATIC
+VOID
+BuildVtdInfo (
+  VOID
+  )
+{
+  VTD_INFO     *VtdInfo;
+  UINTN         McD0BaseAddress;
+  UINT32        MchBar;
+  UINT32        Idx;
+  UINT32        VtdIdx;
+  UINT32        Data;
+  UINT32        RegOff[2] = {R_SA_MCHBAR_VTD1_OFFSET, R_SA_MCHBAR_VTD2_OFFSET};
+
+  VtdInfo = &((PLATFORM_DATA *)GetPlatformDataPtr ())->VtdInfo;
+  McD0BaseAddress = MM_PCI_ADDRESS (SA_MC_BUS, 0, 0, 0);
+  MchBar          = MmioRead32 (McD0BaseAddress + R_SA_MCHBAR_REG) & ~BIT0;
+  VtdInfo->HostAddressWidth = 38;
+
+  VtdIdx = 0;
+  for (Idx = 0; Idx < ARRAY_SIZE(RegOff); Idx++) {
+    Data = MmioRead32 (MchBar + RegOff[Idx]) & ~3;
+    if (Data != 0) {
+      DEBUG ((DEBUG_INFO, "VT-d Engine %d @ 0x%08X\n", VtdIdx, Data));
+      VtdInfo->VTdEngineAddress[VtdIdx++] = Data;
+      ASSERT (VtdIdx <= ARRAY_SIZE(VtdInfo->VTdEngineAddress));
+    }
+  }
+
+  VtdInfo->VTdEngineCount = VtdIdx;
+}
+
+/**
+  Apply SD card power if card is present.
+
+**/
+VOID
+SdcardPowerUp (
+  VOID
+  )
+{
+  UINT16  PlatformId;
+  UINT32  Data;
+
+  PlatformId = GetPlatformId ();
+  if ((PlatformId == PLATFORM_ID_LFH) || (PlatformId == PLATFORM_ID_OXH) || (PlatformId == PLATFORM_ID_JNH)) {
+    // Check if SD card is present using GPIO_177
+    Data = GpioRead ((SW_GPIO_177) >> 16, (SW_GPIO_177) & 0xFFFF) & BIT1;
+    if (Data == 0) {
+      // Card present, so turn on SD card power using GPIO_183
+      Data = GpioRead ((SW_GPIO_183) >> 16, (SW_GPIO_183) & 0xFFFF);
+      GpioWrite ((SW_GPIO_183) >> 16, (SW_GPIO_183) & 0xFFFF, Data & ~BIT0);
+      MmioOr32 (P2SB_MMIO_BASE_ADDRESS + 0xD60608, BIT5);
+    }
+  }
+}
+
+/**
   Board specific hook points.
 
   Implement board specific initialization during the boot flow.
@@ -679,6 +848,7 @@ UpdatePayloadId (
 
 **/
 VOID
+EFIAPI
 BoardInit (
   IN  BOARD_INIT_PHASE    InitPhase
   )
@@ -687,9 +857,10 @@ BoardInit (
   UINT32              VarBase;
   UINT32              VarSize;
   UINT32              TcoCnt;
-  LOADER_GLOBAL_DATA *LdrGlobal;
+  VOID               *FspHobList;
   UINT32              TsegBase;
   UINT64              TsegSize;
+  VTD_INFO           *VtdInfo;
 
   switch (InitPhase) {
   case PreSiliconInit:
@@ -704,23 +875,22 @@ BoardInit (
 
     // Get TSEG info from FSP HOB
     // It will be consumed in MpInit if SMM rebase is enabled
-    LdrGlobal  = (LOADER_GLOBAL_DATA *)GetLoaderGlobalDataPointer ();
-    TsegBase = (UINT32)GetFspReservedMemoryFromGuid (
-                       LdrGlobal->FspHobList,
-                       &TsegSize,
-                       &gReservedMemoryResourceHobTsegGuid
-                       );
+    TsegBase = 0;
+    FspHobList = GetFspHobListPtr ();
+    if (FspHobList != NULL) {
+      TsegBase = (UINT32)GetFspReservedMemoryFromGuid (
+                        FspHobList,
+                        &TsegSize,
+                        &gReservedMemoryResourceHobTsegGuid
+                        );
+    }
     if (TsegBase != 0) {
       Status = PcdSet32S (PcdSmramTsegBase, TsegBase);
       Status = PcdSet32S (PcdSmramTsegSize, (UINT32)TsegSize);
     }
 
+    SdcardPowerUp();
     SaveOtgRole();
-    if (PcdGetBool (PcdFramebufferInitEnabled)) {
-      // Enable framebuffer as WC for performance
-      SetFrameBufferWriteCombining ();
-    }
-
     Status = PcdSet32S (PcdFuncCpuInitHook, (UINT32)(UINTN) PlatformCpuInit);
     break;
   case PostSiliconInit:
@@ -731,9 +901,26 @@ BoardInit (
       PciWrite8 (PCI_LIB_ADDRESS(SA_IGD_BUS, SA_IGD_DEV, SA_IGD_FUN_0, PCI_COMMAND_OFFSET), \
                  EFI_PCI_COMMAND_MEMORY_SPACE | EFI_PCI_COMMAND_BUS_MASTER);
     }
+    //
+    // Initialize Smbios Info for SmbiosInit
+    //
+    if (FeaturePcdGet (PcdSmbiosEnabled)) {
+      InitializeSmbiosInfo ();
+    }
+    // Enable DMA protection
+    if (FeaturePcdGet (PcdDmaProtectionEnabled)) {
+      BuildVtdInfo ();
+      VtdInfo = &((PLATFORM_DATA *)GetPlatformDataPtr ())->VtdInfo;
+      SetDmaProtection (VtdInfo, TRUE);
+    }
     BuildOsConfigDataHob ();
     break;
   case PostPciEnumeration:
+    // Enable framebuffer as WC for performance
+    Status = SetFrameBufferWriteCombining (0, MAX_UINT32);
+    if (EFI_ERROR(Status)) {
+      DEBUG ((DEBUG_INFO, "Failed to set GFX framebuffer as WC\n"));
+    }
     if (PcdGetBool (PcdSeedListEnabled)) {
       Status = GenerateSeeds ();
       if (EFI_ERROR (Status)) {
@@ -750,12 +937,13 @@ BoardInit (
     }
     break;
   case EndOfStages:
-    RegisterHeciService();
+    HeciRegisterHeciService ();
     InitPlatformService ();
 
     if (GetPayloadId() != 0) {
       ProgramSecuritySetting ();
     }
+
     break;
   case ReadyToBoot:
     if (GetPayloadId() == 0) {
@@ -768,6 +956,11 @@ BoardInit (
     break;
   case EndOfFirmware:
     ClearFspHob ();
+    if (FeaturePcdGet (PcdDmaProtectionEnabled)) {
+      // Disable DMA protection
+      VtdInfo = &((PLATFORM_DATA *)GetPlatformDataPtr ())->VtdInfo;
+      SetDmaProtection (VtdInfo, FALSE);
+    }
     EnterIaUnTrustMode ();
     // Clear known MCA logged in BANK4 and enable this MCA again
     AsmWriteMsr64 (IA32_MC4_STATUS, 0);
@@ -785,6 +978,7 @@ BoardInit (
 
 **/
 VOID
+EFIAPI
 UpdateFspConfig (
   VOID     *FspsUpdPtr
   )
@@ -863,7 +1057,7 @@ UpdateFspConfig (
     PciBase  = (UINT32)PcdGet64(PcdPciExpressBaseAddress);
     Stepping = MmioRead8 (PciBase + 8);
     Value64  = AsmReadMsr64 (MSR_IA32_PLATFORM_ID);
-    PlatformId = (Value64 >> 50) & 7;
+    PlatformId = RShiftU64 (Value64, 50) & 7;
     if (Stepping <= 0xB && PlatformId == 0) {
       FspsConfig->IpuEn   = 0;
     }
@@ -972,7 +1166,7 @@ UpdateFspConfig (
     FspsConfig->DspEndpointI2sHp          = HdaCfgData->DspEndpointI2sHp;
     FspsConfig->DspFeatureMask            = HdaCfgData->DspFeatureMask;
     FspsConfig->DspPpModuleMask           = HdaCfgData->DspPpModuleMask;
-    FspsConfig->HdaVerbTablePtr           = (UINT32) (&HdaVerbTableAlc662);
+    FspsConfig->HdaVerbTablePtr           = (UINT32)(UINTN)(&HdaVerbTableAlc662);
     FspsConfig->HdaVerbTableEntryNum      = 1;
 
     HdaEndpointBtRender.VirtualBusId      = HdaCfgData->VirtualIdBtRender;
@@ -983,7 +1177,7 @@ UpdateFspConfig (
   }
 
   if (PcdGetBool (PcdFramebufferInitEnabled)) {
-    FspsConfig->GraphicsConfigPtr = PcdGet32 (PcdGraphicsVbtAddress);
+    FspsConfig->GraphicsConfigPtr   = (UINT32)GetVbtAddress ();
   } else {
     FspsConfig->GraphicsConfigPtr = 0;
   }
@@ -1092,9 +1286,15 @@ SaveNvsData (
   UINT8                           Data8;
   UINT8                           BitMap;
   FLASH_MAP                      *FlashMapPtr;
+  VOID                           *FspHobList;
 
-  VariableMrcData = GetGuidHobData (((LOADER_GLOBAL_DATA *)GetLoaderGlobalDataPointer ())->FspHobList,
-                                          &VarLength, &gFspVariableNvDataHobGuid);
+  VariableMrcData = NULL;
+  FspHobList = GetFspHobListPtr ();
+  if (FspHobList != NULL) {
+    VariableMrcData = GetGuidHobData (FspHobList,
+                                      &VarLength,
+                                      &gFspVariableNvDataHobGuid);
+  }
   if (VariableMrcData == NULL || (Buffer == NULL) || (Length < sizeof (MrcParamHdr->Crc))) {
     return EFI_NOT_FOUND;
   }
@@ -1130,7 +1330,7 @@ SaveNvsData (
       break;
     }
 
-    DataSize  = RleCompressData (Buffer, Length, (UINT8 *)MemPool + sizeof (MRC_PARAM_HDR));
+    DataSize  = (UINT32)RleCompressData (Buffer, Length, (UINT8 *)MemPool + sizeof (MRC_PARAM_HDR));
     DataSize += sizeof (MRC_PARAM_HDR);
 
     DEBUG ((DEBUG_INFO, "Writing MRC ParamData to SPI BIOS @ 0x%X:0x%X\n", BiosOffset + MrcParamsOffset, DataSize));
@@ -1174,7 +1374,7 @@ SaveNvsData (
 
     DEBUG ((DEBUG_INFO, "Read MRC VarData at 0x%X\n", MrcDataBase + MrcNvDataOffset));
     MrcVarHdr = (MRC_VAR_HDR *)MemPool;
-    CopyMem ((UINT8 *)MrcVarHdr, (UINT8 *)MrcDataBase + MrcNvDataOffset, sizeof (MRC_VAR_HDR));
+    CopyMem ((UINT8 *)MrcVarHdr, (UINT8 *)(UINTN)MrcDataBase + MrcNvDataOffset, sizeof (MRC_VAR_HDR));
 
     ActIdx = 0xFF;
     if (MrcVarHdr->Signature == MRC_VAR_SIGNATURE) {
@@ -1246,7 +1446,7 @@ UpdateSerialPortInfo (
   )
 {
   SerialPortInfo->Type     = 2;
-  SerialPortInfo->BaseAddr = GetSerialPortBase();
+  SerialPortInfo->BaseAddr = (UINT32) GetSerialPortBase();
   SerialPortInfo->RegWidth = GetSerialPortStrideSize();
 
   DEBUG ((DEBUG_INFO, "SerialPortInfo Type=%d BaseAddr=0x%08X RegWidth=%d\n",
@@ -1302,7 +1502,6 @@ UpdateOsBootMediumInfo (
     DEBUG ((DEBUG_INFO, "Set boot to shell!\n"));
     OsBootOptionList->BootToShell = 1;
   }
-
 }
 
 /**
@@ -1365,39 +1564,56 @@ UpdateLoaderPlatformInfo (
                                         ((PlatformData->BtGuardInfo.Bpm.Mb) << 1);
 
     // Get Manufacturing Mode from Heci
-    ReadHeciFwStatus(&HeciFwSts);
+    HeciReadFwStatus (&HeciFwSts);
     LoaderPlatformInfo->HwState |= (HeciFwSts & BIT4) >> 2;
   }
 }
 
-
-
 /**
  Update loader SMM info.
 
- @param[out] SmmInfoHob     pointer to SMM information HOB
+ @param[out] LdrSmmInfo     pointer to SMM information HOB
 
 **/
 VOID
 UpdateSmmInfo (
-  OUT  LDR_SMM_INFO           *SmmInfoHob
+  OUT  LDR_SMM_INFO           *LdrSmmInfo
 )
 {
+  if (LdrSmmInfo == NULL) {
+    return;
+  }
+  LdrSmmInfo->SmmBase = MmioRead32 (TO_MM_PCI_ADDRESS (0x00000000) + TSEG) & ~0xF;
+  LdrSmmInfo->SmmSize = MmioRead32 (TO_MM_PCI_ADDRESS (0x00000000) + BGSM) & ~0xF;
+  LdrSmmInfo->SmmSize -= LdrSmmInfo->SmmBase;
+  LdrSmmInfo->Flags = SMM_FLAGS_4KB_COMMUNICATION;
+  DEBUG ((DEBUG_INFO, "SmmRamBase = 0x%x, SmmRamSize = 0x%x\n", LdrSmmInfo->SmmBase, LdrSmmInfo->SmmSize));
 
-  SmmInfoHob->SmmBase = MmioRead32 (TO_MM_PCI_ADDRESS (0x00000000) + TSEG) & ~0xF;
-  SmmInfoHob->SmmSize = MmioRead32 (TO_MM_PCI_ADDRESS (0x00000000) + BGSM) & ~0xF;
-  SmmInfoHob->SmmSize -= SmmInfoHob->SmmBase;
-  SmmInfoHob->Flags   = SMM_FLAGS_4KB_COMMUNICATION;
-  DEBUG ((DEBUG_INFO, "SmmRamBase = 0x%x, SmmRamSize = 0x%x\n", SmmInfoHob->SmmBase, SmmInfoHob->SmmSize));
   //
-  // Update the HOB with smi ctrl register data
+  // Update smi ctrl register data
   //
-  SmmInfoHob->SmiCtrlReg.RegType    = IO;
-  SmmInfoHob->SmiCtrlReg.RegWidth   = WIDE32;
-  SmmInfoHob->SmiCtrlReg.SmiGblPos  = B_SMI_EN_GBL_SMI;
-  SmmInfoHob->SmiCtrlReg.SmiApmPos  = B_SMI_EN_APMC;
-  SmmInfoHob->SmiCtrlReg.SmiEosPos  = B_SMI_EN_EOS;
-  SmmInfoHob->SmiCtrlReg.Address    = (UINT32)(ACPI_BASE_ADDRESS + R_SMI_EN);
+  LdrSmmInfo->SmiCtrlReg.RegType    = (UINT8)REG_TYPE_IO;
+  LdrSmmInfo->SmiCtrlReg.RegWidth   = (UINT8)WIDE32;
+  LdrSmmInfo->SmiCtrlReg.SmiGblPos  = (UINT8)HighBitSet32 (B_SMI_EN_GBL_SMI);
+  LdrSmmInfo->SmiCtrlReg.SmiApmPos  = (UINT8)HighBitSet32 (B_SMI_EN_APMC);
+  LdrSmmInfo->SmiCtrlReg.SmiEosPos  = (UINT8)HighBitSet32 (B_SMI_EN_EOS);
+  LdrSmmInfo->SmiCtrlReg.Address    = (UINT32)(ACPI_BASE_ADDRESS + R_SMI_EN);
+
+  //
+  // Update smi status register data
+  //
+  LdrSmmInfo->SmiStsReg.RegType    = (UINT8)REG_TYPE_IO;
+  LdrSmmInfo->SmiStsReg.RegWidth   = (UINT8)WIDE32;
+  LdrSmmInfo->SmiStsReg.SmiApmPos  = (UINT8)HighBitSet32 (B_SMI_STS_APMC);
+  LdrSmmInfo->SmiStsReg.Address    = (UINT32)(ACPI_BASE_ADDRESS + R_SMI_STS);
+
+  //
+  // Update smi lock register data
+  //
+  LdrSmmInfo->SmiLockReg.RegType    = (UINT8)REG_TYPE_MMIO;
+  LdrSmmInfo->SmiLockReg.RegWidth   = (UINT8)WIDE32;
+  LdrSmmInfo->SmiLockReg.SmiLockPos = (UINT8)HighBitSet32 (B_PMC_GEN_PMCON_2_SMI_LOCK);
+  LdrSmmInfo->SmiLockReg.Address    = (UINT32)(PMC_BASE_ADDRESS + R_PMC_GEN_PMCON_2);
 }
 
 
@@ -1508,7 +1724,7 @@ UpdateAcpiDsdt (
   for (; Ptr < End; Ptr++) {
     if (!PnvsFound && (*(UINT32 *)Ptr == SIGNATURE_32 ('P', 'N', 'V', 'S')) &&
          (*(Ptr - 1) == AML_EXT_REGION_OP)) {
-      * (UINT32 *) (Ptr + 6)  = (UINT32)&Gnvs->CpuNvs;
+      * (UINT32 *) (Ptr + 6)  = (UINT32)(UINTN)&Gnvs->CpuNvs;
       * (UINT16 *) (Ptr + 11) = (UINT16)sizeof(CPU_NVS_AREA);
       PnvsFound = TRUE;
     }
@@ -1564,7 +1780,7 @@ PlatformUpdateAcpiTable (
 
     Hpet->BaseAddressLower32Bit.Address = HPET_BASE_ADDRESS;
     Hpet->EventTimerBlockId             = EFI_ACPI_EVENT_TIMER_BLOCK_ID;
-    Data16 = * (UINT16 *) HPET_BASE_ADDRESS;
+    Data16 = * (UINT16 *)(UINTN) HPET_BASE_ADDRESS;
     Data16 &= B_HPET_GCID_NT;
     if (Data16 != 0) {
       Hpet->EventTimerBlockId = Hpet->EventTimerBlockId | Data16;
@@ -1588,8 +1804,8 @@ PlatformUpdateAcpiTable (
     }
   }
 
-  if (FeaturePcdGet (PcdVtdEnabled)) {
-    if (Table->Signature == EFI_ACPI_VTD_DMAR_TABLE_SIGNATURE) {
+  if (Table->Signature == EFI_ACPI_VTD_DMAR_TABLE_SIGNATURE) {
+    if (FeaturePcdGet (PcdVtdEnabled)) {
       PlatformData  = (PLATFORM_DATA *)GetPlatformDataPtr ();
       if (PlatformData->RmrrUsbAddress != 0) {
         Dmar = (EFI_ACPI_DMAR_TABLE *)Table;
@@ -1597,6 +1813,8 @@ PlatformUpdateAcpiTable (
         Dmar->RmrrHeci.RmrLimitAddress = Dmar->RmrrHeci.RmrBaseAddress + VTD_RMRR_USB_LENGTH - 1;
       }
       UpdateDmarAcpi (Table);
+    } else {
+      Status = EFI_UNSUPPORTED;
     }
   }
 
@@ -1623,7 +1841,6 @@ PlatformUpdateAcpiTable (
       DEBUG ( (DEBUG_INFO, "Updated Psd Table in AcpiTable Entries\n") );
     }
   }
-  ASSERT_EFI_ERROR (Status);
 
   return Status;
 }
@@ -1681,7 +1898,7 @@ PlatformUpdateAcpiGnvs (
 
   PcieRpConfigData  = (PCIE_RP_CFG_DATA *)FindConfigDataByTag (CDATA_PCIE_RP_TAG);
   if (PcieRpConfigData != NULL) {
-    PowerResetData = (PCIE_RP_PIN_CTRL *) PcieRpConfigData->PcieRpPinCtrlData0;
+    PowerResetData = (PCIE_RP_PIN_CTRL *) &PcieRpConfigData->PcieRpPower0;
     for (Idx1 = 0; Idx1 < PCIE_MAX_ROOT_PORTS; Idx1++) {
       Idx2 = (UINT8)PowerResetData->PcieRpPower0.Wake;
       if (Idx2 >= sizeof(mPcieRpWakeGpeBit)) {

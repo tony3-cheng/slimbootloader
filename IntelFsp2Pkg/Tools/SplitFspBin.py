@@ -1,6 +1,6 @@
-## @ FspTool.py
+## @ SplitFspBin.py
 #
-# Copyright (c) 2015 - 2019, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2015 - 2021, Intel Corporation. All rights reserved.<BR>
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 ##
@@ -103,26 +103,29 @@ class FSP_COMMON_HEADER(Structure):
 
 class FSP_INFORMATION_HEADER(Structure):
      _fields_ = [
-        ('Signature',            ARRAY(c_char, 4)),
-        ('HeaderLength',         c_uint32),
-        ('Reserved1',            c_uint16),
-        ('SpecVersion',          c_uint8),
-        ('HeaderRevision',       c_uint8),
-        ('ImageRevision',        c_uint32),
-        ('ImageId',              ARRAY(c_char, 8)),
-        ('ImageSize',            c_uint32),
-        ('ImageBase',            c_uint32),
-        ('ImageAttribute',       c_uint16),
-        ('ComponentAttribute',   c_uint16),
-        ('CfgRegionOffset',      c_uint32),
-        ('CfgRegionSize',        c_uint32),
-        ('Reserved2',            c_uint32),
-        ('TempRamInitEntryOffset',     c_uint32),
-        ('Reserved3',                  c_uint32),
-        ('NotifyPhaseEntryOffset',     c_uint32),
-        ('FspMemoryInitEntryOffset',   c_uint32),
-        ('TempRamExitEntryOffset',     c_uint32),
-        ('FspSiliconInitEntryOffset',  c_uint32)
+        ('Signature',                      ARRAY(c_char, 4)),
+        ('HeaderLength',                   c_uint32),
+        ('Reserved1',                      c_uint16),
+        ('SpecVersion',                    c_uint8),
+        ('HeaderRevision',                 c_uint8),
+        ('ImageRevision',                  c_uint32),
+        ('ImageId',                        ARRAY(c_char, 8)),
+        ('ImageSize',                      c_uint32),
+        ('ImageBase',                      c_uint32),
+        ('ImageAttribute',                 c_uint16),
+        ('ComponentAttribute',             c_uint16),
+        ('CfgRegionOffset',                c_uint32),
+        ('CfgRegionSize',                  c_uint32),
+        ('Reserved2',                      c_uint32),
+        ('TempRamInitEntryOffset',         c_uint32),
+        ('Reserved3',                      c_uint32),
+        ('NotifyPhaseEntryOffset',         c_uint32),
+        ('FspMemoryInitEntryOffset',       c_uint32),
+        ('TempRamExitEntryOffset',         c_uint32),
+        ('FspSiliconInitEntryOffset',      c_uint32),
+        ('FspMultiPhaseSiInitEntryOffset', c_uint32),
+        ('ExtendedImageRevision',          c_uint16),
+        ('Reserved4',                      c_uint16)
     ]
 
 class FSP_PATCH_TABLE(Structure):
@@ -390,7 +393,26 @@ def OutputStruct (obj, indent = 0, plen = 0):
             if IsStrType (val):
                 rep = HandleNameStr (val)
             elif IsIntegerType (val):
-                rep = '0x%X' % val
+                if (key == 'ImageRevision'):
+                    FspImageRevisionMajor       = ((val >> 24) & 0xFF)
+                    FspImageRevisionMinor       = ((val >> 16) & 0xFF)
+                    FspImageRevisionRevision    = ((val >> 8) & 0xFF)
+                    FspImageRevisionBuildNumber = (val & 0xFF)
+                    rep = '0x%08X' % val
+                elif (key == 'ExtendedImageRevision'):
+                    FspImageRevisionRevision    |= (val & 0xFF00)
+                    FspImageRevisionBuildNumber |= ((val << 8) & 0xFF00)
+                    rep = "0x%04X ('%02X.%02X.%04X.%04X')" % (val, FspImageRevisionMajor, FspImageRevisionMinor, FspImageRevisionRevision, FspImageRevisionBuildNumber)
+                elif field[1] == c_uint64:
+                    rep = '0x%016X' % val
+                elif field[1] == c_uint32:
+                    rep = '0x%08X' % val
+                elif field[1] == c_uint16:
+                    rep = '0x%04X' % val
+                elif field[1] == c_uint8:
+                    rep = '0x%02X' % val
+                else:
+                    rep = '0x%X' % val
             elif isinstance(val, c_uint24):
                 rep = '0x%X' % val.get_value()
             elif 'c_ubyte_Array' in str(type(val)):
@@ -428,7 +450,7 @@ class FirmwareFile:
         ffssize = len(self.FfsData)
         offset  = sizeof(self.FfsHdr)
         if self.FfsHdr.Name != '\xff' * 16:
-            while offset < ffssize:
+            while offset < (ffssize - sizeof (EFI_COMMON_SECTION_HEADER)):
                 sechdr = EFI_COMMON_SECTION_HEADER.from_buffer (self.FfsData, offset)
                 sec = Section (offset, self.FfsData[offset:offset + int(sechdr.Size)])
                 self.SecList.append(sec)
@@ -453,7 +475,7 @@ class FirmwareVolume:
         else:
             offset = self.FvHdr.HeaderLength
         offset = AlignPtr(offset)
-        while offset < fvsize:
+        while offset < (fvsize - sizeof (EFI_FFS_FILE_HEADER)):
             ffshdr = EFI_FFS_FILE_HEADER.from_buffer (self.FvData, offset)
             if (ffshdr.Name == '\xff' * 16) and (int(ffshdr.Size) == 0xFFFFFF):
                 offset = fvsize
@@ -515,7 +537,7 @@ class FirmwareDevice:
         offset = 0
         fdsize = len(self.FdData)
         self.FvList  = []
-        while offset < fdsize:
+        while offset < (fdsize - sizeof (EFI_FIRMWARE_VOLUME_HEADER)):
             fvh = EFI_FIRMWARE_VOLUME_HEADER.from_buffer (self.FdData, offset)
             if b'_FVH' != fvh.Signature:
                 raise Exception("ERROR: Invalid FV header !")
@@ -619,10 +641,10 @@ class PeTeImage:
             rsize   = self.TeHdr.DataDirectoryBaseReloc.Size
             roffset = sizeof(self.TeHdr) - self.TeHdr.StrippedSize + self.TeHdr.DataDirectoryBaseReloc.VirtualAddress
         else:
-            if self.PeHdr.OptionalHeader.PeOptHdr.Magic == 0x10b: # PE32 image
-                rsize   = self.PeHdr.OptionalHeader.PeOptHdr.DataDirectory[EFI_IMAGE_DIRECTORY_ENTRY.BASERELOC].Size
-                roffset = self.PeHdr.OptionalHeader.PeOptHdr.DataDirectory[EFI_IMAGE_DIRECTORY_ENTRY.BASERELOC].VirtualAddress
-            if self.PeHdr.OptionalHeader.PeOptHdr.Magic == 0x20b: # PE32+ image
+            # Assuming PE32 image type (self.PeHdr.OptionalHeader.PeOptHdr.Magic == 0x10b)
+            rsize   = self.PeHdr.OptionalHeader.PeOptHdr.DataDirectory[EFI_IMAGE_DIRECTORY_ENTRY.BASERELOC].Size
+            roffset = self.PeHdr.OptionalHeader.PeOptHdr.DataDirectory[EFI_IMAGE_DIRECTORY_ENTRY.BASERELOC].VirtualAddress
+            if self.PeHdr.OptionalHeader.PePlusOptHdr.Magic == 0x20b: # PE32+ image
                 rsize   = self.PeHdr.OptionalHeader.PePlusOptHdr.DataDirectory[EFI_IMAGE_DIRECTORY_ENTRY.BASERELOC].Size
                 roffset = self.PeHdr.OptionalHeader.PePlusOptHdr.DataDirectory[EFI_IMAGE_DIRECTORY_ENTRY.BASERELOC].VirtualAddress
 
@@ -677,8 +699,12 @@ class PeTeImage:
         else:
             offset  = self.Offset + self.DosHdr.e_lfanew
             offset += EFI_IMAGE_NT_HEADERS32.OptionalHeader.offset
-            offset += EFI_IMAGE_OPTIONAL_HEADER32.ImageBase.offset
-            size    = EFI_IMAGE_OPTIONAL_HEADER32.ImageBase.size
+            if self.PeHdr.OptionalHeader.PePlusOptHdr.Magic == 0x20b: # PE32+ image
+                offset += EFI_IMAGE_OPTIONAL_HEADER32_PLUS.ImageBase.offset
+                size    = EFI_IMAGE_OPTIONAL_HEADER32_PLUS.ImageBase.size
+            else:
+                offset += EFI_IMAGE_OPTIONAL_HEADER32.ImageBase.offset
+                size    = EFI_IMAGE_OPTIONAL_HEADER32.ImageBase.size
 
         value  = Bytes2Val(fdbin[offset:offset+size]) + delta
         fdbin[offset:offset+size] = Val2Bytes(value, size)
@@ -838,7 +864,7 @@ def RebaseFspBin (FspBinary, FspComponent, FspBase, OutputDir, OutputFile):
 
 def main ():
     parser     = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers(title='commands')
+    subparsers = parser.add_subparsers(title='commands', dest="which")
 
     parser_rebase  = subparsers.add_parser('rebase',  help='rebase a FSP into a new base address')
     parser_rebase.set_defaults(which='rebase')
@@ -880,7 +906,7 @@ def main ():
     elif args.which == 'info':
         ShowFspInfo (args.FspBinary)
     else:
-        pass
+        parser.print_help()
 
     return 0
 

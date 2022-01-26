@@ -1,6 +1,6 @@
 /** @file
 
-  Copyright (c) 2019, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2021, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
   Copyright (c) 1997 Manuel Bouyer.
@@ -108,7 +108,7 @@
   @retval other if error.
 **/
 STATIC
-INT32
+RETURN_STATUS
 BlockMap (
   IN  OPEN_FILE     *File,
   IN  INDPTR         FileBlock,
@@ -127,7 +127,7 @@ BlockMap (
   @retval other if error.
 **/
 STATIC
-INT32
+RETURN_STATUS
 SearchDirectory (
   IN      CHAR8         *Name,
   IN      INT32          Length,
@@ -148,7 +148,7 @@ SearchDirectory (
   @retval 0 if success
   @retval other if error.
 **/
-INT32
+RETURN_STATUS
 EFIAPI
 BDevStrategy (
   IN  VOID       *DevData,
@@ -159,7 +159,7 @@ BDevStrategy (
   OUT UINT32     *RSize
   )
 {
-  INT32                    Res;
+  RETURN_STATUS           Status;
   PEI_EXT_PRIVATE_DATA    *PrivateData;
   UINT64                  Startblockno;
 
@@ -174,14 +174,14 @@ BDevStrategy (
 
   Startblockno = BlockNum + PrivateData->StartBlock;
   if (ReadWrite == F_READ) {
-    Res = MediaReadBlocks (PrivateData->PhysicalDevNo, (UINT32)Startblockno, Size, Buf);
-    if (Res != 0) {
-      return Res;
+    Status = MediaReadBlocks (PrivateData->PhysicalDevNo, (UINT32)Startblockno, Size, Buf);
+    if (RETURN_ERROR (Status)) {
+      return Status;
     }
   }
 
   *RSize = Size;
-  return 0;
+  return RETURN_SUCCESS;
 }
 
 /**
@@ -193,7 +193,7 @@ BDevStrategy (
   @retval         0 if success
   @retval         other if error.
 **/
-INT32
+RETURN_STATUS
 EFIAPI
 ReadInode (
   IN    INODE32      INumber,
@@ -204,7 +204,7 @@ ReadInode (
   M_EXT2FS     *FileSystem;
   CHAR8        *Buf;
   UINT32        RSize;
-  INT32         Rc;
+  RETURN_STATUS Status;
   DADDRESS      InodeSector;
   EXT2GD       *Ext2FsGrpDes;
   EXTFS_DINODE *DInodePtr;
@@ -213,7 +213,7 @@ ReadInode (
   FileSystem = Fp->SuperBlockPtr;
 
   Ext2FsGrpDes = FileSystem->Ext2FsGrpDes;
-  Ext2FsGrpDes = (EXT2GD*)((UINT32)Ext2FsGrpDes + (INOTOCG(FileSystem, INumber) * FileSystem->Ext2FsGDSize));
+  Ext2FsGrpDes = (EXT2GD*)((UINTN)Ext2FsGrpDes + (INOTOCG(FileSystem, INumber) * FileSystem->Ext2FsGDSize));
 
   InodeSector = (DADDRESS) (Ext2FsGrpDes->Ext2BGDInodeTables + DivU64x32 (ModU64x32 ((INumber - 1), FileSystem->Ext2Fs.Ext2FsINodesPerGroup), FileSystem->Ext2FsInodesPerBlock));
 
@@ -228,10 +228,10 @@ ReadInode (
   // Read inode and save it.
   //
   Buf = Fp->Buffer;
-  Rc = DEV_STRATEGY (File->DevPtr) (File->FileDevData, F_READ,
+  Status = DEV_STRATEGY (File->DevPtr) (File->FileDevData, F_READ,
                                     InodeSector, FileSystem->Ext2FsBlockSize, Buf, &RSize);
-  if (Rc != 0) {
-    return Rc;
+  if (RETURN_ERROR (Status)) {
+    return Status;
   }
   if (RSize != (UINT32)FileSystem->Ext2FsBlockSize) {
     return EFI_DEVICE_ERROR;
@@ -246,7 +246,7 @@ ReadInode (
   //
   Fp->InodeCacheBlock = ~0;
   Fp->BufferBlockNum = -1;
-  return Rc;
+  return Status;
 }
 
 /**
@@ -261,7 +261,7 @@ ReadInode (
   @retval other if error.
 **/
 STATIC
-INT32
+RETURN_STATUS
 BlockMap (
   IN  OPEN_FILE     *File,
   IN  INDPTR         FileBlock,
@@ -274,13 +274,13 @@ BlockMap (
   INDPTR    IndCache;
   INDPTR    IndBlockNum;
   UINT32    RSize;
-  INT32     Rc;
   INDPTR   *Buf;
   UINT32    Index;
   UINT64    NextLevelNode;
   EXT4_EXTENT_TABLE *Etable;
   EXT4_EXTENT_INDEX *ExtIndex;
   EXT4_EXTENT       *Extent;
+  RETURN_STATUS     Status;
 
   Fp = (FILE *)File->FileSystemSpecificData;
   FileSystem = Fp->SuperBlockPtr;
@@ -315,11 +315,11 @@ BlockMap (
         //
         // We need to read the next level node of the extent tree since the data was not in the current level.
         //
-        Rc = DEV_STRATEGY (File->DevPtr) (File->FileDevData, F_READ,
+        Status = DEV_STRATEGY (File->DevPtr) (File->FileDevData, F_READ,
                                           FSBTODB (Fp->SuperBlockPtr, (DADDRESS) NextLevelNode), FileSystem->Ext2FsBlockSize,
                                           Buf, &RSize);
-        if (Rc != 0) {
-          return Rc;
+        if (RETURN_ERROR (Status)) {
+          return Status;
         }
         if (RSize != (UINT32)FileSystem->Ext2FsBlockSize) {
           return EFI_DEVICE_ERROR;
@@ -404,11 +404,11 @@ BlockMap (
       //  of a filesystem block.
       //  However we don't do this very often anyway...
       //
-      Rc = DEV_STRATEGY (File->DevPtr) (File->FileDevData, F_READ,
+      Status = DEV_STRATEGY (File->DevPtr) (File->FileDevData, F_READ,
                                         FSBTODB (Fp->SuperBlockPtr, IndBlockNum), FileSystem->Ext2FsBlockSize,
                                         Buf, &RSize);
-      if (Rc != 0) {
-        return Rc;
+      if (RETURN_ERROR (Status)) {
+        return Status;
       }
       if (RSize != (UINT32)FileSystem->Ext2FsBlockSize) {
         return EFI_DEVICE_ERROR;
@@ -429,7 +429,7 @@ BlockMap (
     *DiskBlockPtr = IndBlockNum;
   }
 
-  return 0;
+  return RETURN_SUCCESS;
 }
 
 /**
@@ -444,7 +444,7 @@ BlockMap (
   @retval     0 if success
   @retval     other if error.
 **/
-INT32
+RETURN_STATUS
 EFIAPI
 BufReadFile (
   IN  OPEN_FILE     *File,
@@ -458,7 +458,7 @@ BufReadFile (
   INDPTR FileBlock;
   INDPTR DiskBlock;
   UINT32 BlockSize;
-  INT32 Rc;
+  RETURN_STATUS Rc;
 
   Fp = (FILE *)File->FileSystemSpecificData;
   FileSystem = Fp->SuperBlockPtr;
@@ -522,7 +522,7 @@ BufReadFile (
   @retval other if error.
 **/
 STATIC
-INT32
+RETURN_STATUS
 SearchDirectory (
   IN      CHAR8         *Name,
   IN      INT32          Length,
@@ -536,7 +536,7 @@ SearchDirectory (
   CHAR8 *Buf;
   UINT32 BufSize;
   INT32 NameLen;
-  INT32 Rc;
+  RETURN_STATUS Status;
 
   Fp = (FILE *)File->FileSystemSpecificData;
 
@@ -545,9 +545,9 @@ SearchDirectory (
   // XXX should handle LARGEFILE
   //
   while (Fp->SeekPtr < (OFFSET)Fp->DiskInode.Ext2DInodeSize) {
-    Rc = BufReadFile (File, &Buf, &BufSize);
-    if (Rc != 0) {
-      return Rc;
+    Status = BufReadFile (File, &Buf, &BufSize);
+    if (RETURN_ERROR (Status)) {
+      return Status;
     }
 
     Dp = (EXT2FS_DIRECT *)Buf;
@@ -573,7 +573,94 @@ SearchDirectory (
     }
     Fp->SeekPtr += BufSize;
   }
-  return EFI_UNSUPPORTED;
+  return EFI_NOT_FOUND;
+}
+
+/**
+  Validate EXT2 Superblock
+
+  @param[in]      FsHandle      EXT file system handle.
+  @param[in]      File          File for which super block needs to be read.
+  @param[out]     RExt2Fs       EXT2FS meta data to retreive.
+
+  @retval 0 if superblock validation is success
+  @retval other if error.
+**/
+RETURN_STATUS
+EFIAPI
+Ext2SbValidate (
+  IN CONST EFI_HANDLE  FsHandle,
+  IN CONST OPEN_FILE   *File     OPTIONAL,
+  OUT      EXT2FS      *RExt2Fs  OPTIONAL
+  )
+{
+  PEI_EXT_PRIVATE_DATA *PrivateData;
+  UINT8 *Buffer;
+  EXT2FS *Ext2Fs;
+  UINT32 BufSize;
+  RETURN_STATUS Rc;
+  UINT32 SbOffset;
+
+  Rc = 0;
+  Buffer = NULL;
+
+  if (FsHandle == NULL) {
+    Rc = RETURN_INVALID_PARAMETER;
+    goto Exit;
+  }
+
+  PrivateData = (PEI_EXT_PRIVATE_DATA *)FsHandle;
+
+  Buffer = AllocatePool ((PrivateData->BlockSize > SBSIZE) ? PrivateData->BlockSize : SBSIZE);
+  if (Buffer == NULL) {
+    Rc = EFI_OUT_OF_RESOURCES;
+    goto Exit;
+  }
+
+  if (File == NULL) {
+    Rc = BDevStrategy (PrivateData, F_READ,
+                       SBOFF / PrivateData->BlockSize, PrivateData->BlockSize, Buffer, &BufSize);
+  } else {
+    Rc = DEV_STRATEGY (File->DevPtr) (PrivateData, F_READ,
+                                      SBOFF / PrivateData->BlockSize, PrivateData->BlockSize,
+                                      Buffer, &BufSize);
+  }
+
+  if (Rc != 0) {
+    goto Exit;
+  }
+
+  SbOffset = (SBOFF < PrivateData->BlockSize) ? SBOFF : 0;
+  Ext2Fs = (EXT2FS *)(&Buffer[SbOffset]);
+  if (Ext2Fs->Ext2FsMagic != E2FS_MAGIC) {
+    Rc = EFI_UNSUPPORTED;
+    goto Exit;
+  }
+
+  if (Ext2Fs->Ext2FsRev > E2FS_REV1 ||
+      (Ext2Fs->Ext2FsRev == E2FS_REV1 &&
+       (Ext2Fs->Ext2FsFirstInode != EXT2_FIRSTINO ||
+        (Ext2Fs->Ext2FsInodeSize != 128 && Ext2Fs->Ext2FsInodeSize != 256) ||
+        Ext2Fs->Ext2FsFeaturesIncompat & ~EXT2F_INCOMPAT_SUPP))) {
+    Rc = EFI_UNSUPPORTED;
+    goto Exit;
+  }
+
+  if (Ext2Fs->Ext2FsRev == E2FS_REV0) {
+    Ext2Fs->Ext2FsFirstInode = 11;
+    Ext2Fs->Ext2FsInodeSize  = 128;
+  }
+
+  if (RExt2Fs != NULL) {
+    E2FS_SBLOAD ((VOID *)Ext2Fs, RExt2Fs);
+  }
+
+Exit:
+  if (Buffer != NULL) {
+    FreePool (Buffer);
+  }
+
+  return Rc;
 }
 
 /**
@@ -585,7 +672,7 @@ SearchDirectory (
   @retval 0 if superblock compute is success
   @retval other if error.
 **/
-INT32
+RETURN_STATUS
 EFIAPI
 ReadSBlock (
   IN      OPEN_FILE     *File,
@@ -593,43 +680,17 @@ ReadSBlock (
   )
 {
   PEI_EXT_PRIVATE_DATA *PrivateData;
-  UINT8 *Buffer;
-  EXT2FS Ext2Fs;
-  UINT32 BufSize;
-  INT32  Rc;
-  UINT32 SbOffset;
+  RETURN_STATUS Rc;
 
   Rc = 0;
-  Buffer = NULL;
 
   PrivateData = (PEI_EXT_PRIVATE_DATA*) File->FileDevData;
 
-  Buffer = AllocatePool ((PrivateData->BlockSize > SBSIZE) ? PrivateData->BlockSize : SBSIZE);
-  if (Buffer == NULL) {
-    Rc = EFI_OUT_OF_RESOURCES;
+  Rc = Ext2SbValidate ((EFI_HANDLE)PrivateData, File, &FileSystem->Ext2Fs);
+  if (RETURN_ERROR (Rc)) {
     goto Exit;
   }
 
-  Rc = DEV_STRATEGY (File->DevPtr) (File->FileDevData, F_READ,
-                                    SBOFF / PrivateData->BlockSize, PrivateData->BlockSize, Buffer, &BufSize);
-  if (Rc != 0) {
-    goto Exit;
-  }
-  SbOffset = (SBOFF < PrivateData->BlockSize) ? SBOFF : 0;
-  E2FS_SBLOAD ((VOID *)(&Buffer[SbOffset]), &Ext2Fs);
-  if (Ext2Fs.Ext2FsMagic != E2FS_MAGIC) {
-    Rc = EFI_INVALID_PARAMETER;
-    goto Exit;
-  }
-  if (Ext2Fs.Ext2FsRev > E2FS_REV1 ||
-      (Ext2Fs.Ext2FsRev == E2FS_REV1 &&
-       (Ext2Fs.Ext2FsFirstInode != EXT2_FIRSTINO ||
-        (Ext2Fs.Ext2FsInodeSize != 128 && Ext2Fs.Ext2FsInodeSize != 256) ||
-        Ext2Fs.Ext2FsFeaturesIncompat & ~EXT2F_INCOMPAT_SUPP))) {
-    Rc = EFI_UNSUPPORTED;
-    goto Exit;
-  }
-  E2FS_SBLOAD ((VOID *)&Ext2Fs, &FileSystem->Ext2Fs);
   //
   // compute in-memory m_ext2fs values
   //
@@ -637,25 +698,21 @@ ReadSBlock (
     HOWMANY (FileSystem->Ext2Fs.Ext2FsBlockCount - FileSystem->Ext2Fs.Ext2FsFirstDataBlock,
              FileSystem->Ext2Fs.Ext2FsBlocksPerGroup);
 
-  FileSystem->Ext2FsFsbtobd           = (FileSystem->Ext2Fs.Ext2FsLogBlockSize + 10) - HighBitSet32 (PrivateData->BlockSize);
+  FileSystem->Ext2FsFsbtobd           = (INT32)(FileSystem->Ext2Fs.Ext2FsLogBlockSize + 10) - (INT32)HighBitSet32 (PrivateData->BlockSize);
   FileSystem->Ext2FsBlockSize         = MINBSIZE << FileSystem->Ext2Fs.Ext2FsLogBlockSize;
   FileSystem->Ext2FsLogicalBlock      = LOG_MINBSIZE + FileSystem->Ext2Fs.Ext2FsLogBlockSize;
   FileSystem->Ext2FsQuadBlockOffset   = FileSystem->Ext2FsBlockSize - 1;
   FileSystem->Ext2FsBlockOffset       = (UINT32)~FileSystem->Ext2FsQuadBlockOffset;
   FileSystem->Ext2FsGDSize            = 32;
-  if (Ext2Fs.Ext2FsFeaturesIncompat & EXT2F_INCOMPAT_64BIT) {
+  if (FileSystem->Ext2Fs.Ext2FsFeaturesIncompat & EXT2F_INCOMPAT_64BIT) {
     FileSystem->Ext2FsGDSize          = FileSystem->Ext2Fs.Ext2FsGDSize;
   }
   FileSystem->Ext2FsNumGrpDesBlock    =
     HOWMANY (FileSystem->Ext2FsNumCylinder, FileSystem->Ext2FsBlockSize / FileSystem->Ext2FsGDSize);
-  FileSystem->Ext2FsInodesPerBlock    = FileSystem->Ext2FsBlockSize / Ext2Fs.Ext2FsInodeSize;
+  FileSystem->Ext2FsInodesPerBlock    = FileSystem->Ext2FsBlockSize / FileSystem->Ext2Fs.Ext2FsInodeSize;
   FileSystem->Ext2FsInodesTablePerGrp = FileSystem->Ext2Fs.Ext2FsINodesPerGroup / FileSystem->Ext2FsInodesPerBlock;
 
 Exit:
-  if (Buffer != NULL) {
-    FreePool (Buffer);
-  }
-
   return Rc;
 }
 
@@ -668,7 +725,7 @@ Exit:
   @retval 0 if Group descriptor read is success
   @retval other if error.
 **/
-INT32
+RETURN_STATUS
 EFIAPI
 ReadGDBlock (
   IN OUT  OPEN_FILE     *File,
@@ -678,19 +735,20 @@ ReadGDBlock (
   FILE *Fp;
   UINT32 RSize;
   UINT32 gdpb;
-  INT32 Index, Rc;
+  INT32 Index;
+  RETURN_STATUS Status;
 
   Fp = (FILE *)File->FileSystemSpecificData;
 
   gdpb = FileSystem->Ext2FsBlockSize / FileSystem->Ext2FsGDSize;
 
   for (Index = 0; Index < FileSystem->Ext2FsNumGrpDesBlock; Index++) {
-    Rc = DEV_STRATEGY (File->DevPtr) (File->FileDevData, F_READ,
+    Status = DEV_STRATEGY (File->DevPtr) (File->FileDevData, F_READ,
                                       FSBTODB (FileSystem, FileSystem->Ext2Fs.Ext2FsFirstDataBlock +
                                           1 /* superblock */ + Index),
                                       FileSystem->Ext2FsBlockSize, Fp->Buffer, &RSize);
-    if (Rc != 0) {
-      return Rc;
+    if (RETURN_ERROR (Status)) {
+      return Status;
     }
     if (RSize != (UINT32)FileSystem->Ext2FsBlockSize) {
       return EFI_DEVICE_ERROR;
@@ -703,7 +761,7 @@ ReadGDBlock (
                  FileSystem->Ext2FsBlockSize);
   }
 
-  return 0;
+  return RETURN_SUCCESS;
 }
 
 /**
@@ -712,10 +770,10 @@ ReadGDBlock (
   @param[in]      Path          Path to locate the file
   @param[in/out]  File          The struct having the device and file info
 
-  @retval 0 if file open is success
+  @retval RETURN_SUCCESS if file open is success
   @retval other if error.
 **/
-INT32
+RETURN_STATUS
 EFIAPI
 Ext2fsOpen (
   IN      CHAR8         *Path,
@@ -730,11 +788,11 @@ Ext2fsOpen (
   INODE32 INumber;
   FILE *Fp;
   M_EXT2FS *FileSystem;
-  INT32 Rc;
+  RETURN_STATUS Status;
 #ifndef LIBSA_NO_FS_SYMLINK
   INODE32 ParentInumber;
   INT32 Nlinks;
-  CHAR8 NameBuf[MAXPATHLEN + 1];
+  CHAR8 NameBuf[MAXPATHLEN+1];
   CHAR8 *Buf;
 
   Nlinks = 0;
@@ -747,17 +805,27 @@ Ext2fsOpen (
   // allocate struct file system specific data structure
   //
   Fp = AllocatePool (sizeof (FILE));
+  if (Fp == NULL) {
+    Status = EFI_OUT_OF_RESOURCES;
+    goto out;
+  }
+
   SetMem32 (Fp, sizeof (FILE), 0 );
   File->FileSystemSpecificData = (VOID *)Fp;
   //
   // allocate space and read super block
   //
   FileSystem = AllocatePool (sizeof (*FileSystem));
+  if (FileSystem == NULL) {
+    Status = EFI_OUT_OF_RESOURCES;
+    goto out;
+  }
+
   SetMem32 (FileSystem, sizeof (*FileSystem), 0);
   Fp->SuperBlockPtr = FileSystem;
 
-  Rc = ReadSBlock (File, FileSystem);
-  if (Rc != 0) {
+  Status = ReadSBlock (File, FileSystem);
+  if (RETURN_ERROR (Status)) {
     goto out;
   }
 
@@ -772,8 +840,8 @@ Ext2fsOpen (
   // read group descriptor blocks
   //
   FileSystem->Ext2FsGrpDes = AllocatePool (FileSystem->Ext2FsGDSize * FileSystem->Ext2FsNumCylinder);
-  Rc = ReadGDBlock (File, FileSystem);
-  if (Rc != 0) {
+  Status = ReadGDBlock (File, FileSystem);
+  if (RETURN_ERROR (Status)) {
     goto out;
   }
 
@@ -797,7 +865,8 @@ Ext2fsOpen (
   Fp->NiShift = Length2;
 
   INumber = EXT2_ROOTINO;
-  if ((Rc = ReadInode (INumber, File)) != 0) {
+  Status = ReadInode (INumber, File);
+  if (RETURN_ERROR (Status)) {
     goto out;
   }
 
@@ -818,7 +887,7 @@ Ext2fsOpen (
     //  Check that current node is a directory.
     //
     if ((Fp->DiskInode.Ext2DInodeMode & EXT2_IFMT) != EXT2_IFDIR) {
-      Rc = EFI_LOAD_ERROR;
+      Status = EFI_LOAD_ERROR;
       goto out;
     }
 
@@ -838,15 +907,16 @@ Ext2fsOpen (
 #ifndef LIBSA_NO_FS_SYMLINK
     ParentInumber = INumber;
 #endif
-    Rc = SearchDirectory (Ncp, Cp - Ncp, File, &INumber);
-    if (Rc != 0) {
+    Status = SearchDirectory (Ncp, (INT32)(Cp - Ncp), File, &INumber);
+    if (RETURN_ERROR (Status)) {
       goto out;
     }
 
     //
     //  Open next component.
     //
-    if ((Rc = ReadInode (INumber, File)) != 0) {
+    Status = ReadInode (INumber, File);
+    if (RETURN_ERROR (Status)) {
       goto out;
     }
 
@@ -858,20 +928,20 @@ Ext2fsOpen (
       //
       // XXX should handle LARGEFILE
       //
-      INT32 LinkLength;
-      INT32 Len;
+      UINTN LinkLength;
+      UINTN Len;
 
       LinkLength = Fp->DiskInode.Ext2DInodeSize;
 
       Len = AsciiStrLen (Cp);
 
-      if (LinkLength + Len > MAXPATHLEN ||
-          ++Nlinks > MAXSYMLINKS) {
-        Rc = ENOENT;
+      if (((LinkLength + Len) > MAXPATHLEN) ||
+          ((++Nlinks) > MAXSYMLINKS)) {
+        Status = RETURN_LOAD_ERROR;
         goto out;
       }
 
-      memmove (&NameBuf[LinkLength], Cp, Len + 1);
+      CopyMem (&NameBuf[LinkLength], Cp, Len + 1);
 
       if (LinkLength < EXT2_MAXSYMLINKLEN) {
         CopyMem (NameBuf, Fp->DiskInode.Ext2DInodeBlocks, LinkLength);
@@ -883,15 +953,15 @@ Ext2fsOpen (
         INDPTR    DiskBlock;
 
         Buf = Fp->Buffer;
-        Rc = BlockMap (File, (INDPTR)0, &DiskBlock);
-        if (Rc != 0) {
+        Status = BlockMap (File, (INDPTR)0, &DiskBlock);
+        if (RETURN_ERROR (Status)) {
           goto out;
         }
 
-        Rc = DEV_STRATEGY (File->DevPtr) (File->FileDevData,
+        Status = DEV_STRATEGY (File->DevPtr) (File->FileDevData,
                                           F_READ, FSBTODB (FileSystem, DiskBlock),
                                           FileSystem->Ext2FsBlockSize, Buf, &BufSize);
-        if (Rc != 0) {
+        if (RETURN_ERROR (Status)) {
           goto out;
         }
 
@@ -909,7 +979,8 @@ Ext2fsOpen (
         INumber = (INODE32)EXT2_ROOTINO;
       }
 
-      if ((Rc = ReadInode (INumber, File)) != 0) {
+      Status = ReadInode (INumber, File);
+      if (RETURN_ERROR (Status)) {
         goto out;
       }
     }
@@ -919,35 +990,30 @@ Ext2fsOpen (
   //
   //  Found terminal component.
   //
-  Rc = 0;
+  Status = RETURN_SUCCESS;
 
 #else // !LIBSA_FS_SINGLECOMPONENT
   //
   // look up component in the current (root) directory
   //
-  Rc = SearchDirectory (Path, AsciiStrLen (Path), File, &INumber);
-  if (Rc != 0) {
+  Status = SearchDirectory (Path, AsciiStrLen (Path), File, &INumber);
+  if (RETURN_ERROR (Status)) {
     goto out;
   }
   //
   // open it
   //
-  Rc = ReadInode (INumber, File);
+  Status = ReadInode (INumber, File);
 
 #endif // !LIBSA_FS_SINGLECOMPONENT
 
   Fp->SeekPtr = 0;        // reset seek pointer
 
 out:
-  if (Rc != 0) {
+  if (RETURN_ERROR (Status)) {
     Ext2fsClose (File);
   }
-#if 0
-  else {
-    fsmod = "Ext2Fs";
-  }
-#endif
-  return Rc;
+  return Status;
 }
 
 /**
@@ -955,9 +1021,9 @@ out:
 
   @param[in/out]    File        File to be closed.
 
-  @retval 0 regardless of success/fail condition
+  @retval RETURN_SUCCESS regardless of success/fail condition
 **/
-INT32
+RETURN_STATUS
 EFIAPI
 Ext2fsClose (
   IN OUT  OPEN_FILE     *File
@@ -969,7 +1035,7 @@ Ext2fsClose (
 
   File->FileSystemSpecificData = NULL;
   if (Fp == NULL) {
-    return 0;
+    return RETURN_SUCCESS;
   }
 
   if (Fp->SuperBlockPtr->Ext2FsGrpDes) {
@@ -980,7 +1046,7 @@ Ext2fsClose (
   }
   FreePool (Fp->SuperBlockPtr);
   FreePool (Fp);
-  return 0;
+  return RETURN_SUCCESS;
 }
 
 /**
@@ -1010,10 +1076,10 @@ Ext2fsFileSize (
   @param[in]        Size      Size to be read
   @param[out]       ResId     Actual read size
 
-  @retval 0 if file read is success
+  @retval RETURN_SUCCESS if file read is success
   @retval other if error.
 **/
-INT32
+RETURN_STATUS
 EFIAPI
 Ext2fsRead (
   IN OUT  OPEN_FILE     *File,
@@ -1026,11 +1092,11 @@ Ext2fsRead (
   UINT32 Csize;
   CHAR8 *Buf;
   UINT32 BufSize;
-  INT32 Rc;
   CHAR8 *Address;
+  RETURN_STATUS Status;
 
   Fp = (FILE *)File->FileSystemSpecificData;
-  Rc = 0;
+  Status = RETURN_SUCCESS;
   Address = Start;
 
   while (Size != 0) {
@@ -1041,8 +1107,8 @@ Ext2fsRead (
       break;
     }
 
-    Rc = BufReadFile (File, &Buf, &BufSize);
-    if (Rc != 0) {
+    Status = BufReadFile (File, &Buf, &BufSize);
+    if (RETURN_ERROR (Status)) {
       break;
     }
 
@@ -1060,7 +1126,7 @@ Ext2fsRead (
   if (ResId != NULL) {
     *ResId = Size;
   }
-  return Rc;
+  return Status;
 }
 
 #ifdef EXT2FS_DEBUG

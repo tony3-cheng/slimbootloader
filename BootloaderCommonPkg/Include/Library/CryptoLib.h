@@ -1,7 +1,7 @@
 /** @file
   Provides sha256 and RSA2048 verify functions.
 
-Copyright (c) 2017, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2017-2020, Intel Corporation. All rights reserved.<BR>
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -57,6 +57,9 @@ typedef UINT8 HASH_ALG_TYPE;
 #define IPP_HASHLIB_SHA2_384             0x0004
 #define IPP_HASHLIB_SHA2_512             0x0008
 #define IPP_HASHLIB_SM3_256              0x0010
+
+#define IPP_RSALIB_PKCS_1_5              0x0001
+#define IPP_RSALIB_PSS                   0x0002
 
 
 typedef UINT8 HASH_CTX[IPP_HASH_CTX_SIZE];   //IPP Hash context buffer
@@ -121,6 +124,7 @@ typedef struct {
   @retval                  A pointer to SHA-256 digest value
 **/
 UINT8 *
+EFIAPI
 Sha256 (
   IN  CONST UINT8          *Data,
   IN        UINT32          Length,
@@ -142,6 +146,7 @@ Sha256 (
   @retval                  A pointer to SHA-384 digest value
 **/
 UINT8 *
+EFIAPI
 Sha384 (
   IN  CONST UINT8          *Data,
   IN        UINT32          Length,
@@ -162,6 +167,7 @@ Sha384 (
   @retval                  A pointer to SM3 digest value
 **/
 UINT8 *
+EFIAPI
 Sm3 (
   IN  CONST UINT8          *Data,
   IN        UINT32          Length,
@@ -171,11 +177,9 @@ Sm3 (
 /**
   Verifies the RSA signature with PKCS1-v1_5 encoding scheme defined in RSA PKCS#1.
 
-  @param[in]  PubKey         Pointer to a pre-processed RSA key data.
-  @param[in]  Signature      Pointer to RSA PKCS1-v1_5 signature to be verified.
-  @param[in]  SignatureLen   Length of the signature in bytes.
-  @param[in]  SignatureType  Now only support signature type SIG_TYPE_RSA2048SHA256.
-  @param[in]  Hash           Pointer to octet message hash to be checked.
+  @param[in]  PubKeyHdr         Pointer to a PubKey data.
+  @param[in]  SignatureHdr      Pointer to signature data to be verified.
+  @param[in]  Hash              Pointer to octet message hash to be checked.
 
   @retval  RETURN_SUCCESS             Valid signature.
   @retval  RETURN_INVALID_PARAMETER   Key or signature format is incorrect.
@@ -183,11 +187,37 @@ Sm3 (
 
 **/
 RETURN_STATUS
+EFIAPI
 RsaVerify_Pkcs_1_5 (
-  CONST PUB_KEY_HDR        *PubKeyHdr,
-  CONST SIGNATURE_HDR      *SignatureHdr,
-  CONST UINT8              *Hash
+  IN CONST PUB_KEY_HDR        *PubKeyHdr,
+  IN CONST SIGNATURE_HDR      *SignatureHdr,
+  IN CONST UINT8              *Hash
   );
+
+
+/**
+  Verifies the RSA signature with PSS encoding scheme defined in RSA PSS.
+
+  @param[in]  PubKeyHdr         Pointer to a PubKey data.
+  @param[in]  SignatureHdr      Pointer to signature data to be verified.
+  @param[in]  Src               Pointer to meassage.
+  @param[in]  SrcSize           Size of the message.
+
+  @retval  RETURN_SUCCESS             Valid signature.
+  @retval  RETURN_INVALID_PARAMETER   Key or signature format is incorrect.
+  @retval  RETURN_SECURITY_VIOLATION  Invalid signature.
+
+**/
+
+RETURN_STATUS
+EFIAPI
+RsaVerify_PSS (
+  IN CONST PUB_KEY_HDR        *PubKeyHdr,
+  IN CONST SIGNATURE_HDR      *SignatureHdr,
+  IN CONST UINT8              *Src,
+  IN CONST UINT32             SrcSize
+  );
+
 
 /**
   Computes the HMAC SHA-256 message digest of a input data buffer.
@@ -207,6 +237,7 @@ RsaVerify_Pkcs_1_5 (
   @retval   EFI_PROTOCOL_ERROR          Error caused while calculating HMAC SHA256
 **/
 EFI_STATUS
+EFIAPI
 HmacSha256 (
   IN  CONST UINT8          *Msg,
   IN        UINT32          MsgLen,
@@ -257,6 +288,7 @@ HkdfExtractExpand (
   @retval  RETURN_SECURITY_VIOLATION  All other errors.
 **/
 RETURN_STATUS
+EFIAPI
 Sha256Init (
   IN      HASH_CTX   *HashCtx,
   IN      UINT32      HashCtxSize
@@ -274,6 +306,7 @@ Sha256Init (
   @retval  RETURN_SECURITY_VIOLATION  All other errors.
 **/
 RETURN_STATUS
+EFIAPI
 Sha256Update (
   IN        HASH_CTX   *HashCtx,
   IN CONST  UINT8      *Msg,
@@ -290,6 +323,7 @@ Sha256Update (
   @retval  RETURN_SECURITY_VIOLATION  All other errors.
 **/
 RETURN_STATUS
+EFIAPI
 Sha256Final (
   IN       HASH_CTX   *HashCtx,
   OUT      UINT8      *Hash
@@ -307,6 +341,7 @@ Sha256Final (
   @retval  RETURN_SECURITY_VIOLATION  All other errors.
 **/
 RETURN_STATUS
+EFIAPI
 Sha384Init (
   IN      HASH_CTX   *HashCtx,
   IN      UINT32      HashCtxSize
@@ -324,6 +359,7 @@ Sha384Init (
   @retval  RETURN_SECURITY_VIOLATION  All other errors.
 **/
 RETURN_STATUS
+EFIAPI
 Sha384Update (
   IN        HASH_CTX   *HashCtx,
   IN CONST  UINT8      *Msg,
@@ -340,6 +376,7 @@ Sha384Update (
   @retval  RETURN_SECURITY_VIOLATION  All other errors.
 **/
 RETURN_STATUS
+EFIAPI
 Sha384Final (
   IN       HASH_CTX   *HashCtx,
   OUT      UINT8      *Hash
@@ -356,6 +393,7 @@ Sha384Final (
   @retval  RETURN_SECURITY_VIOLATION  All other errors.
 **/
 RETURN_STATUS
+EFIAPI
 Sm3Init (
   IN      HASH_CTX   *HashCtx,
   IN      UINT32      HashCtxSize
@@ -373,6 +411,7 @@ Sm3Init (
   @retval  RETURN_SECURITY_VIOLATION  All other errors.
 **/
 RETURN_STATUS
+EFIAPI
 Sm3Update (
   IN        HASH_CTX   *HashCtx,
   IN CONST  UINT8      *Msg,
@@ -389,6 +428,7 @@ Sm3Update (
   @retval  RETURN_SECURITY_VIOLATION  All other errors.
 **/
 RETURN_STATUS
+EFIAPI
 Sm3Final (
   IN       HASH_CTX   *HashCtx,
   OUT      UINT8      *Hash

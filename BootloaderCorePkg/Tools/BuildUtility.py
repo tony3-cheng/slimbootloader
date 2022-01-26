@@ -2,7 +2,7 @@
 ## @ BuildUtility.py
 # Build bootloader main script
 #
-# Copyright (c) 2016 - 2020, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2016 - 2021, Intel Corporation. All rights reserved.<BR>
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 ##
@@ -22,12 +22,26 @@ import datetime
 import zipfile
 import ntpath
 from   CommonUtility import *
-from   IfwiUtility   import FLASH_MAP, FLASH_MAP_DESC
+from   IfwiUtility   import FLASH_MAP, FLASH_MAP_DESC, FIT_ENTRY, UCODE_HEADER
+from SingleSign import MESSAGE_SBL_KEY_DIR
+from distutils.version import LooseVersion
 
 sys.dont_write_bytecode = True
 sys.path.append (os.path.join(os.path.dirname(__file__), '..', '..', 'IntelFsp2Pkg', 'Tools'))
 from   SplitFspBin  import RebaseFspBin, FirmwareDevice, EFI_SECTION_TYPE, FSP_INFORMATION_HEADER, PeTeImage
 from   GenContainer import gen_container_bin
+
+# Mimimum Toolchain Requirement
+build_toolchains = {
+    'python'    : '3.6.0',
+    'nasm'      : '2.12.02',
+    'iasl'      : '20190509',
+    'openssl'   : '1.1.0g',
+    'git'       : '2.20.0',
+    'vs'        : '2015',
+    'gcc'       : '7.3',
+    'clang'     : '9.0.0'
+}
 
 AUTO_GEN_DSC_HDR = """#
 #  DO NOT EDIT
@@ -92,44 +106,15 @@ HASH_USAGE = {
     'PUBKEY_FWU'          : (1<<10),
     'PUBKEY_OS'           : (1<<11),
     'PUBKEY_CONT_DEF'     : (1<<12),
+    'PUBKEY_OEM_0'        : (1<<24),
+    'PUBKEY_OEM_1'        : (1<<25),
+    'PUBKEY_OEM_2'        : (1<<26),
+    'PUBKEY_OEM_3'        : (1<<27),
+    'PUBKEY_OEM_4'        : (1<<28),
+    'PUBKEY_OEM_5'        : (1<<29),
+    'PUBKEY_OEM_6'        : (1<<30),
+    'PUBKEY_OEM_7'        : (1<<31),
 }
-
-class UcodeHeader(Structure):
-    _pack_ = 1
-    _fields_ = [
-        ('header_version',  c_uint32),
-        ('update_revision',  c_uint32),
-        ('date',  c_uint32),
-        ('processor_signature',  c_uint32),
-        ('checksum',  c_uint32),
-        ('loader_revision',  c_uint32),
-        ('processor_flags',  c_uint32),
-        ('data_size',  c_uint32),
-        ('total_size',  c_uint32),
-        ('reserved',  ARRAY(c_uint32, 12)),
-        ]
-
-
-class FitEntry(Structure):
-
-    FIT_SIGNATURE = b'_FIT_   '
-
-    _pack_ = 1
-    _fields_ = [
-        ('address',  c_uint64),
-        ('size',     c_uint32), # Bits[31:24] Reserved
-        ('version',  c_uint16),
-        ('type',     c_uint8), # Bit[7] = C_V
-        ('checksum', c_uint8),
-        ]
-
-    def set_values(self, _address, _size, _version, _type, _checksum):
-        self.address  = _address
-        self.size     = _size
-        self.version  = _version
-        self.type     = _type
-        self.checksum = _checksum
-
 
 class HashStoreData(Structure):
 
@@ -173,7 +158,8 @@ class ImageVer(Structure):
         ('CoreMinorVersion',  c_uint8),
         ('CoreMajorVersion',  c_uint8),
         ('SecureVerNum',      c_uint8),
-        ('Reserved',          c_uint8, 5),
+        ('Reserved',          c_uint8, 4),
+        ('ImageArch',         c_uint8, 1),
         ('BldDebug',          c_uint8, 1),
         ('FspDebug',          c_uint8, 1),
         ('Dirty',             c_uint8, 1),
@@ -204,40 +190,146 @@ class VariableRegionHeader(Structure):
         ]
 
 
-def get_visual_studio_info ():
+class PciEnumPolicyInfo(Structure):
+    _pack_ = 1
+    _fields_ = [
+        ('DowngradeIo32',           c_uint16, 1),
+        ('DowngradeMem64',          c_uint16, 1),
+        ('DowngradePMem64',         c_uint16, 1),
+        # 0: Do not downgrade PCI devices on bus 0
+        # 1: Downgrade all PCI devices on bus 0
+        # 2: Downgrade all PCI devices on bus 0 but GFX
+        # 3: Reserved
+        ('DowngradeBus0',           c_uint16, 2),
+        ('DowngradeReserved',       c_uint16, 11),
+        ('FlagAllocPmemFirst',      c_uint16, 1),
+        ('FlagReserved',            c_uint16, 15),
+        ('BusScanType',             c_uint8), # 0: list, 1: range
+        ('NumOfBus',                c_uint8),
+        ('BusScanItems',            ARRAY(c_uint8, 0))
+    ]
+
+    def __init__(self):
+        self.DowngradeIo32      = 1
+        self.DowngradeMem64     = 1
+        self.DowngradePMem64    = 1
+        self.DowngradeBus0      = 1
+        self.DowngradeReserved  = 0
+        self.FlagAllocPmemFirst = 0
+        self.FlagReserved       = 0
+        self.Reserved           = 0
+        self.BusScanType        = 0
+        self.NumOfBus           = 0
+
+def is_valid_tool_version(cmd, current_version, optional=False):
+    try:
+        name_str = ntpath.basename(cmd).split('.')[0]
+        name = re.sub(r'\d+', '', name_str)
+        minimum_version = build_toolchains[name]
+        valid = LooseVersion(current_version) >= LooseVersion(minimum_version)
+    except:
+        print('Unexpected exception while checking %s tool version' % cmd)
+        return False
+
+    try:
+        if os.name == 'posix':
+            cmd = subprocess.check_output(['which', cmd], stderr=subprocess.STDOUT).decode().strip()
+    except:
+        pass
+
+    print ('- %s: Version %s (>= %s) [%s]' % (cmd, current_version, minimum_version, \
+           'PASS' if valid else 'RECOMMEND' if optional else 'FAIL'))
+    return valid | optional
+
+def get_gcc_info ():
+    toolchain = 'GCC5'
+    cmd = 'gcc'
+    try:
+        prefix = os.environ.get(toolchain + '_BIN')
+        ver = subprocess.check_output([(prefix if prefix else '') + cmd, '-dumpfullversion']).decode().strip()
+    except:
+        ver = ''
+        pass
+    valid = is_valid_tool_version(cmd, ver)
+    return (toolchain if valid else None, None, None, ver)
+
+def get_clang_info ():
+    if os.name == 'posix':
+        toolchain_path   = ''
+    else:
+        # On windows, still need visual studio to provide nmake build utility
+        toolchain, toolchain_prefix, toolchain_path, toolchain_ver = get_visual_studio_info ()
+        os.environ['CLANG_HOST_BIN'] =  os.path.join(toolchain_path, "bin\\Hostx64\\x64\\n")
+        toolchain_path   = 'C:\\Program Files\\LLVM\\bin\\'
+    toolchain        = 'CLANGPDB'
+    toolchain_prefix = 'CLANG_BIN'
+    cmd = os.path.join(toolchain_path, 'clang')
+    try:
+        ver_str = subprocess.check_output([cmd, '--version']).decode().strip()
+        ver = re.search(r'version\s*([\d.]+)', ver_str).group(1)
+    except:
+        ver = ''
+        pass
+    valid = is_valid_tool_version(cmd, ver)
+    return (toolchain if valid else None, toolchain_prefix, toolchain_path, ver)
+
+def get_visual_studio_info (preference = ''):
 
     toolchain        = ''
     toolchain_prefix = ''
     toolchain_path   = ''
     toolchain_ver    = ''
+    vs_ver_list      = ['2019', '2017']
+    vs_ver_list_old  = ['2015', '2013']
+
+    if preference:
+        preference = preference.strip().lower()
+        if not preference.startswith('vs'):
+            print("Invalid vistual studio toolchain type '%s' !" % preference)
+            return (None,None,None,None)
+        vs_str = preference[2:]
+        if vs_str in vs_ver_list:
+            vs_ver_list     = [vs_str]
+            vs_ver_list_old = []
+        elif vs_str in vs_ver_list_old:
+            vs_ver_list     = []
+            vs_ver_list_old = [vs_str]
+        else:
+            print("Unsupported toolchain version '%s' !" % preference)
+            return (None,None,None,None)
 
     # check new Visual Studio Community version first
     vswhere_path = "%s/Microsoft Visual Studio/Installer/vswhere.exe" % os.environ['ProgramFiles(x86)']
     if os.path.exists (vswhere_path):
         cmd = [vswhere_path, '-all', '-property', 'installationPath']
         lines = run_process (cmd, capture_out = True)
-        vscommon_path = ''
+        vscommon_paths = []
         for each in lines.splitlines ():
             each = each.strip()
             if each and os.path.isdir(each):
-                vscommon_path = each
-        vcver_file = vscommon_path + '\\VC\\Auxiliary\\Build\\Microsoft.VCToolsVersion.default.txt'
-        if os.path.exists(vcver_file):
-            for vs_ver in ['2017']:
-                check_path = '\\Microsoft Visual Studio\\%s\\' % vs_ver
-                if check_path in vscommon_path:
-                    toolchain_ver    = get_file_data (vcver_file, 'r').strip()
-                    toolchain_prefix = 'VS%s_PREFIX' % (vs_ver)
-                    toolchain_path   = vscommon_path + '\\VC\\Tools\\MSVC\\%s\\' % toolchain_ver
-                    toolchain='VS%s' % (vs_ver)
-                    break
+                vscommon_paths.append(each)
+
+        for vs_ver in vs_ver_list:
+            for vscommon_path in vscommon_paths:
+                vcver_file = vscommon_path + '\\VC\\Auxiliary\\Build\\Microsoft.VCToolsVersion.default.txt'
+                if os.path.exists(vcver_file):
+                    check_path = '\\Microsoft Visual Studio\\%s\\' % vs_ver
+                    if check_path in vscommon_path:
+                        toolchain_ver    = get_file_data (vcver_file, 'r').strip()
+                        toolchain_prefix = 'VS%s_PREFIX' % (vs_ver)
+                        toolchain_path   = vscommon_path + '\\VC\\Tools\\MSVC\\%s\\' % toolchain_ver
+                        toolchain = 'VS%s' % (vs_ver)
+                        break
+            if toolchain:
+                break
 
     if toolchain == '':
-        vs_ver_list = [
-            ('2015', 'VS140COMNTOOLS'),
-            ('2013', 'VS120COMNTOOLS')
-        ]
-        for vs_ver, vs_tool in vs_ver_list:
+        vs_ver_dict = {
+            '2015': 'VS140COMNTOOLS',
+            '2013': 'VS120COMNTOOLS'
+        }
+        for vs_ver in vs_ver_list_old:
+            vs_tool = vs_ver_dict[vs_ver]
             if vs_tool in os.environ:
                 toolchain        ='VS%s%s' % (vs_ver, 'x86')
                 toolchain_prefix = 'VS%s_PREFIX' % (vs_ver)
@@ -250,8 +342,8 @@ def get_visual_studio_info ():
                         toolchain_ver = part[len(vs_node):]
                 break
 
-    return (toolchain, toolchain_prefix, toolchain_path, toolchain_ver)
-
+    valid = is_valid_tool_version('vs', vs_ver)
+    return (toolchain if valid else None, toolchain_prefix, toolchain_path, toolchain_ver)
 
 def split_fsp(path, out_dir):
     run_process ([
@@ -314,6 +406,10 @@ def get_fsp_upd_size (path):
     di = open(path,'rb').read()[0xBC:0xC0]
     return ((struct.unpack('I', di)[0] + 0x10) & 0xFFFFFFF0)
 
+def get_fsp_upd_signature (path):
+    bins = open(path,'rb').read()
+    off  = bytes_to_value (bins[0xB8:0xBC])
+    return bins[off:off+8]
 
 def get_fsp_revision (path):
     di = open(path,'rb').read()[0xA0:0xA4]
@@ -361,30 +457,35 @@ def get_payload_list (payloads):
 
     return pld_lst
 
-
-def gen_pub_key_hash_store (signing_key, pub_key_hash_list, hash_alg, pub_key_dir, out_file):
+def gen_pub_key_hash_store (signing_key, pub_key_hash_list, hash_alg, sign_scheme, svn, pub_key_dir, out_file):
     # Build key hash blob
-    key_hash_buf = bytearray (HashStoreTable())
+    key_hash_buf = bytearray ()
     idx = 0
     for usage, key_file in pub_key_hash_list:
         pub_key_file = os.path.dirname(out_file) + '/PUBKEY%02d.bin' % idx
         gen_pub_key (os.path.join(pub_key_dir, key_file), pub_key_file)
-        hash_data = gen_hash_file (pub_key_file, hash_alg, None, True)
+        key_hash_alg = adjust_hash_type (pub_key_file)
+        hash_data = gen_hash_file (pub_key_file, key_hash_alg, None, True)
         key_hash_entry = HashStoreData()
         key_hash_entry.Usage     = usage
-        key_hash_entry.HashAlg   = HASH_TYPE_VALUE[hash_alg]
+        key_hash_entry.HashAlg   = HASH_TYPE_VALUE[key_hash_alg]
         key_hash_entry.DigestLen = len(hash_data)
         key_hash_buf.extend (bytearray(key_hash_entry) + hash_data)
         idx += 1
-    hash_store_table = HashStoreTable.from_buffer(key_hash_buf)
-    hash_store_table.UsedLength  = len(key_hash_buf)
-    hash_store_table.TotalLength = hash_store_table.UsedLength
-    gen_file_from_object (out_file, key_hash_buf)
 
-    # Sign the key hash
-    if signing_key:
-        rsa_sign_file (signing_key, None, hash_alg, out_file, out_file + '.sig', True, True)
-        shutil.copy(out_file + '.sig', out_file)
+    key_store_bin_file = out_file + '.raw'
+    gen_file_from_object (key_store_bin_file, key_hash_buf)
+
+    key_store_cnt_file = os.path.basename(out_file)
+    key_store_bin_file = os.path.basename(key_store_bin_file)
+
+    key_type = get_key_type(signing_key)
+    sign_scheme = sign_scheme[sign_scheme.index("_")+1:]
+    auth_type   = key_type + '_' + sign_scheme +  '_' + hash_alg
+    hash_store  = [('KEYH', key_store_cnt_file, '', auth_type, signing_key, 0x10, 0, svn)]
+    hash_store.append ((HashStoreTable.HASH_STORE_SIGNATURE.decode(), key_store_bin_file, '', hash_alg, '', 0x10, 0, svn))
+    out_dir = os.path.dirname(out_file)
+    gen_container_bin ([hash_store], out_dir, out_dir, '', '')
 
 
 def gen_ias_file (rel_file_path, file_space, out_file):
@@ -407,7 +508,16 @@ def gen_flash_map_bin (flash_map_file, comp_list):
     flash_map = FLASH_MAP()
     for comp in reversed(comp_list):
         desc  = FLASH_MAP_DESC ()
-        desc.sig    = FLASH_MAP.FLASH_MAP_COMPONENT_SIGNATURE[comp['bname']].encode()
+        if comp['bname'] not in FLASH_MAP.FLASH_MAP_COMPONENT_SIGNATURE:
+            if len(comp['bname']) < 4:
+                # For short names, prefix with '_'
+                bname = '_' * (4 - len(comp['bname'])) + comp['bname']
+            else:
+                # For long names, use the 1st 4 chars
+                bname = comp['bname'][:4]
+            desc.sig    = bname.encode()
+        else:
+            desc.sig    = FLASH_MAP.FLASH_MAP_COMPONENT_SIGNATURE[comp['bname']].encode()
         desc.flags  = comp['flag']
         desc.offset = comp['offset']
         desc.size   = comp['size']
@@ -423,36 +533,43 @@ def gen_flash_map_bin (flash_map_file, comp_list):
 def copy_expanded_file (src, dst):
     gen_cfg_data ("GENDLT", src, dst)
 
-def gen_config_file (fv_dir, brd_name, platform_id, pri_key, cfg_db_size, cfg_size, cfg_int, cfg_ext, hash_type):
+def gen_config_file (fv_dir, brd_name_override, brd_name, platform_id, pri_key, cfg_db_size, cfg_size, cfg_int, cfg_ext, sign_scheme, hash_type, svn):
     # Remove previous generated files
     for file in glob.glob(os.path.join(fv_dir, "CfgData*.*")):
             os.remove(file)
 
     CfgIntLen = len(cfg_int)
 
+    file_ext = 'yaml'
+    gen_cmd  = { 'yaml':'GENYML', 'dsc':'GENDSC' }
+
     # Generate CFG data
     brd_name_dir      = os.path.join(os.environ['PLT_SOURCE'], 'Platform', brd_name)
+    if not os.path.exists(brd_name_dir):
+        brd_name_dir      = os.path.join(os.environ['SBL_SOURCE'], 'Platform', brd_name)
     comm_brd_dir      = os.path.join(os.environ['SBL_SOURCE'], 'Platform', 'CommonBoardPkg')
     brd_cfg_dir       = os.path.join(brd_name_dir, 'CfgData')
     com_brd_cfg_dir   = os.path.join(comm_brd_dir, 'CfgData')
     cfg_hdr_file      = os.path.join(brd_name_dir, 'Include', 'ConfigDataStruct.h')
     cfg_com_hdr_file  = os.path.join(comm_brd_dir, 'Include', 'ConfigDataCommonStruct.h')
     cfg_inc_file      = os.path.join(brd_name_dir, 'Include', 'ConfigDataBlob.h')
-    cfg_dsc_file      = os.path.join(brd_cfg_dir, 'CfgDataDef.dsc')
+    cfg_dsc_file      = os.path.join(brd_cfg_dir, 'CfgDataDef.' + file_ext)
     cfg_hdr_dyn_file  = os.path.join(brd_name_dir, 'Include', 'ConfigDataDynamic.h')
-    cfg_dsc_dyn_file  = os.path.join(brd_cfg_dir, 'CfgDataDynamic.dsc')
+    cfg_dsc_dyn_file  = os.path.join(brd_cfg_dir, 'CfgDataDynamic.' + file_ext)
     cfg_pkl_file      = os.path.join(fv_dir, "CfgDataDef.pkl")
     cfg_bin_file      = os.path.join(fv_dir, "CfgDataDef.bin")  #default core dsc file cfg data
     cfg_bin_int_file  = os.path.join(fv_dir, "CfgDataInt.bin")  #_INT_CFG_DATA_FILE settings
     cfg_bin_ext_file  = os.path.join(fv_dir, "CfgDataExt.bin")  #_EXT_CFG_DATA_FILE settings
-    cfg_comb_dsc_file = os.path.join(fv_dir, 'CfgDataDef.dsc')
+    cfg_comb_dsc_file = os.path.join(fv_dir, 'CfgDataDef.' + file_ext)
+    if brd_name_override != '':
+        brd_cfg2_dir  = os.path.join(os.environ['PLT_SOURCE'], 'Platform', brd_name_override, 'CfgData')
 
     # Generate parsed result into pickle file to improve performance
     if os.path.exists(cfg_dsc_dyn_file):
             gen_cfg_data ("GENHDR", cfg_dsc_dyn_file, cfg_hdr_dyn_file)
 
     gen_cfg_data ("GENPKL", cfg_dsc_file, cfg_pkl_file)
-    gen_cfg_data ("GENDSC", cfg_pkl_file, cfg_comb_dsc_file)
+    gen_cfg_data (gen_cmd[file_ext], cfg_dsc_file, cfg_comb_dsc_file)
     gen_cfg_data ("GENHDR", cfg_pkl_file, ';'.join([cfg_hdr_file, cfg_com_hdr_file]))
     gen_cfg_data ("GENBIN", cfg_pkl_file, cfg_bin_file)
 
@@ -466,7 +583,13 @@ def gen_config_file (fv_dir, brd_name, platform_id, pri_key, cfg_db_size, cfg_si
 
         cfg_bin_list = []
         for dlt_file in cfg_file_list:
-            cfg_dlt_file  = os.path.join(brd_cfg_dir, dlt_file)
+            cfg_dlt_file = ''
+            if brd_name_override != '':
+                cfg_dlt_file = os.path.join(brd_cfg2_dir, dlt_file)
+
+            if cfg_dlt_file == '' or not os.path.exists(cfg_dlt_file):
+                cfg_dlt_file = os.path.join(brd_cfg_dir, dlt_file)
+
             if not os.path.exists(cfg_dlt_file):
                 test_file = os.path.join(fv_dir, dlt_file)
                 if os.path.exists(test_file):
@@ -506,14 +629,23 @@ def gen_config_file (fv_dir, brd_name, platform_id, pri_key, cfg_db_size, cfg_si
 
     cfg_final_file = os.path.join(fv_dir, "CFGDATA.bin")
     if pri_key:
-        cfg_data_tool ('sign', ['-k', pri_key, '-a', hash_type, cfg_merged_bin_file], cfg_final_file)
+        cfg_data_tool ('sign', ['-k', pri_key, '-a', hash_type, '-s', sign_scheme, '-svn', str(svn), cfg_merged_bin_file], cfg_final_file)
     else:
         shutil.copy(cfg_merged_bin_file, cfg_final_file)
 
     # copy delta files
     dlt_list  = cfg_int[1:] + cfg_ext
     for dlt_file in dlt_list:
-        copy_expanded_file (os.path.join (brd_cfg_dir, dlt_file), os.path.join (fv_dir, dlt_file))
+        src_dlt_file = ''
+        if brd_name_override != '':
+            src_dlt_file = os.path.join(brd_cfg2_dir, dlt_file)
+        if src_dlt_file == '' or not os.path.exists(src_dlt_file):
+            src_dlt_file = os.path.join (brd_cfg_dir, dlt_file)
+        if not os.path.exists(src_dlt_file):
+            src_dlt_file = os.path.join (fv_dir, dlt_file)
+        if not os.path.exists(src_dlt_file):
+            raise Exception ('dlt file %s could not be found!' % (os.path.join (brd_cfg_dir, dlt_file)))
+        copy_expanded_file (src_dlt_file, os.path.join (fv_dir, dlt_file))
 
     # generate CfgDataStitch script
     tool_dir    = os.path.abspath(os.path.dirname(__file__))
@@ -552,12 +684,12 @@ def gen_config_file (fv_dir, brd_name, platform_id, pri_key, cfg_db_size, cfg_si
     fd.close()
 
 
-def gen_payload_bin (fv_dir, pld_list, pld_bin, priv_key, hash_alg, brd_name = None):
+def gen_payload_bin (fv_dir, arch_dir, pld_list, pld_bin, priv_key, hash_alg, sign_scheme, brd_name = None):
     fv_dir = os.path.dirname (pld_bin)
     for idx, pld in enumerate(pld_list):
         if pld['file'] in ['OsLoader.efi', 'FirmwareUpdate.efi']:
             pld_base_name = pld['file'].split('.')[0]
-            src_file = "../IA32/PayloadPkg/%s/%s/OUTPUT/%s.efi" % (pld_base_name, pld_base_name, pld_base_name)
+            src_file = "../%s/PayloadPkg/%s/%s/OUTPUT/%s.efi" % (arch_dir, pld_base_name, pld_base_name, pld_base_name)
             src_file = os.path.join(fv_dir, src_file)
         else:
             src_file = os.path.join(os.environ['PLT_SOURCE'], 'Platform', brd_name, 'Binaries', pld['file'])
@@ -585,13 +717,15 @@ def gen_payload_bin (fv_dir, pld_list, pld_bin, priv_key, hash_alg, brd_name = N
         return
 
     # E-payloads container format
+    svn = 0x0
     alignment = 0x10
     key_dir  = os.path.dirname (priv_key)
     key_type = get_key_type(priv_key)
-    auth_type = key_type + '_' + hash_alg
-    pld_list = [('EPLD', '%s' % epld_bin, '', auth_type, '%s' % os.path.basename(priv_key), alignment, 0)]
+    sign_scheme = sign_scheme[sign_scheme.index("_")+1:]
+    auth_type = key_type + '_' + sign_scheme +  '_' + hash_alg
+    pld_list = [('EPLD', '%s' % epld_bin, '', auth_type, '%s' % os.path.basename(priv_key), alignment, 0, svn)]
     for pld in ext_list:
-        pld_list.append ((pld['name'], pld['file'], pld['algo'], hash_alg, '', 0, 0))
+        pld_list.append ((pld['name'], pld['file'], pld['algo'], hash_alg, '', 0, 0, svn))
     gen_container_bin ([pld_list], fv_dir, fv_dir, key_dir, '')
 
 def pub_key_valid (pubkey):
@@ -698,10 +832,10 @@ def get_verinfo_via_file (ver_dict, file):
         if len(elements) == 2:
                 ver_dict[elements[0].strip()] = elements[1].strip()
     image_id = '%-8s' % ver_dict['ImageId']
-    image_id = image_id[0:8]
+    image_id = image_id[0:8].encode()
 
     ver_info = VerInfo ()
-    ver_info.Signature      = '$SBH'
+    ver_info.Signature      = b'$SBH'
     ver_info.HeaderLength   = sizeof(ver_info)
     ver_info.HeaderRevision = 1
     ver_info.ImageId        = struct.unpack('Q', image_id)[0]
@@ -713,6 +847,7 @@ def get_verinfo_via_file (ver_dict, file):
         ver_info.ImageVersion.CoreMajorVersion = int(ver_dict['CoreMajorVersion'])
         ver_info.ImageVersion.BuildNumber  = int(ver_dict['BuildNumber'])
         ver_info.ImageVersion.SecureVerNum = int(ver_dict['SecureVerNum'])
+        ver_info.ImageVersion.ImageArch    = 1 if ver_dict['BUILD_ARCH'] == 'X64' else 0;
         ver_info.ImageVersion.FspDebug     = 1 if ver_dict['FSPDEBUG_MODE'] else 0;
         ver_info.ImageVersion.BldDebug     = 0 if ver_dict['RELEASE_MODE']  else 1;
         ver_info.ImageVersion.Dirty        = int(ver_dict['Dirty'])
@@ -761,6 +896,7 @@ def get_verinfo_via_git (ver_dict, repo_dir = '.'):
     ver_info.ImageVersion.CoreMinorVersion = ver_dict['VERINFO_CORE_MINOR_VER']
     ver_info.ImageVersion.CoreMajorVersion = ver_dict['VERINFO_CORE_MAJOR_VER']
     ver_info.ImageVersion.SecureVerNum = ver_dict['VERINFO_SVN']
+    ver_info.ImageVersion.ImageArch    = 1 if ver_dict['BUILD_ARCH'] == 'X64' else 0;
     ver_info.ImageVersion.FspDebug     = 1 if ver_dict['FSPDEBUG_MODE'] else 0;
     ver_info.ImageVersion.BldDebug     = 0 if ver_dict['RELEASE_MODE']  else 1;
     ver_info.ImageVersion.Dirty        = dirty
@@ -773,7 +909,7 @@ def gen_ver_info_txt (ver_file, ver_info):
     h_file.write('#\n')
     h_file.write('# This file is automatically generated. Please do NOT modify !!!\n')
     h_file.write('#\n\n')
-    h_file.write('ImageId       = %s\n'  % struct.pack('<Q', ver_info.ImageId))
+    h_file.write('ImageId       = %s\n'  % struct.pack('<Q', ver_info.ImageId).decode())
     h_file.write('SourceVersion = %016x\n' % ver_info.SourceVersion)
     h_file.write('SecureVerNum  = %03d\n'  % ver_info.ImageVersion.SecureVerNum)
     h_file.write('ProjMajorVersion  = %03d\n'  % ver_info.ImageVersion.ProjMajorVersion)
@@ -788,23 +924,14 @@ def check_for_python():
     '''
     Verify Python executable is at required version
     '''
-    cmd = [sys.executable, '-c', 'import sys; import platform; print(platform.python_version())']
-    version = run_process (cmd, capture_out = True).strip()
-    ver_parts = version.split('.')
-    # Require Python 3.6 or above
-    if not (len(ver_parts) >= 2 and int(ver_parts[0]) >= 3 and int(ver_parts[1]) >= 6):
-        print('WARNING: Python version %s is unsupported, potential build issue might encounter !\n         '
-              'Please consider installing and using Python 3.6 or above to launch build script !\n') % version
-
-    return version
-
-def print_tool_version_info(cmd, version):
+    os.environ['PYTHON_COMMAND'] = sys.executable
+    cmd = os.environ['PYTHON_COMMAND']
     try:
-        if os.name == 'posix':
-            cmd = subprocess.check_output(['which', cmd], stderr=subprocess.STDOUT).decode().strip()
+        ver = subprocess.check_output([cmd, '--version']).decode().strip().split()[-1]
     except:
+        ver = ''
         pass
-    print ('Using %s, Version %s' % (cmd, version))
+    return is_valid_tool_version(cmd, ver)
 
 def check_for_openssl():
     '''
@@ -812,25 +939,46 @@ def check_for_openssl():
     '''
     cmd = get_openssl_path ()
     try:
-        version = subprocess.check_output([cmd, 'version']).decode().strip()
+        ver = subprocess.check_output([cmd, 'version']).decode().strip().split()[1]
     except:
         print('ERROR: OpenSSL not available. Please set OPENSSL_PATH.')
-        sys.exit(1)
-    print_tool_version_info(cmd, version)
-    return version
+        ver = ''
+        pass
+    return is_valid_tool_version(cmd, ver)
 
 def check_for_nasm():
     '''
     Verify NASM executable is available
     '''
+    if os.name == 'nt' and 'NASM_PREFIX' not in os.environ:
+        os.environ['NASM_PREFIX'] = "C:\\Nasm\\"
+
     cmd = os.path.join(os.environ.get('NASM_PREFIX', ''), 'nasm')
     try:
-        version = subprocess.check_output([cmd, '-v']).decode().strip()
+        ver_str = subprocess.check_output([cmd, '-v']).decode().strip()
+        ver = re.search(r'version\s*([\d.]+)', ver_str).group(1)
     except:
         print('ERROR: NASM not available. Please set NASM_PREFIX.')
-        sys.exit(1)
-    print_tool_version_info(cmd, version)
-    return version
+        ver = ''
+        pass
+    return is_valid_tool_version(cmd, ver)
+
+def check_for_iasl():
+    '''
+    Verify iasl executable is available
+    '''
+    if os.name == 'nt' and 'IASL_PREFIX' not in os.environ:
+        os.environ['IASL_PREFIX'] = "C:\\ASL\\"
+
+    cmd = os.path.join(os.environ.get('IASL_PREFIX', ''), 'iasl')
+    try:
+        ver_str = subprocess.check_output([cmd, '-v']).decode().strip()
+        ver = re.search(r'version\s*([\d.]+)', ver_str).group(1)
+    except:
+        print('ERROR: iasl not available. Please set IASL_PREFIX.')
+        ver = ''
+        pass
+    return is_valid_tool_version(cmd, ver)
 
 def check_for_git():
     '''
@@ -838,12 +986,59 @@ def check_for_git():
     '''
     cmd = 'git'
     try:
-        version = subprocess.check_output([cmd, '--version']).decode().strip()
+        ver_str = subprocess.check_output([cmd, '--version']).decode().strip()
+        ver = re.search(r'version\s*([\d.]+)', ver_str).group(1)
     except:
         print('ERROR: Git not found. Please install Git or check if Git is in the PATH environment variable.')
+        ver = ''
+        pass
+    return is_valid_tool_version(cmd, ver, True)
+
+def check_for_toolchain(toolchain_preferred):
+    toolchain = None
+    if toolchain_preferred.startswith('clang'):
+        toolchain, toolchain_prefix, toolchain_path, toolchain_ver = get_clang_info ()
+    elif sys.platform == 'darwin':
+        toolchain, toolchain_prefix, toolchain_path, toolchain_ver = get_clang_info ()
+        toolchain, toolchain_prefix, toolchain_path = 'XCODE5', None, None
+    elif os.name == 'posix':
+        toolchain, toolchain_prefix, toolchain_path, toolchain_ver = get_gcc_info ()
+    elif os.name == 'nt':
+        toolchain, toolchain_prefix, toolchain_path, toolchain_ver = get_visual_studio_info (toolchain_preferred)
+
+    if not toolchain:
+        return False
+
+    os.environ['TOOL_CHAIN'] = toolchain
+    if toolchain_prefix:
+        os.environ[toolchain_prefix] = toolchain_path
+    return True
+
+def verify_toolchains(toolchain_preferred, toolchain_dict = None):
+    print('Checking Toolchain Versions...')
+
+    if toolchain_dict:
+        build_toolchains.update(toolchain_dict)
+
+    valid  = check_for_python()
+    valid &= check_for_openssl()
+    valid &= check_for_nasm()
+    valid &= check_for_iasl()
+    valid &= check_for_git()
+    valid &= check_for_toolchain(toolchain_preferred)
+
+    if valid != True:
+        print('...Failed! Please check toolchain versions!')
+        sys.exit(-1)
+    print('...Done!\n')
+
+def check_for_slimbootkeydir():
+    if not os.path.exists(os.environ.get('SBL_KEY_DIR')):
+        print ("!!! ERROR: SBL_KEY_DIR is set to directory %s does not exist!!! \n"  % os.environ['SBL_KEY_DIR'])
+        print (MESSAGE_SBL_KEY_DIR)
         sys.exit(1)
-    print_tool_version_info(cmd, version)
-    return version
+    else:
+        print ("SBL_KEY_DIR is set to %s !!" % os.path.abspath(os.environ.get('SBL_KEY_DIR')))
 
 def copy_images_to_output (fv_dir, zip_file, img_list, rgn_name_list, out_list):
     zip_path_file = os.path.join (os.environ['WORKSPACE'], zip_file)
@@ -1024,3 +1219,62 @@ def find_component_in_image_list (comp_name, img_list):
 def print_component_list (comp_list):
     for comp in comp_list:
         print('%-20s BASE=0x%08X' % (comp['name'], comp['base']))
+
+def gen_pci_enum_policy_info (policy_dict):
+    policy_info   = PciEnumPolicyInfo()
+    struct_string = ''
+    items_string  = ''
+    try:
+        policy_info.DowngradeIo32   = policy_dict['DOWNGRADE_IO32']
+        policy_info.DowngradeMem64  = policy_dict['DOWNGRADE_MEM64']
+        policy_info.DowngradePMem64 = policy_dict['DOWNGRADE_PMEM64']
+        policy_info.DowngradeBus0   = policy_dict['DOWNGRADE_BUS0']
+        policy_info.FlagAllocPmemFirst  = policy_dict['FLAG_ALLOC_PMEM_FIRST']
+        policy_info.BusScanType     = policy_dict['BUS_SCAN_TYPE']
+        bus_scan_items              = policy_dict['BUS_SCAN_ITEMS']
+
+        # Bus Scan List Type
+        if policy_info.BusScanType == 0:
+            # use dictionary key to remove duplicated bus number
+            items_dict = dict((int(elem, 0), 0) for elem in bus_scan_items.split(','))
+            for i in sorted (items_dict.keys()):
+                if i > 255:
+                    raise Exception('Bus number cannot exceed 255!')
+                items_string += (',0x%02x' % i)
+
+            policy_info.NumOfBus = len(items_dict)
+        # Bus Scan Range Type
+        else:
+            items_list = [int(elem, 0) for elem in bus_scan_items.split(',')]
+            policy_info.NumOfBus = len(items_list)
+            if policy_info.NumOfBus != 2:
+                raise Exception('Bus Scan Range type must have two bus number for start and end!')
+
+            items_list.sort()
+            items_string = ',0x%02x,0x%02x' % (items_list[0], items_list[1])
+
+        # combine structure and data
+        struct_data = list(bytearray(policy_info))
+        struct_string = ','.join(['0x%02x' % elem for elem in struct_data])
+        struct_string = '{' + struct_string + items_string + '}'
+    except KeyError:
+        raise Exception ("Failed to generate PCI_ENUM_POLICY_INFO!")
+
+    return struct_string
+
+def get_vtf_patch_base (stage1a_fd):
+    stage1a_bin = bytearray (get_file_data (stage1a_fd))
+    dlen = len(stage1a_bin) & ~0xF
+    if dlen > 0x1000:
+      dlen = 0x1000
+
+    found = 0
+    for i in range (0, dlen, 16):
+      if stage1a_bin[-i:-i+8] == b"\xF0\x0F\xAA\x55\x78\x56\x34\x12":
+        found = 0x100000000 - i
+        break
+
+    if not found:
+      raise Exception ("Could not find patchable data region in VTF !")
+
+    return found

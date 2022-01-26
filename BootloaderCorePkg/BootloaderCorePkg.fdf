@@ -9,7 +9,7 @@
 [Defines]
 DEFINE FLASH_ERASE_POLARITY   = 1
 DEFINE FV_DIR                 = $(OUTPUT_DIRECTORY)/$(TARGET)_$(TOOL_CHAIN_TAG)/FV
-DEFINE IA_DIR                 = $(OUTPUT_DIRECTORY)/$(TARGET)_$(TOOL_CHAIN_TAG)/IA32
+DEFINE ARCH_DIR               = $(OUTPUT_DIRECTORY)/$(TARGET)_$(TOOL_CHAIN_TAG)/$(ARCH)
 
 #------------------------------------------------------------------------------
 # STAGE1A FD
@@ -124,13 +124,12 @@ FV = OsLoader
 !endif
 
   FILE RAW = EFAC3859-B680-4232-A159-F886F2AE0B83 {
-    SECTION RAW = $(IA_DIR)/BootloaderCorePkg/PcdData/PcdData/OUTPUT/PEIPcdDataBase.raw
+    SECTION RAW = $(ARCH_DIR)/BootloaderCorePkg/PcdData/PcdData/OUTPUT/PEIPcdDataBase.raw
   }
 
-  INF $(PLATFORM_PACKAGE)/Stage1A/Stage1A.inf
+  INF BootloaderCorePkg/Stage1A/Stage1A.inf
 
-  INF RuleOverride = RESET_VECTOR USE = IA32 $(PLATFORM_PACKAGE)/Stage1A/Ia32/Vtf0/Bin/ResetVector.inf
-
+  INF RuleOverride = RESET_VECTOR USE = $(ARCH) BootloaderCorePkg/Stage1A/Ia32/Vtf0/Bin/ResetVector.inf
 
 #------------------------------------------------------------------------------
 # STAGE1B FV
@@ -155,7 +154,7 @@ FV = OsLoader
   READ_LOCK_CAP      = TRUE
   READ_LOCK_STATUS   = TRUE
 
-  INF $(PLATFORM_PACKAGE)/Stage1B/Stage1B.inf
+  INF BootloaderCorePkg/Stage1B/Stage1B.inf
 
   FILE FREEFORM = 016E6CD0-4834-4C7E-BCFE-41DFB88A6A6D {
     SECTION RAW = $(FV_DIR)/CfgDataInt.bin
@@ -183,10 +182,10 @@ FV = OsLoader
   READ_LOCK_CAP      = TRUE
   READ_LOCK_STATUS   = TRUE
 
-  INF $(PLATFORM_PACKAGE)/Stage2/Stage2.inf
+  INF BootloaderCorePkg/Stage2/Stage2.inf
 
 !if $(HAVE_ACPI_TABLE)
-  INF RuleOverride = ACPITABLE Platform/$(BOARD_PKG_NAME)/AcpiTables/AcpiTables.inf
+  INF RuleOverride = ACPITABLE $(ACPI_TABLE_INF_FILE)
 !endif
 
 !if $(HAVE_VBT_BIN)
@@ -278,4 +277,5 @@ FV = OsLoader
   FILE FREEFORM = $(NAMED_GUID) {
     RAW ACPI  Optional     |.acpi
     RAW ASL   Optional     |.aml
+    RAW BIN   Optional     |.bin
   }

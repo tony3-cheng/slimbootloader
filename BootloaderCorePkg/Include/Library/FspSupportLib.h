@@ -9,7 +9,7 @@
 #define __FSP_SUPPORT_LIB_H__
 
 typedef VOID \
-(*MEM_RES_HOB_CALLBACK) (EFI_HOB_RESOURCE_DESCRIPTOR *ResourceDescriptor, VOID *Param);
+(EFIAPI *MEM_RES_HOB_CALLBACK) (EFI_HOB_RESOURCE_DESCRIPTOR *ResourceDescriptor, VOID *Param);
 
 /**
   This function retrieves FSP Non-volatile Storage HOB buffer and size.
@@ -22,6 +22,7 @@ typedef VOID \
 
 **/
 VOID *
+EFIAPI
 GetFspNvsDataBuffer (
   CONST VOID             *HobListPtr,
   UINT32                 *Length
@@ -38,10 +39,27 @@ GetFspNvsDataBuffer (
 
 **/
 UINT64
+EFIAPI
 GetFspReservedMemoryFromGuid (
   CONST VOID     *HobListPtr,
   UINT64         *Length,
   EFI_GUID       *OwnerGuid
+  );
+
+/**
+  This function retrieves a top of low and high memory address.
+
+  @param  HobListPtr    A HOB list pointer.
+  @param  TopOfHighMem  A pointer to receive the top of high memory.
+
+  @retval              Top of low memory.
+
+**/
+UINT32
+EFIAPI
+GetSystemTopOfMemeory (
+  CONST VOID     *HobListPtr,
+  UINT64         *TopOfHighMem  OPTIONAL
   );
 
 /**
@@ -58,6 +76,18 @@ TraverseMemoryResourceHob (
   IN  CONST VOID            *HobListPtr,
   IN  MEM_RES_HOB_CALLBACK   MemResHobCallback,
   IN  VOID                  *Param
+  );
+
+/**
+  Dump FSP memory resource
+
+  @param  HobListPtr         A HOB list pointer.
+
+**/
+VOID
+EFIAPI
+DumpFspResourceHob (
+  IN  CONST VOID            *HobListPtr
   );
 
 #endif

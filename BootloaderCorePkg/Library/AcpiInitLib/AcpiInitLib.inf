@@ -21,9 +21,14 @@
 [Sources.IA32]
   Ia32/S3Wake.nasm
 
+[Sources.X64]
+  X64/S3Wake.nasm
+
 [Sources]
+  AcpiInitLibInternal.h
   AcpiInitLib.c
   AcpiFpdt.c
+  AcpiBgrt.c
 
 [Packages]
   MdePkg/MdePkg.dec
@@ -38,6 +43,7 @@
   DebugDataLib
   MpInitLib
   TimeStampLib
+  MemoryAllocationLib
 
 [Guids]
   gEsrtSystemFirmwareGuid
@@ -53,3 +59,9 @@
   gPlatformModuleTokenSpaceGuid.PcdAcpiGnvsAddress
   gPlatformModuleTokenSpaceGuid.PcdLoaderAcpiReclaimSize
   gPlatformCommonLibTokenSpaceGuid.PcdLowestSupportedFwVer
+  gPlatformModuleTokenSpaceGuid.PcdLegacyEfSegmentEnabled
+  gPlatformModuleTokenSpaceGuid.PcdSplashLogoAddress
+  gPlatformModuleTokenSpaceGuid.PcdSplashEnabled
+  gPlatformCommonLibTokenSpaceGuid.PcdCpuX2ApicEnabled
+  gPlatformModuleTokenSpaceGuid.PcdAcpiTableTemplatePtr
+  gPlatformModuleTokenSpaceGuid.PcdAcpiProcessorIdBase

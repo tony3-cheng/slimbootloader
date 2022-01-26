@@ -1,40 +1,66 @@
-Slim Bootloader support FOR Advantech
+  Advantech Slim Bootloader support 
 =====================================
-
-Base on: commit faa172e67e4e43416732b0b2d4c17a8383348257
 
 Status
 ------
 
->Apollo Lake
-
-  |Project|BoardID|Bring up|GPIO|HSIO|Super IO|GOP(VBT)|Boot Payload|
+  |Apollolake|PlatformID|Bring up|GPIO|HSIO|EC(IO)|GOP(VBT)|Payload|
   |----|----|----|----|----|----|----|----|
-  |SOM 2569|0x10|Yes| | | |Yes|UEFI|
-  |SOM 3569|0x11|Yes| | | |Yes|UEFI|
-  |SOM 6869|0x12|Yes| | | |Yes|UEFI|
-  |SOM 7569|0x13|Yes| | | |Yes|UEFI|
+  |SOM-2569|0x10|Yes|NotReady|NotReady|NotReady|Yes|UEFI|
+  |SOM-3569|0x11|Yes|NotReady|NotReady|NotReady|Yes|UEFI|
+  |SOM-6869|0x12|Yes|NotReady|NotReady|NotReady|Yes|UEFI|
+  |SOM-7569|0x13|Yes|NotReady|NotReady|NotReady|Yes|UEFI|
 
 
->Coffee Lake
-
-  |Project|BoardID|Bring up|GPIO|HSIO|Super IO|GOP(VBT)|Boot Payload|
+  |Coffeelake|PlatformID|Bring up|GPIO|HSIO|EC(IO)|GOP(VBT)|Payload|
   |----|----|----|----|----|----|----|----|
-  |SOM 6882(WHL-U ERB)|0x14|Yes| | |Yes|OsLoader|
+  |SOM-6882|0x14|Yes|NotReady|NotReady|NotReady|Yes|OsLoader|
+
+  |Cometlake|PlatformID|Bring up|GPIO|HSIO|EC(IO)|GOP(VBT)|Payload|
+  |----|----|----|----|----|----|----|----|
+  |NotReady|NotReady|NotReady|NotReady|NotReady|NotReady|NotReady|NotReady|
+
+  |Tigerlake|PlatformID|Bring up|GPIO|HSIO|EC(IO)|GOP(VBT)|Payload|
+  |----|----|----|----|----|----|----|----|
+  |SOM-7583|0x10|Yes|Yes|Yes|NotReady|Yes|UEFI|
+
+  |Elkhartlake|PlatformID|BringUp|GPIO|HSIO|EC(IO)|GOP(VBT)|Payload|
+  |----|----|----|----|----|----|----|----|
+  |SOM-2532|NotReady|NotReady|NotReady|NotReady|NotReady|NotReady|NotReady|
 
 
 Build Environment
 -----------------
 
-Python 3.6 - C:\Python36
+>Python 3.6
 
-NASM 2.11 - C:\Nasm
+    set PYTHON_HOME=C:\Python36
 
-IASL 20160422 - C:\ASL
+>NASM 2.11
 
-OpenSSL - C:\openssl
+    set NASM_PREFIX=C:\Nasm\
+
+>IASL 20160422
+
+    set IASL_PREFIX=C:\ASL\
+
+>OpenSSL
 
     set OPENSSL_PATH=C:\Openssl
+
+>Slim BootLoader Key
+
+    set SBL_KEY_DIR=%CD%\..\sblKeys\
+
+>EDK2 Payload Image 
+
+    set WORKSPACE=%CD%
+
+    set PACKAGES_PATH=%CD%
+
+    set EDK_TOOLS_PATH=%CD%\BaseTools
+
+    set BASE_TOOLS_PATH=%CD%\BaseTools
 
 Download Slim Bootloader
 ------------------------
@@ -42,20 +68,24 @@ Download Slim Bootloader
 git clone https://github.com/Advgcipc/slimbootloader.git
 
 
+Create Slim Bootloader Key
+--------------------------
+
+python BootloaderCorePkg\Tools\GenerateKeys.py -k ..\sblKeys
+
+
 Build Slim Bootloader
 ---------------------
 
-python BuildLoader.py build apl
+python BuildLoader.py build $(PlatformName)
 
 python BuildLoader.py clean -d
 
-Build SBL: (Release mode)
+Build SBL Release mode:
+python BuildLoader.py build $(PlatformName) -r -p "OsLoader.efi:LLDR:Lz4;UEFIPAYLOADRel.fd:UEFI:Lzma"
 
-python BuildLoader.py build apl -r -p "OsLoader.efi:LLDR:Lz4;UEFIPAYLOAD_RELEASE.fd:UEFI:Lzma"
-
-Build SBL: (Debug mode)
-
-python BuildLoader.py build apl -p "OsLoader.efi:LLDR:Lz4;UEFIPAYLOAD_DEBUG.fd:UEFI:Lzma"
+Build SBL Debug mode:
+python BuildLoader.py build $(PlatformName) -p "OsLoader.efi:LLDR:Lz4;UEFIPAYLOADDbg.fd:UEFI:Lzma"
 
 
 Stitch Slim Bootloader
@@ -71,23 +101,21 @@ python Platform/ApollolakeBoardPkg/Script/StitchLoader.py -i 35690000I60X402.bin
 Build UEFIPayload
 -----------------
 
-git clone --recurse-submodules https://github.com/tianocore/edk2.git edk2
 
-git checkout 42d8be0eaac5e7e109f487d4e241847e815b077a
+git clone --recurse-submodules https://github.com/tianocore/edk2.git edk2
 
 git submodule update ¡Vrecursive
 
 edksetup.bat
 
-build -a IA32 -a X64 -p UefiPayloadPkg\UefiPayloadPkgIa32X64.dsc -b DEBUG -t VS2017 -D BOOTLOADER=SBL
+build -a X64 -b DEBUG -t VS2017 -D BOOTLOADER=SBL -p UefiPayloadPkg\UefiPayloadPkg.dsc 
 
-build -a IA32 -a X64 -p UefiPayloadPkg\UefiPayloadPkgIa32X64.dsc -b RELEASE -t VS2017 -D BOOTLOADER=SBL
 
 Build Slim Bootloader with UEFIPayload
 --------------------------------------
 
-Put UEFIPAYLOAD.fd into $(SOURCE)\PayloadPkg\PayloadBins\
----------------------------------------------------------
+copy $(BUILD_DIR)\UEFIPAYLOAD.fd into $(SOURCE)\PayloadPkg\PayloadBins\UEFIPAYLOADRel.fd
+
 Example:
 
 copy edk2\Build\UefiPayloadPkgX64\DEBUG_VS2015x86\FV\UEFIPAYLOAD.fd sbl\PayloadPkg\PayloadBins\UEFIPAYLOAD.fd
@@ -99,6 +127,7 @@ Insert the following line to file sbl\Platform\ApollolakeBoardPkg\CfgData\CfgDat
 GEN_CFG_DATA.PayloadId                   | 'UEFI'
 
   Repeat *** Build Slim Bootloader *** and *** Stitch Slim Bootloader ***
+
 
 
 Slim Bootloader

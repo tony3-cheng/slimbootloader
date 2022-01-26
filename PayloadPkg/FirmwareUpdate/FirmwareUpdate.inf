@@ -27,6 +27,7 @@
   GetCapsuleImage.c
   CsmeFwUpdate.c
   ErrorList.c
+  CmdFwUpdate.c
 
 [Packages]
   MdePkg/MdePkg.dec
@@ -47,6 +48,8 @@
   LiteFvLib
   ConfigDataLib
   ContainerLib
+  StringSupportLib
+  BootOptionLib
 
 [Guids]
   gLoaderMemoryMapInfoGuid
@@ -56,13 +59,13 @@
   gFirmwareUpdateImageFileGuid
   gFlashMapInfoGuid
   gBootLoaderVersionFileGuid
+  gBootLoaderVersionGuid
 
 [Pcd]
   gEfiMdePkgTokenSpaceGuid.PcdPciExpressBaseAddress
   gPayloadTokenSpaceGuid.PcdPayloadHobList
   gPlatformCommonLibTokenSpaceGuid.PcdAcpiPmTimerBase
   gPayloadTokenSpaceGuid.PcdFwUpdStatusBase
-  gPayloadTokenSpaceGuid.PcdRsvdRegionBase
   gPlatformCommonLibTokenSpaceGuid.PcdLowestSupportedFwVer
   gPayloadTokenSpaceGuid.PcdCsmeUpdateEnabled
   gPlatformCommonLibTokenSpaceGuid.PcdCompSignHashAlg

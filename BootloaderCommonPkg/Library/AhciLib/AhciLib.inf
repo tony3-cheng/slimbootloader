@@ -36,3 +36,8 @@
   TimerLib
   BaseMemoryLib
   MemoryAllocationLib
+  IoMmuLib
+
+[Pcd]
+  gPlatformCommonLibTokenSpaceGuid.PcdDmaBufferSize
+  gPlatformCommonLibTokenSpaceGuid.PcdDmaProtectionEnabled

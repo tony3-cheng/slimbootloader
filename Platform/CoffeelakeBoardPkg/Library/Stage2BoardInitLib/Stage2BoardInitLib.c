@@ -45,8 +45,8 @@
 #include <Library/PchSerialIoLib.h>
 #include <Library/SgxLib.h>
 #include <PlatformBase.h>
-#include <Library/SiGpioLib.h>
-#include <Library/GpioNativeLib.h>
+#include <Library/GpioLib.h>
+#include <Library/GpioSiLib.h>
 #include <RegAccess.h>
 #include <CpuPowerMgmt.h>
 #include <PowerMgmtNvsStruct.h>
@@ -62,10 +62,13 @@
 #include <Library/SmbiosInitLib.h>
 #include <IndustryStandard/SmBios.h>
 #include <VerInfo.h>
+#include <Library/VtdPmrLib.h>
 #include <Library/S3SaveRestoreLib.h>
 #include "GpioTables.h"
 #include <Library/PchSpiLib.h>
 #include <Register/RegsSpi.h>
+#include <Library/HeciLib.h>
+#include <Library/PlatformHookLib.h>
 
 #define DEFAULT_GPIO_IRQ_ROUTE                      14
 
@@ -245,18 +248,8 @@ STATIC SMMBASE_INFO mSmmBaseInfo = {
 
 STATIC S3_SAVE_REG mS3SaveReg = {
   { BL_PLD_COMM_SIG, S3_SAVE_REG_COMM_ID, 1, 0 },
-  { { IO, WIDE32, { 0, 0}, (ACPI_BASE_ADDRESS + R_ACPI_IO_SMI_EN), 0x00000000 } }
+  { { REG_TYPE_IO, WIDE32, { 0, 0}, (ACPI_BASE_ADDRESS + R_ACPI_IO_SMI_EN), 0x00000000 } }
 };
-
-UINT8
-GetSerialPortStrideSize (
-  VOID
-);
-
-UINT32
-GetSerialPortBase (
-  VOID
-  );
 
 VOID
 EnableLegacyRegions (
@@ -308,8 +301,8 @@ ClearSmi (
   @retval                   Calculated power value in mW
 
 **/
-STATIC
 UINT32
+EFIAPI
 CalculateRelativePower (
   IN  UINT16  BaseRatio,
   IN  UINT16  CurrRatio,
@@ -506,7 +499,7 @@ UpdateBlRsvdRegion ()
     return Status;
   }
 
-  CopyMem (&FwUpdStatus, (VOID *)RsvdBase, sizeof(FW_UPDATE_STATUS));
+  CopyMem (&FwUpdStatus, (VOID *)(UINTN)RsvdBase, sizeof(FW_UPDATE_STATUS));
 
   if (FwUpdStatus.StateMachine == FW_UPDATE_SM_PART_AB) {
     Status = SpiFlashErase (FlashRegionBios, FlashMap->RomSize - (~RsvdBase + 1), RsvdSize);
@@ -517,30 +510,6 @@ UpdateBlRsvdRegion ()
   }
 
   return EFI_SUCCESS;
-}
-
-/**
-  Clear FSP HOB data
-
-**/
-VOID
-ClearFspHob (
-  VOID
-  )
-{
-  LOADER_GLOBAL_DATA          *LdrGlobal;
-  EFI_HOB_HANDOFF_INFO_TABLE  *HandOffHob;
-  UINT32                      Length;
-
-  LdrGlobal  = (LOADER_GLOBAL_DATA *)GetLoaderGlobalDataPointer ();
-  if (LdrGlobal->FspHobList == NULL) {
-    return;
-  }
-
-  HandOffHob = (EFI_HOB_HANDOFF_INFO_TABLE  *) LdrGlobal->FspHobList;
-  Length     = (UINT8 *) (UINTN) HandOffHob->EfiEndOfHobList - (UINT8 *)HandOffHob;
-  ZeroMem (HandOffHob, Length);
-  LdrGlobal->FspHobList = NULL;
 }
 
 /**
@@ -596,7 +565,7 @@ InitializeSmbiosInfo (
   Index         = 0;
   PlatformId    = GetPlatformId ();
   TempSmbiosStrTbl  = (SMBIOS_TYPE_STRINGS *) AllocateTemporaryMemory (0);
-  VerInfoTbl    = GetLoaderGlobalDataPointer()->VerInfoPtr;
+  VerInfoTbl    = GetVerInfoPtr ();
 
   //
   // SMBIOS_TYPE_BIOS_INFORMATION
@@ -712,7 +681,7 @@ PrintGpioConfigTable (
   GpioInitConf = (GPIO_INIT_CONFIG *)GpioConfData;
   for (Index  = 0; Index < GpioPinNum; Index++) {
     PadDataPtr = (UINT32 *)&GpioInitConf->GpioConfig;
-    DEBUG ((DEBUG_INFO, "GPIO PAD: 0x%08X   DATA: 0x%08X 0x%08X\n", GpioInitConf->GpioPad, PadDataPtr[0], PadDataPtr[1]));
+    DEBUG ((DEBUG_VERBOSE, "GPIO PAD: 0x%08X   DATA: 0x%08X 0x%08X\n", GpioInitConf->GpioPad, PadDataPtr[0], PadDataPtr[1]));
     GpioInitConf++;
   }
 }
@@ -906,12 +875,49 @@ UpdatePayloadId (
 }
 
 /**
+  Build VT-d information to prepare PMR program
+
+**/
+STATIC
+VOID
+BuildVtdInfo (
+  VOID
+  )
+{
+  VTD_INFO     *VtdInfo;
+  UINTN         McD0BaseAddress;
+  UINT32        MchBar;
+  UINT32        Idx;
+  UINT32        VtdIdx;
+  UINT32        Data;
+  UINT32        RegOff[2] = {R_SA_MCHBAR_VTD1_OFFSET, R_SA_MCHBAR_VTD3_OFFSET};
+
+  VtdInfo = &((PLATFORM_DATA *)GetPlatformDataPtr ())->VtdInfo;
+  McD0BaseAddress = MM_PCI_ADDRESS (SA_MC_BUS, 0, 0, 0);
+  MchBar          = MmioRead32 (McD0BaseAddress + R_SA_MCHBAR) & ~BIT0;
+  VtdInfo->HostAddressWidth = 39;
+
+  VtdIdx = 0;
+  for (Idx = 0; Idx < ARRAY_SIZE(RegOff); Idx++) {
+    Data = MmioRead32 (MchBar + RegOff[Idx]) & ~3;
+    if (Data != 0) {
+      DEBUG ((DEBUG_INFO, "VT-d Engine %d @ 0x%08X\n", VtdIdx, Data));
+      VtdInfo->VTdEngineAddress[VtdIdx++] = Data;
+      ASSERT (VtdIdx <= ARRAY_SIZE(VtdInfo->VTdEngineAddress));
+    }
+  }
+
+  VtdInfo->VTdEngineCount = VtdIdx;
+}
+
+/**
   Initialize Board specific things in Stage2 Phase
 
   @param[in]  InitPhase            Indicates a board init phase to be initialized
 
 **/
 VOID
+EFIAPI
 BoardInit (
   IN  BOARD_INIT_PHASE    InitPhase
 )
@@ -920,16 +926,19 @@ BoardInit (
   EFI_STATUS      Status;
   UINT32          RgnBase;
   UINT32          RgnSize;
-  UINT32          LpcBase;
+  UINTN           LpcBase;
   UINTN           SpiBaseAddress;
   UINT16          TcoBase;
   UINT32          SaMcAddress;
   UINT32          AddressPort;
   UINTN           SpiBar0;
   UINT32          Length;
-
+  UINT32          TsegBase;
+  UINT32          TsegSize;
+  BL_SW_SMI_INFO            *BlSwSmiInfo;
+  VTD_INFO                  *VtdInfo;
   EFI_PEI_GRAPHICS_INFO_HOB *FspGfxHob;
-  LOADER_GLOBAL_DATA        *LdrGlobal;
+  VOID                      *FspHobList;
 
   switch (InitPhase) {
   case PreSiliconInit:
@@ -947,19 +956,24 @@ BoardInit (
     }
     break;
   case PostSiliconInit:
-    if (GetBootMode () == BOOT_ON_S3_RESUME) {
-      Status = PcdSet8S (PcdSmmRebaseMode, SMM_REBASE_ENABLE_ON_S3_RESUME_ONLY);
-    }
-    Status = PcdSet32S (PcdSmramTsegBase, MmioRead32 (TO_MM_PCI_ADDRESS (0x00000000) + TSEG) & ~0xF);
+    // Set TSEG base/size PCD
+    TsegBase = MmioRead32 (TO_MM_PCI_ADDRESS (0x00000000) + TSEG) & ~0xF;
+    TsegSize = MmioRead32 (TO_MM_PCI_ADDRESS (0x00000000) + BGSM) & ~0xF;
+    TsegSize -= TsegBase;
+    (VOID) PcdSet32S (PcdSmramTsegBase, TsegBase);
+    (VOID) PcdSet32S (PcdSmramTsegSize, (UINT32)TsegSize);
 
     //
     // Reinitialize PCI bus master and memory space for Graphics device
     // Reinitialize the BAR for Graphics device
     //
     if (PcdGetBool (PcdFramebufferInitEnabled)) {
-      LdrGlobal = (LOADER_GLOBAL_DATA *)GetLoaderGlobalDataPointer();
-      FspGfxHob = (EFI_PEI_GRAPHICS_INFO_HOB *)GetGuidHobData (LdrGlobal->FspHobList, &Length,
-                    &gEfiGraphicsInfoHobGuid);
+      FspGfxHob = NULL;
+      FspHobList = GetFspHobListPtr ();
+      if (FspHobList != NULL) {
+        FspGfxHob = (EFI_PEI_GRAPHICS_INFO_HOB *)GetGuidHobData (FspHobList, &Length,
+                      &gEfiGraphicsInfoHobGuid);
+      }
       if (FspGfxHob != NULL) {
         PciAnd8 (PCI_LIB_ADDRESS(SA_IGD_BUS, SA_IGD_DEV, SA_IGD_FUN_0, PCI_COMMAND_OFFSET), \
                    (UINT8)(~EFI_PCI_COMMAND_BUS_MASTER));
@@ -992,10 +1006,35 @@ BoardInit (
     if (FeaturePcdGet (PcdSmbiosEnabled)) {
       InitializeSmbiosInfo ();
     }
+
+    // Enable DMA protection
+    if (FeaturePcdGet (PcdDmaProtectionEnabled)) {
+      BuildVtdInfo ();
+      VtdInfo = &((PLATFORM_DATA *)GetPlatformDataPtr ())->VtdInfo;
+      SetDmaProtection (VtdInfo, TRUE);
+    }
     break;
   case PrePciEnumeration:
     break;
   case PostPciEnumeration:
+    if (GetBootMode() == BOOT_ON_S3_RESUME) {
+      //
+      // Clear Smi
+      //
+      ClearSmi ();
+      RestoreS3RegInfo (FindS3Info (S3_SAVE_REG_COMM_ID));
+      BlSwSmiInfo = NULL;
+
+      //
+      // If UEFI payload registered a software SMI handler
+      // for bootloader to restore SMRR base and mask in
+      // S3 resume path, trigger sw smi
+      //
+      BlSwSmiInfo = FindS3Info (BL_SW_SMI_COMM_ID);
+      if (BlSwSmiInfo != NULL) {
+        TriggerPayloadSwSmi (BlSwSmiInfo->BlSwSmiHandlerInput);
+      }
+    }
     break;
   case PrePayloadLoading:
     Status = IgdOpRegionInit ();
@@ -1003,20 +1042,23 @@ BoardInit (
       DEBUG ((DEBUG_WARN, "VBT not found %r\n", Status));
     }
     if (GetPayloadId () == UEFI_PAYLOAD_ID_SIGNATURE && GetBootMode() != BOOT_ON_S3_RESUME) {
+      ClearS3SaveRegion ();
       //
       // Set SMMBASE_INFO dummy strucutre in TSEG before others
       //
       mSmmBaseInfo.SmmBaseHdr.Count     = (UINT8) MpGetInfo()->CpuCount;
       mSmmBaseInfo.SmmBaseHdr.TotalSize = sizeof(BL_PLD_COMM_HDR) + mSmmBaseInfo.SmmBaseHdr.Count * sizeof(CPU_SMMBASE);
-      Status = AppendS3Info ((VOID *)&mSmmBaseInfo);
+      Status = AppendS3Info ((VOID *)&mSmmBaseInfo, TRUE);
       //
       // Set REG_INFO struct in TSEG region except 'Val' for regs
       //
       mS3SaveReg.S3SaveHdr.TotalSize = sizeof(BL_PLD_COMM_HDR) + mS3SaveReg.S3SaveHdr.Count * sizeof(REG_INFO);
-      AppendS3Info ((VOID *)&mS3SaveReg);
+      AppendS3Info ((VOID *)&mS3SaveReg, FALSE);
     }
     break;
   case EndOfStages:
+    // Register Heci Service
+    HeciRegisterHeciService ();
     // Lock down SPI for all other payload entry except FWUpdate and OSloader
     // as this phase is too early for them to lock it here
     SpiBaseAddress = GetDeviceAddr (OsBootDeviceSpi, 0);
@@ -1028,14 +1070,6 @@ BoardInit (
     }
     break;
   case ReadyToBoot:
-    //
-    // Clear Smi and restore S3 regs on S3 resume
-    //
-    ClearSmi ();
-    if ((GetBootMode() == BOOT_ON_S3_RESUME) && (GetPayloadId () == UEFI_PAYLOAD_ID_SIGNATURE)) {
-      RestoreS3RegInfo (FindS3Info (S3_SAVE_REG_COMM_ID));
-    }
-
     //
     // Do necessary locks, and clean up before jumping tp OS
     //
@@ -1091,6 +1125,11 @@ BoardInit (
     break;
   case EndOfFirmware:
     ClearFspHob ();
+    if (FeaturePcdGet (PcdDmaProtectionEnabled)) {
+      // Disable DMA protection
+      VtdInfo = &((PLATFORM_DATA *)GetPlatformDataPtr ())->VtdInfo;
+      SetDmaProtection (VtdInfo, FALSE);
+    }
     break;
   default:
     break;
@@ -1144,6 +1183,7 @@ FindSerialIoIrq (
 
 **/
 VOID
+EFIAPI
 UpdateFspConfig (
   IN  VOID     *FspsUpdPtr
 )
@@ -1198,6 +1238,9 @@ UpdateFspConfig (
   FspsUpd->FspsConfig.TcoIrqSelect        = 9;
 
   HdaVerbTablePtr = (UINT32 *) AllocateZeroPool (6 * sizeof (UINT32));  // max 6 tables supported for now
+  if (HdaVerbTablePtr == NULL) {
+    return;
+  }
   HdaVerbTableNum = 0;
   HdaVerbTablePtr[HdaVerbTableNum++]   = (UINT32)(UINTN) &HdaVerbTableDisplayAudio;
   if (IsPchLp()) {
@@ -1208,7 +1251,11 @@ UpdateFspConfig (
   FspsUpd->FspsConfig.PchHdaVerbTablePtr      = (UINT32)(UINTN) HdaVerbTablePtr;
   FspsUpd->FspsConfig.PchHdaVerbTableEntryNum = HdaVerbTableNum;
 
-  FspsUpd->FspsConfig.GraphicsConfigPtr   = PcdGet32(PcdGraphicsVbtAddress);
+  if (PcdGetBool (PcdFramebufferInitEnabled)) {
+    FspsUpd->FspsConfig.GraphicsConfigPtr   = (UINT32)GetVbtAddress ();
+  } else {
+    FspsUpd->FspsConfig.GraphicsConfigPtr = 0;
+  }
 
   CopyMem (&FspsUpd->FspsConfig.PxRcConfig, mPxRcConfig, sizeof(mPxRcConfig));
 
@@ -1261,8 +1308,9 @@ UpdateFspConfig (
   }
 
   if (PlatformId == PLATFORM_ID_UPXTREME) {
-    // Workaround for USB issue on port 9, disable it for now
-    FspsUpd->FspsConfig.PortUsb20Enable[9] = 0;
+    // Workaround for USB issue on port 10, it does not respond to USB enumeration.
+    // Disable this port for now
+    FspsUpd->FspsConfig.PortUsb20Enable[9] = FALSE;
   }
 
   Length = GetPchXhciMaxUsb3PortNum ();
@@ -1678,7 +1726,7 @@ SaveNvsData (
   // Compare input data against the stored MRC training data
   // if they match, no need to update again.
   //
-  if (CompareMem ((VOID *)Address, Buffer, Length) == 0) {
+  if (CompareMem ((VOID *)(UINTN)Address, Buffer, Length) == 0) {
     SetDramInitScratchpad ();
     return EFI_ALREADY_STARTED;
   }
@@ -1724,7 +1772,7 @@ UpdateSerialPortInfo (
   IN  SERIAL_PORT_INFO  *SerialPortInfo
 )
 {
-  SerialPortInfo->BaseAddr = GetSerialPortBase();
+  SerialPortInfo->BaseAddr = (UINT32) GetSerialPortBase();
   SerialPortInfo->RegWidth = GetSerialPortStrideSize();
   if (SerialPortInfo->BaseAddr < 0x10000) {
     // IO Type
@@ -1765,7 +1813,8 @@ UpdateFrameBufferInfo (
 )
 {
   if (PcdGetBool (PcdIntelGfxEnabled)) {
-    GfxInfo->FrameBufferBase = PciRead32 (PCI_LIB_ADDRESS(0, 2, 0, 0x18)) & 0xFFFFFF00;
+    GfxInfo->FrameBufferBase  = LShiftU64 (PciRead32 (PCI_LIB_ADDRESS(0, 2, 0, 0x1C)), 32);
+    GfxInfo->FrameBufferBase += (PciRead32 (PCI_LIB_ADDRESS(0, 2, 0, 0x18)) & 0xFFFFFF00);
   }
 }
 
@@ -1801,20 +1850,36 @@ UpdateSmmInfo (
   if (LdrSmmInfo == NULL) {
     return;
   }
-  LdrSmmInfo->SmmBase = MmioRead32 (TO_MM_PCI_ADDRESS (0x00000000) + TSEG) & ~0xF;
-  LdrSmmInfo->SmmSize = MmioRead32 (TO_MM_PCI_ADDRESS (0x00000000) + BGSM) & ~0xF;
-  LdrSmmInfo->SmmSize -= LdrSmmInfo->SmmBase;
+  LdrSmmInfo->SmmBase = PcdGet32 (PcdSmramTsegBase);
+  LdrSmmInfo->SmmSize = PcdGet32 (PcdSmramTsegSize);
   LdrSmmInfo->Flags = SMM_FLAGS_4KB_COMMUNICATION;
-  DEBUG ((DEBUG_ERROR, "Stage2: SmmRamBase = 0x%x, SmmRamSize = 0x%x\n", LdrSmmInfo->SmmBase, LdrSmmInfo->SmmSize));
+  DEBUG ((DEBUG_INFO, "SmmRamBase = 0x%x, SmmRamSize = 0x%x\n", LdrSmmInfo->SmmBase, LdrSmmInfo->SmmSize));
+
   //
-  // Update the HOB with smi ctrl register data
+  // Update smi ctrl register data
   //
-  LdrSmmInfo->SmiCtrlReg.RegType    = IO;
-  LdrSmmInfo->SmiCtrlReg.RegWidth   = WIDE32;
-  LdrSmmInfo->SmiCtrlReg.SmiGblPos  = B_ACPI_IO_SMI_EN_GBL_SMI;
-  LdrSmmInfo->SmiCtrlReg.SmiApmPos  = B_ACPI_IO_SMI_EN_APMC;
-  LdrSmmInfo->SmiCtrlReg.SmiEosPos  = B_ACPI_IO_SMI_EN_EOS;
+  LdrSmmInfo->SmiCtrlReg.RegType    = (UINT8)REG_TYPE_IO;
+  LdrSmmInfo->SmiCtrlReg.RegWidth   = (UINT8)WIDE32;
+  LdrSmmInfo->SmiCtrlReg.SmiGblPos  = (UINT8)HighBitSet32 (B_ACPI_IO_SMI_EN_GBL_SMI);
+  LdrSmmInfo->SmiCtrlReg.SmiApmPos  = (UINT8)HighBitSet32 (B_ACPI_IO_SMI_EN_APMC);
+  LdrSmmInfo->SmiCtrlReg.SmiEosPos  = (UINT8)HighBitSet32 (B_ACPI_IO_SMI_EN_EOS);
   LdrSmmInfo->SmiCtrlReg.Address    = (UINT32)(ACPI_BASE_ADDRESS + R_ACPI_IO_SMI_EN);
+
+  //
+  // Update smi status register data
+  //
+  LdrSmmInfo->SmiStsReg.RegType    = (UINT8)REG_TYPE_IO;
+  LdrSmmInfo->SmiStsReg.RegWidth   = (UINT8)WIDE32;
+  LdrSmmInfo->SmiStsReg.SmiApmPos  = (UINT8)HighBitSet32 (B_ACPI_IO_SMI_STS_APM);
+  LdrSmmInfo->SmiStsReg.Address    = (UINT32)(ACPI_BASE_ADDRESS + R_ACPI_IO_SMI_STS);
+
+  //
+  // Update smi lock register data
+  //
+  LdrSmmInfo->SmiLockReg.RegType    = (UINT8)REG_TYPE_MMIO;
+  LdrSmmInfo->SmiLockReg.RegWidth   = (UINT8)WIDE32;
+  LdrSmmInfo->SmiLockReg.SmiLockPos = (UINT8)HighBitSet32 (B_PMC_PWRM_GEN_PMCON_B_SMI_LOCK);
+  LdrSmmInfo->SmiLockReg.Address    = (UINT32)(PCH_PWRM_BASE_ADDRESS + R_PMC_PWRM_GEN_PMCON_B);
 }
 
 /**
@@ -1902,11 +1967,9 @@ PlatformUpdateAcpiTable (
   GLOBAL_NVS_AREA             *GlobalNvs;
   UINT32                       Base;
   UINT16                       Size;
-  LOADER_GLOBAL_DATA          *LdrGlobal;
   EFI_STATUS                   Status;
   SILICON_CFG_DATA            *SiliconCfgData;
-
-  LdrGlobal = (LOADER_GLOBAL_DATA *)GetLoaderGlobalDataPointer();
+  VOID                        *FspHobList;
 
   GlobalNvs  = (GLOBAL_NVS_AREA *)(UINTN) PcdGet32 (PcdAcpiGnvsAddress);
 
@@ -1971,15 +2034,18 @@ PlatformUpdateAcpiTable (
   }
 
   if (Table->Signature == EFI_BDAT_TABLE_SIGNATURE) {
-    UpdateBdatAcpiTable (Table, LdrGlobal->FspHobList);
-    DEBUG ( (DEBUG_INFO, "Updated BDAT Table in AcpiTable Entries\n") );
+    FspHobList = GetFspHobListPtr ();
+    if (FspHobList != NULL) {
+      UpdateBdatAcpiTable (Table, FspHobList);
+      DEBUG ( (DEBUG_INFO, "Updated BDAT Table in AcpiTable Entries\n") );
+    }
   }
 
   if (FeaturePcdGet (PcdMeasuredBootEnabled)){
     if ((Table->Signature == EFI_ACPI_5_0_TRUSTED_COMPUTING_PLATFORM_2_TABLE_SIGNATURE) ||
           (Table->OemTableId == ACPI_SSDT_TPM2_DEVICE_OEM_TABLE_ID)) {
 
-      if (LdrGlobal->LdrFeatures & FEATURE_MEASURED_BOOT) {
+      if ((GetFeatureCfg () & FEATURE_MEASURED_BOOT) != 0) {
         Status = UpdateTpm2AcpiTable(Table);
         if (EFI_ERROR (Status)) {
           DEBUG ((DEBUG_ERROR, "UpdateTpm2AcpiTable fails! - %r\n", Status));
@@ -2022,9 +2088,7 @@ UpdateCpuNvs (
 {
   EFI_HOB_GUID_TYPE                     *GuidHob;
   CPU_INIT_DATA_HOB                     *CpuInitDataHob;
-  LOADER_GLOBAL_DATA                    *LdrGlobal;
-
-  LdrGlobal   = (LOADER_GLOBAL_DATA *)GetLoaderGlobalDataPointer();
+  VOID                                  *FspHobList;
 
   if (CpuNvs == NULL) {
     DEBUG ((DEBUG_ERROR, "Invalid Cpu Nvs pointer!!!\n"));
@@ -2034,7 +2098,11 @@ UpdateCpuNvs (
   ///
   /// Get CPU Init Data Hob
   ///
-  GuidHob = GetNextGuidHob (&gCpuInitDataHobGuid, LdrGlobal->FspHobList);
+  GuidHob = NULL;
+  FspHobList = GetFspHobListPtr ();
+  if (FspHobList != NULL) {
+    GuidHob = GetNextGuidHob (&gCpuInitDataHobGuid, FspHobList);
+  }
   if (GuidHob == NULL) {
     DEBUG ((DEBUG_ERROR, "CPU Data HOB not available\n"));
     return;
@@ -2236,6 +2304,8 @@ PlatformUpdateAcpiGnvs (
 
   SaNvs->Mmio32Base   = PcdGet32(PcdPciResourceMem32Base);
   SaNvs->Mmio32Length = ACPI_MMIO_BASE_ADDRESS - SaNvs->Mmio32Base;
+  SaNvs->Mmio64Base   = PcdGet64(PcdPciResourceMem64Base);
+  SaNvs->Mmio64Length = SaNvs->Mmio64Base;
 
   SaNvs->AlsEnable                    = 0;
   SaNvs->IgdState                     = 1;

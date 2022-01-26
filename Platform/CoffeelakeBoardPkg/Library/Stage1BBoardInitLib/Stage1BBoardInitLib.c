@@ -54,7 +54,7 @@ CONST UINT32 mUpxGpioBomPad[]  = {
   GPIO_CNL_LP_GPP_C10,  // BRD_ID2
   GPIO_CNL_LP_GPP_C9,   // BRD_ID1
   GPIO_CNL_LP_GPP_C8,   // BRD_ID0
-  GPIO_CNL_LP_GPP_A23,  // DDR_ID2
+  GPIO_CNL_LP_GPP_A12,  // DDR_ID2
   GPIO_CNL_LP_GPP_A18,  // DDR_ID1
   GPIO_CNL_LP_GPP_C11   // DDR_ID0
 };
@@ -90,6 +90,7 @@ SetDebugLevelFromCfgData (
 
 **/
 VOID
+EFIAPI
 UpdateFspConfig (
   VOID     *FspmUpdPtr
 )
@@ -126,8 +127,8 @@ UpdateFspConfig (
     CopyMem (&Fspmcfg->SpdAddressTable, MemCfgData->SpdAddressTable, sizeof(MemCfgData->SpdAddressTable));
   } else {
     SpdData[0] = 0;
-    SpdData[1] = (UINT32) (((MEM_SPD0_CFG_DATA *)FindConfigDataByTag (CDATA_MEM_SPD0_TAG))->MemorySpdPtr0);
-    SpdData[2] = (UINT32) (((MEM_SPD1_CFG_DATA *)FindConfigDataByTag (CDATA_MEM_SPD1_TAG))->MemorySpdPtr1);
+    SpdData[1] = (UINT32)(UINTN) (((MEM_SPD0_CFG_DATA *)FindConfigDataByTag (CDATA_MEM_SPD0_TAG))->MemorySpdPtr0);
+    SpdData[2] = (UINT32)(UINTN) (((MEM_SPD1_CFG_DATA *)FindConfigDataByTag (CDATA_MEM_SPD1_TAG))->MemorySpdPtr1);
 
     if (PlatformId == PLATFORM_ID_UPXTREME) {
       // For UPX, using BomID to decide SPD data instead.
@@ -168,10 +169,7 @@ UpdateFspConfig (
   CopyMem (&Fspmcfg->DqsMapCpu2DramCh0, MemCfgData->DqsMapCpu2DramCh0, sizeof(MemCfgData->DqsMapCpu2DramCh0));
   CopyMem (&Fspmcfg->DqsMapCpu2DramCh1, MemCfgData->DqsMapCpu2DramCh1, sizeof(MemCfgData->DqsMapCpu2DramCh1));
   Fspmcfg->DqPinsInterleaved      = MemCfgData->DqPinsInterleaved;
-  //
-  // Tseg 4MB is enough for both debug/release build with SBL
-  //
-  Fspmcfg->TsegSize               = 0x00400000;
+  Fspmcfg->TsegSize               = MemCfgData->TsegSize;
   Fspmcfg->MmioSize               = MemCfgData->MmioSize;
   Fspmcfg->RMT                    = MemCfgData->RMT;
   FspmcfgTest->BdatEnable         = MemCfgData->BdatEnable;
@@ -222,6 +220,9 @@ UpdateFspConfig (
   if (!(UpdateFspmSgxConfig (FspmUpd))) {
     DEBUG ((DEBUG_INFO, "FSP-M variables for Intel(R) SGX were NOT updated.\n"));
   }
+
+  // Enable VT-d
+  FspmcfgTest->VtdDisable = 0;
 
   Fspmcfg->PlatformDebugConsent = MemCfgData->PlatformDebugConsent;
   Fspmcfg->PchTraceHubMode      = MemCfgData->PchTraceHubMode;
@@ -323,7 +324,7 @@ PlatformIdInitialize (
       if (EFI_ERROR(Status)) {
         break;
       }
-      BomId = (BomId << 1) + (GpioData & 1);
+      BomId = (BomId << 1) + (GpioData & BIT0);
     }
 
     if (Idx == ARRAY_SIZE(mUpxGpioBomPad)) {
@@ -404,7 +405,6 @@ PlatformFeaturesInit (
   )
 {
   FEATURES_CFG_DATA           *FeaturesCfgData;
-  LOADER_GLOBAL_DATA          *LdrGlobal;
   UINT32                       Features;
   PLATFORM_DATA               *PlatformData;
 
@@ -444,10 +444,8 @@ PlatformFeaturesInit (
     DEBUG ((DEBUG_INFO, "FEATURES CFG DATA NOT FOUND!\n"));
   }
 
-  LdrGlobal = (LOADER_GLOBAL_DATA *)GetLoaderGlobalDataPointer ();
-  LdrGlobal->LdrFeatures = Features;
-
-  DEBUG ((DEBUG_INFO, "PlatformFeaturesInit: LdrGlobal->LdrFeatures 0x%x\n",LdrGlobal->LdrFeatures));
+  SetFeatureCfg (Features);
+  DEBUG ((DEBUG_INFO, "PlatformFeaturesInit: Features 0x%x\n", GetFeatureCfg ()));
 }
 
 /**
@@ -505,47 +503,52 @@ GetPlatformPowerState (
   // Clear PWRBTNOR_STS
   //
   if (IoRead16 (ACPI_BASE_ADDRESS + R_ACPI_IO_PM1_STS) & B_ACPI_IO_PM1_STS_PRBTNOR) {
-    IoWrite16 (ACPI_BASE_ADDRESS + R_ACPI_IO_PM1_STS, B_ACPI_IO_PM1_STS_PRBTNOR);
+    IoWrite16 (ACPI_BASE_ADDRESS + R_ACPI_IO_PM1_STS, B_ACPI_IO_PM1_STS_PRBTNOR | B_ACPI_IO_PM1_STS_PRBTN);
   }
 
   //
   // If Global Reset Status, Power Failure. Host Reset Status bits are set, return S5 State
   //
-  if ((PmconA & (B_PMC_PWRM_GEN_PMCON_A_GBL_RST_STS | B_PMC_PWRM_GEN_PMCON_A_PWR_FLR | B_PMC_PWRM_GEN_PMCON_A_HOST_RST_STS)) != 0) {
-    return BOOT_WITH_FULL_CONFIGURATION;
-  }
-
   BootMode = BOOT_WITH_FULL_CONFIGURATION;
-  if (IoRead16 (ACPI_BASE_ADDRESS + R_ACPI_IO_PM1_STS) & B_ACPI_IO_PM1_STS_WAK) {
-    switch (IoRead16 (ACPI_BASE_ADDRESS + R_ACPI_IO_PM1_CNT) & B_ACPI_IO_PM1_CNT_SLP_TYP) {
-      case V_ACPI_IO_PM1_CNT_S3:
-        BootMode = BOOT_ON_S3_RESUME;
-        break;
-      case V_ACPI_IO_PM1_CNT_S4:
-        BootMode = BOOT_ON_S4_RESUME;
-        break;
-      case V_ACPI_IO_PM1_CNT_S5:
-        BootMode = BOOT_ON_S5_RESUME;
-        break;
-      default:
-        BootMode = BOOT_WITH_FULL_CONFIGURATION;
-        break;
+  if ((PmconA & (B_PMC_PWRM_GEN_PMCON_A_GBL_RST_STS | B_PMC_PWRM_GEN_PMCON_A_PWR_FLR | B_PMC_PWRM_GEN_PMCON_A_HOST_RST_STS)) == 0) {
+    if (IoRead16 (ACPI_BASE_ADDRESS + R_ACPI_IO_PM1_STS) & B_ACPI_IO_PM1_STS_WAK) {
+      switch (IoRead16 (ACPI_BASE_ADDRESS + R_ACPI_IO_PM1_CNT) & B_ACPI_IO_PM1_CNT_SLP_TYP) {
+        case V_ACPI_IO_PM1_CNT_S3:
+          BootMode = BOOT_ON_S3_RESUME;
+          break;
+        case V_ACPI_IO_PM1_CNT_S4:
+          BootMode = BOOT_ON_S4_RESUME;
+          break;
+        case V_ACPI_IO_PM1_CNT_S5:
+          BootMode = BOOT_ON_S5_RESUME;
+          break;
+        default:
+          BootMode = BOOT_WITH_FULL_CONFIGURATION;
+          break;
+      }
+    }
+
+    ///
+    /// Clear Wake Status
+    /// Also clear the PWRBTN_EN, it causes SMI# otherwise (SCI_EN is 0)
+    ///
+    IoAndThenOr32 (ACPI_BASE_ADDRESS + R_ACPI_IO_PM1_STS, (UINT32)~B_ACPI_IO_PM1_EN_PWRBTN_EN, B_ACPI_IO_PM1_STS_WAK);
+
+    IoAnd32 (ACPI_BASE_ADDRESS + R_ACPI_IO_GPE0_EN_127_96, (UINT32)~B_ACPI_IO_GPE0_STS_127_96_PME_B0);
+
+    if ((MmioRead8 (PCH_PWRM_BASE_ADDRESS + R_PMC_PWRM_GEN_PMCON_B) & B_PMC_PWRM_GEN_PMCON_B_RTC_PWR_STS) != 0) {
+      BootMode = BOOT_WITH_FULL_CONFIGURATION;
+
+      ///
+      /// Clear Sleep Type
+      ///
+      IoAndThenOr16 (ACPI_BASE_ADDRESS + R_ACPI_IO_PM1_CNT, (UINT16) ~B_ACPI_IO_PM1_CNT_SLP_TYP, V_ACPI_IO_PM1_CNT_S0);
     }
   }
 
-  ///
-  /// Clear Wake Status
-  /// Also clear the PWRBTN_EN, it causes SMI# otherwise (SCI_EN is 0)
-  ///
-  IoAndThenOr32 (ACPI_BASE_ADDRESS + R_ACPI_IO_PM1_STS, (UINT32)~B_ACPI_IO_PM1_EN_PWRBTN_EN, B_ACPI_IO_PM1_STS_WAK);
-
-  if ((MmioRead8 (PCH_PWRM_BASE_ADDRESS + R_PMC_PWRM_GEN_PMCON_B) & B_PMC_PWRM_GEN_PMCON_B_RTC_PWR_STS) != 0) {
-    BootMode = BOOT_WITH_FULL_CONFIGURATION;
-
-    ///
-    /// Clear Sleep Type
-    ///
-    IoAndThenOr16 (ACPI_BASE_ADDRESS + R_ACPI_IO_PM1_CNT, (UINT16) ~B_ACPI_IO_PM1_CNT_SLP_TYP, V_ACPI_IO_PM1_CNT_S0);
+  if ((BootMode == BOOT_WITH_FULL_CONFIGURATION) || (BootMode == BOOT_ON_S5_RESUME)) {
+    // Clear power button status to prevent false power button event detection later on
+    IoWrite16 (ACPI_BASE_ADDRESS + R_ACPI_IO_PM1_STS,  B_ACPI_IO_PM1_STS_PRBTN);
   }
 
   return BootMode;
@@ -563,7 +566,7 @@ EarlyBootDeviceInit (
 )
 {
   EFI_STATUS  Status        = EFI_SUCCESS;
-  UINT32      EmmcHcPciBase = MmPciBase(0, 0x1A, 0);
+  UINTN       EmmcHcPciBase = MmPciBase(0, 0x1A, 0);
   UINT32      Base          = 0xFE600000;
 
   /* Configure EMMC GPIO Pad */
@@ -601,6 +604,7 @@ EarlyBootDeviceInit (
 
 **/
 VOID
+EFIAPI
 BoardInit (
   IN  BOARD_INIT_PHASE  InitPhase
 )
@@ -615,10 +619,10 @@ BoardInit (
 DEBUG_CODE_BEGIN();
     UINT32  Data;
 
-    Data = *(UINT32 *) (0xFED30328);
+    Data = *(UINT32 *)(UINTN)(0xFED30328);
     DEBUG ((DEBUG_ERROR, "[Boot Guard] AcmStatus : 0x%08X\n", Data));
 
-    Data = *(UINT32 *) (0xFED300A4);
+    Data = *(UINT32 *)(UINTN)(0xFED300A4);
     DEBUG ((DEBUG_ERROR, "[Boot Guard] BootStatus: 0x%08X\n", Data));
 
     if ((Data & (BIT31 | BIT30)) != BIT31) {
@@ -631,6 +635,9 @@ DEBUG_CODE_END();
       EarlyBootDeviceInit ();
     }
     PltDeviceTable = (PLT_DEVICE_TABLE *)AllocatePool (sizeof (PLT_DEVICE_TABLE) + sizeof (mPlatformDevices));
+    if (PltDeviceTable == NULL) {
+      return;
+    }
     PltDeviceTable->DeviceNumber = sizeof (mPlatformDevices) /sizeof (PLT_DEVICE);
     CopyMem (PltDeviceTable->Device, mPlatformDevices, sizeof (mPlatformDevices));
     SetDeviceTable (PltDeviceTable);
@@ -644,8 +651,10 @@ DEBUG_CODE_END();
     break;
   case PreMemoryInit:
     GpioInit (PlatformId);
+    break;
   case PostMemoryInit:
     DEBUG ((DEBUG_INFO, "PostMemoryInit called\n"));
+    UpdateMemoryInfo ();
     break;
   case PreTempRamExit:
     break;
@@ -678,10 +687,10 @@ FindNvsData (
     return NULL;
   }
 
-  if (*(UINT32 *)MrcData == 0xFFFFFFFF) {
+  if (*(UINT32 *)(UINTN)MrcData == 0xFFFFFFFF) {
     return NULL;
   } else {
-    return (VOID *)MrcData;
+    return (VOID *)(UINTN)MrcData;
   }
 }
 

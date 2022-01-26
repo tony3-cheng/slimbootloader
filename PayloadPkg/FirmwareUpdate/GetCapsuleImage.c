@@ -20,6 +20,7 @@
 #include <Library/CryptoLib.h>
 #include <Library/FirmwareUpdateLib.h>
 #include <Library/ConfigDataLib.h>
+#include <Library/BootOptionLib.h>
 #include <ConfigDataCommonStruct.h>
 
 /**
@@ -254,7 +255,7 @@ LoadCapsuleImage (
   // If we do not have file system, try reading capsule from raw partition
   //
   if (CapsuleInfo->FsType >= EnumFileSystemMax) {
-    Status = GetCapsuleFromRawPartition (CapsuleInfo, HwPartHandle, CapsuleImage, CapsuleImageSize);
+    Status = GetCapsuleFromRawPartition (CapsuleInfo, HwPartHandle, CapsuleImage, (UINTN *)CapsuleImageSize);
     return Status;
   }
 
@@ -283,7 +284,7 @@ LoadCapsuleImage (
   // Find capsule using the name provided in configuration data
   //
   if (CapsuleInfo->FileName[0] != 0) {
-    AsciiStrToUnicodeStrS ((CONST CHAR8 *)(&CapsuleInfo->FileName), FileName, MAX_FILE_LEN);
+    AsciiStrToUnicodeStrS ((CONST CHAR8 *)&CapsuleInfo->FileName[0], FileName, MAX_FILE_LEN);
 
     Status = OpenFile (FsHandle, FileName, &FileHandle);
     if (EFI_ERROR(Status)) {
@@ -291,7 +292,7 @@ LoadCapsuleImage (
       goto Done;
     }
 
-    Status = GetFileSize (FileHandle, CapsuleImageSize);
+    Status = GetFileSize (FileHandle, (UINTN *)CapsuleImageSize);
     if (EFI_ERROR(Status)) {
       DEBUG((DEBUG_ERROR, " Get Capsule File '%s' size Status : %r\n", FileName, Status));
       goto Done;
@@ -303,7 +304,7 @@ LoadCapsuleImage (
       goto Done;
     }
 
-    Status = ReadFile (FileHandle, CapsuleImage, CapsuleImageSize);
+    Status = ReadFile (FileHandle, CapsuleImage, (UINTN *)CapsuleImageSize);
     if (EFI_ERROR(Status)) {
       DEBUG((DEBUG_ERROR, " Read Capsule File '%s' Status : %r\n", FileName, Status));
       goto Done;
@@ -401,6 +402,15 @@ GetCapsuleImage (
   if (CapsuleInfo == NULL) {
     DEBUG((DEBUG_ERROR, " CapsuleInfo not found \n"));
     return EFI_NOT_FOUND;
+  }
+
+  DEBUG ((DEBUG_INFO, "Read capsule image from %a DevInstance (%4x) HwPart (%4x) SwPart (%4x) FS (%4a)",
+    GetBootDeviceNameString(CapsuleInfo->DevType), CapsuleInfo->DevInstance, CapsuleInfo->HwPart,
+    CapsuleInfo->SwPart, GetFsTypeString (CapsuleInfo->FsType)));
+  if (CapsuleInfo->FsType < EnumFileSystemMax) {
+    DEBUG ((DEBUG_INFO, " file name: %a\n", CapsuleInfo->FileName));
+  } else {
+    DEBUG ((DEBUG_INFO, " LBA offset: 0x%x \n", CapsuleInfo->LbaAddr));
   }
 
   Status = LoadCapsuleImage (CapsuleInfo, CapsuleImage, CapsuleImageSize);

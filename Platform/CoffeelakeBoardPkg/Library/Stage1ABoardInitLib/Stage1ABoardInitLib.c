@@ -9,7 +9,7 @@
 #include <Library/BoardInitLib.h>
 #include <Library/BootloaderCoreLib.h>
 #include <Library/SerialPortLib.h>
-#include <Library/SiGpioLib.h>
+#include <Library/GpioLib.h>
 #include <Library/PlatformHookLib.h>
 #include <Library/FirmwareUpdateLib.h>
 #include <Library/DebugLib.h>
@@ -95,6 +95,10 @@ CONST GPIO_INIT_CONFIG mUartGpioTable[] = {
   {GPIO_CNL_LP_GPP_C21, {GpioPadModeNative1, GpioHostOwnGpio, GpioDirNone,  GpioOutDefault, GpioIntDis, GpioHostDeepReset,  GpioTermNone}},//SERIALIO_UART2_TXD
 };
 
+CONST GPIO_INIT_CONFIG mGpioDebugPortPinTable[] = {
+  {FixedPcdGet32(PcdGpioDebugPortPinPad), {GpioPadModeGpio, GpioHostOwnGpio, GpioDirOut,  GpioOutHigh, GpioIntDis, GpioHostDeepReset,  GpioTermNone}},
+};
+
 typedef enum {
   BootPartition1,
   BootPartition2,
@@ -153,7 +157,7 @@ EarlyPlatformDataCheck (
   STITCH_DATA          *StitchData;
 
   // Stitching process might pass some plafform specific data.
-  StitchData = (STITCH_DATA *) 0xFFFFFFF4;
+  StitchData = (STITCH_DATA *)(UINTN)0xFFFFFFF4;
   if (StitchData->Marker != 0xAA) {
     // PlatformID will be deferred to be detected
     SetDebugPort ( PcdGet8 (PcdDebugPortNumber));
@@ -178,7 +182,7 @@ GetBootPartition (
   OUT BOOT_PARTITION_SELECT      *BootPartition
   )
 {
-  UINT32    P2sbBase;
+  UINTN     P2sbBase;
   UINT32    P2sbBar;
   //UINT16    RegOffset;
   //UINT8     RtcPortId;
@@ -233,6 +237,7 @@ GetBootPartition (
 
 **/
 VOID
+EFIAPI
 BoardInit (
   IN  BOARD_INIT_PHASE  InitPhase
 )
@@ -258,6 +263,13 @@ BoardInit (
     if (DebugPort < PCH_MAX_SERIALIO_UART_CONTROLLERS) {
       GpioConfigurePads (2, (GPIO_INIT_CONFIG *)mUartGpioTable + (DebugPort << 1));
     }
+
+    if ((PcdGet32 (PcdDebugOutputDeviceMask) & DEBUG_OUTPUT_DEVICE_DEBUG_PORT) != 0) {
+      if (PcdGet32 (PcdGpioDebugPortMmioBase)  != 0) {
+        GpioConfigurePads (1, (GPIO_INIT_CONFIG *)mGpioDebugPortPinTable);
+      }
+    }
+
     PlatformHookSerialPortInitialize ();
     SerialPortInitialize ();
     Status = GetBootPartition (&BootPartition);

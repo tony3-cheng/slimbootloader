@@ -1,6 +1,6 @@
 /** @file
 
-  Copyright (c) 2019, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2019 - 2021, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -17,9 +17,12 @@
 #include <Library/BootloaderCoreLib.h>
 #include <Library/SpiFlashLib.h>
 #include <Library/CryptoLib.h>
+#include <Library/IgdOpRegionLib.h>
+#include <IgdOpRegionDefines.h>
+#include <GopConfig.h>
 
-#define  IMAGE_TYPE_ADDENDUM  0xFE
-#define  IMAGE_TYPE_NOT_USED  0xFF
+#define  IMAGE_TYPE_ADDENDUM  0x1E
+#define  IMAGE_TYPE_NOT_USED  0x1F
 
 #define NATIVE_PSTATE_LATENCY         10
 #define PSTATE_BM_LATENCY             10
@@ -58,12 +61,12 @@ FillBootOptionListFromCfgData (
   IN OUT   OS_BOOT_OPTION_LIST   *OsBootOptionList
 )
 {
+  GEN_CFG_DATA               *GenCfgData;
   OS_BOOT_OPTION             *BootOption;
   OS_BOOT_OPTION             *BootOptionCfgData;
   UINT8                       PrevBootOptionIndex;
-  UINT8                       UpdateFlag;
   UINTN                       ImageIdx;
-  UINTN                       Idx;
+  UINT32                      Idx;
   UINT64                      Lba;
   CHAR8                      *StrPtr;
 
@@ -81,47 +84,58 @@ FillBootOptionListFromCfgData (
       continue;
     }
 
-    UpdateFlag = 0;
     if (BootOptionCfgData->ImageType == IMAGE_TYPE_ADDENDUM) {
       // This entry is an addendum for previous boot option entry
-      if (ImageIdx < ARRAY_SIZE(BootOption->Image)) {
-        UpdateFlag = 2;
-        BootOption = &OsBootOptionList->OsBootOption[PrevBootOptionIndex];
+      BootOption = &OsBootOptionList->OsBootOption[PrevBootOptionIndex];
+      if (BootOptionCfgData->PreOsImageType < MAX_EXTRA_IMAGE_NUM) {
+        // extra image addendum
+        ImageIdx = LoadImageTypeExtra0 + BootOptionCfgData->PreOsImageType;
+      } else {
+        //  PreOS addendum
+        ImageIdx = LoadImageTypePreOs;
       }
     } else {
       // CFGDATA has short structure to save size on flash
       // Need to translate the short format to OS_BOOT_OPTION format
-      UpdateFlag = 1;
       ImageIdx   = 0;
       BootOption = &OsBootOptionList->OsBootOption[OsBootOptionList->OsBootOptionCount];
       CopyMem (BootOption, BootOptionCfgData, OFFSET_OF (OS_BOOT_OPTION, Image[0]));
     }
 
-    if (UpdateFlag > 0) {
-      StrPtr = (CHAR8 *)BootOptionCfgData->Image[0].FileName;
-      // Use either LBA or filename. '#' indicates it is LBA string.
-      if ((StrPtr[0] == '#') && (AsciiStrHexToUint64S (StrPtr + 1, NULL, &Lba) == RETURN_SUCCESS)) {
-        BootOption->Image[ImageIdx].LbaImage.Valid   = 1;
-        BootOption->Image[ImageIdx].LbaImage.SwPart  = BootOptionCfgData->SwPart;
-        // LBA should be defined as 64bit.
-        // Will remove the typecast when the structure is fixed.
-        BootOption->Image[ImageIdx].LbaImage.LbaAddr = (UINT32)Lba;
-      } else {
-        CopyMem (BootOption->Image[ImageIdx].FileName, BootOptionCfgData->Image[0].FileName,
-                 sizeof (BootOption->Image[ImageIdx].FileName));
+    StrPtr = (CHAR8 *)BootOptionCfgData->Image[0].FileName;
+    // Use either LBA or filename. '#' indicates it is LBA string.
+    if ((StrPtr[0] == '#') && (AsciiStrHexToUint64S (StrPtr + 1, NULL, &Lba) == RETURN_SUCCESS)) {
+      BootOption->Image[ImageIdx].LbaImage.Valid   = 1;
+      BootOption->Image[ImageIdx].LbaImage.SwPart  = BootOptionCfgData->SwPart;
+      // LBA should be defined as 64bit.
+      // Will remove the typecast when the structure is fixed.
+      BootOption->Image[ImageIdx].LbaImage.LbaAddr = (UINT32)Lba;
+    } else {
+      CopyMem (BootOption->Image[ImageIdx].FileName, BootOptionCfgData->Image[0].FileName,
+               sizeof (BootOption->Image[ImageIdx].FileName));
+    }
+
+    if (BootOptionCfgData->ImageType != IMAGE_TYPE_ADDENDUM) {
+      PrevBootOptionIndex = OsBootOptionList->OsBootOptionCount;
+      OsBootOptionList->OsBootOptionCount++;
+      if (OsBootOptionList->OsBootOptionCount >= PcdGet32 (PcdOsBootOptionNumber)) {
+        break;
       }
-      if (UpdateFlag == 1) {
-        PrevBootOptionIndex = OsBootOptionList->OsBootOptionCount;
-        OsBootOptionList->OsBootOptionCount++;
-        if (OsBootOptionList->OsBootOptionCount >= PcdGet32 (PcdOsBootOptionNumber)) {
-          break;
-        }
-      }
-      ImageIdx += 1;
     }
   }
 
-  DEBUG ((DEBUG_INFO, "Created %d OS boot options\n",  OsBootOptionList->OsBootOptionCount));
+  GenCfgData = (GEN_CFG_DATA *)FindConfigDataByTag (CDATA_GEN_TAG);
+  if (GenCfgData != NULL) {
+    OsBootOptionList->CurrentBoot = GenCfgData->CurrentBoot;
+    if (OsBootOptionList->CurrentBoot != MAX_BOOT_OPTION_ENTRY - 1) {
+      if (OsBootOptionList->CurrentBoot >= OsBootOptionList->OsBootOptionCount) {
+        OsBootOptionList->CurrentBoot = 0;
+      }
+    }
+  }
+
+  DEBUG ((DEBUG_INFO, "Created %d OS boot options (Current: %d)\n",  \
+          OsBootOptionList->OsBootOptionCount, OsBootOptionList->CurrentBoot));
 }
 
 /**
@@ -140,14 +154,14 @@ PlatformNameInit (
   if (PlatNameConfigData != NULL) {
     SetPlatformName ((VOID *)&PlatNameConfigData->PlatformName);
   } else {
-    DEBUG ((DEBUG_INFO, "Platform Name config not found"));
+    DEBUG ((DEBUG_INFO, "Platform Name config not found\n"));
   }
 }
 
 
 /**
   Load the configuration data blob from SPI flash into destination buffer.
-  It supports the sources:  BIOS for external Cfgdata.
+  It supports the sources: PDR, BIOS for external Cfgdata.
 
   @param[in]    Dst        Destination address to load configuration data blob.
   @param[in]    Src        Source address to load configuration data blob.
@@ -178,7 +192,7 @@ SpiLoadExternalConfigData (
   UINT32       Length;
 
   BlobSize = sizeof(CDATA_BLOB);
-  Buffer   = (UINT8 *)Dst;
+  Buffer   = (UINT8 *)(UINTN)Dst;
   Base     = 0;
 
   CfgDataLoadSrc = PcdGet32 (PcdCfgDataLoadSource);
@@ -198,7 +212,7 @@ SpiLoadExternalConfigData (
   } else if (CfgDataLoadSrc == FlashRegionBios) {
     Status = GetComponentInfo (FLASH_MAP_SIG_CFGDATA, &Base, &Length);
     if (!EFI_ERROR(Status)) {
-      CopyMem (Buffer, (VOID *)Base, BlobSize);
+      CopyMem (Buffer, (VOID *)(UINTN)Base, BlobSize);
     }
   }
   if (EFI_ERROR(Status)) {
@@ -226,7 +240,7 @@ SpiLoadExternalConfigData (
   // Read the full configuration data
   //
   if (Base > 0) {
-    CopyMem (Buffer + BlobSize, (VOID *)(Base + BlobSize), SignedLen - BlobSize);
+    CopyMem (Buffer + BlobSize, (VOID *)(UINTN)(Base + BlobSize), SignedLen - BlobSize);
   }
 
   return Status;
@@ -258,7 +272,7 @@ CheckStateMachine (
       DEBUG((DEBUG_ERROR, "Could not get component information for bootloader reserved region\n"));
       return Status;
     }
-    pFwUpdStatus = (FW_UPDATE_STATUS *)RsvdBase;
+    pFwUpdStatus = (FW_UPDATE_STATUS *)(UINTN)RsvdBase;
   }
 
   //
@@ -447,4 +461,126 @@ AcpiPatchPssTable (
   }
 
   return EFI_SUCCESS;
+}
+
+/**
+  Find the actual VBT image from the container.
+
+  In case of multiple VBT tables are packed into a single FFS, the PcdGraphicsVbtAddress could
+  point to the container address instead. This function checks this condition and locates the
+  actual VBT table address within the container.
+
+  @param[in] ImageId    Image ID for VBT binary to locate in the container
+
+  @retval               Actual VBT address found in the container. 0 if not found.
+
+**/
+UINT32
+LocateVbtByImageId (
+  IN  UINT32     ImageId
+)
+{
+  VBT_MB_HDR     *VbtMbHdr;
+  VBT_ENTRY_HDR  *VbtEntry;
+  UINT32          VbtAddr;
+  UINTN           Idx;
+
+  VbtMbHdr = (VBT_MB_HDR* )(UINTN)PcdGet32 (PcdGraphicsVbtAddress);
+  if ((VbtMbHdr == NULL) || (VbtMbHdr->Signature != MVBT_SIGNATURE)) {
+    return 0;
+  }
+
+  VbtAddr  = 0;
+  VbtEntry = (VBT_ENTRY_HDR *)&VbtMbHdr[1];
+  for (Idx = 0; Idx < VbtMbHdr->EntryNum; Idx++) {
+    if (VbtEntry->ImageId == ImageId) {
+      VbtAddr = (UINT32)(UINTN)VbtEntry->Data;
+      break;
+    }
+    VbtEntry = (VBT_ENTRY_HDR *)((UINT8 *)VbtEntry + VbtEntry->Length);
+  }
+
+  DEBUG ((DEBUG_INFO, "%a VBT ImageId 0x%08X\n",
+                      (VbtAddr == 0) ? "Cannot find" : "Select", ImageId));
+
+  return VbtAddr;
+}
+
+/**
+  Get VBT address.
+
+  This function gets VBT address, In case of multiple VBT
+  tables, this function will call LocateVbtByImageId, otherwise
+  returns PcdGraphicsVbtAddress.
+
+  @retval               Actual VBT address found in the container. 0 if not found.
+
+**/
+UINTN
+GetVbtAddress ()
+{
+  EFI_STATUS      Status;
+  UINT32            VbtAddress;
+  GEN_CFG_DATA      *GenericCfgData;
+
+  VbtAddress = 0;
+
+  GenericCfgData = (GEN_CFG_DATA *)FindConfigDataByTag (CDATA_GEN_TAG);
+  if (GenericCfgData != NULL) {
+    VbtAddress = LocateVbtByImageId (GenericCfgData->VbtImageId);
+    if (VbtAddress != 0) {
+      Status = PcdSet32S (PcdGraphicsVbtAddress, VbtAddress);
+      DEBUG ((DEBUG_VERBOSE, "Setting Graphic VBT address failed with Status %r\n", Status));
+    }
+  }
+
+  return PcdGet32(PcdGraphicsVbtAddress);
+}
+
+/**
+  Patch VBT to use a fixed display mode with the required resolution.
+
+  @param[in]  VbtBuf    VBT binary buffer in memory to be patched.
+  @param[in]  Xres      Requested mode X resolution.
+  @param[in]  Yres      Requested mode Y resolution.
+
+  @retval     EFI_SUCCESS        Fixed mode block in VBT has been patched to the required mode.
+              EFI_NOT_FOUND      Could not find fixed mode block in VBT.
+**/
+EFI_STATUS
+EFIAPI
+SetVbtFixedMode (
+  IN  UINT8     *VbtBuf,
+  IN  UINT32     Xres,
+  IN  UINT32     Yres
+  )
+{
+  EFI_STATUS                Status;
+  VBT_HEADER               *VbtHdr;
+  VBT_BIOS_DATA_HEADER     *BiosDataHdr;
+  VBT_BLOCK_COMMON_HEADER  *BlkHdr;
+  BLOCK51_FIXED_MODE_SET   *ModeBlk;
+  UINT32                    Offset;
+
+  Status = EFI_NOT_FOUND;
+  if ((VbtBuf != NULL) && (*(UINT32 *)VbtBuf == VBT_SIGNATURE)) {
+    VbtHdr = (VBT_HEADER *)VbtBuf;
+    Offset = VbtHdr->Bios_Data_Offset;
+    BiosDataHdr = (VBT_BIOS_DATA_HEADER *)(VbtBuf + Offset);
+    Offset = Offset + BiosDataHdr->BDB_Header_Size;
+    while (Offset < BiosDataHdr->BDB_Size) {
+      BlkHdr = (VBT_BLOCK_COMMON_HEADER *)(VbtBuf + Offset);
+      // BlockId 51 is for fixed mode set
+      if (BlkHdr->BlockId == 51) {
+        ModeBlk = (BLOCK51_FIXED_MODE_SET *) BlkHdr;
+        ModeBlk->FeatureEnable = 1;
+        ModeBlk->XRes = Xres;
+        ModeBlk->YRes = Yres;
+        Status = EFI_SUCCESS;
+        break;
+      }
+      Offset += (BlkHdr->BlockSize + sizeof(VBT_BLOCK_COMMON_HEADER));
+    }
+  }
+  return Status;
 }

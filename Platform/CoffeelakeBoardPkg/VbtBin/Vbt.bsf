@@ -2651,7 +2651,7 @@ List    &Aggressiveness_Level_Profile
   Selection       0x00,       "Minimum"
   Selection       0x01,       "Moderate"
   Selection       0x02,       "High"
-EndList    
+EndList
 List    &Int_EFP_Port_List
   Selection       0x00,       "N/A"
   Selection       0x01,       "HDMI-B"
@@ -2690,7 +2690,7 @@ List    &GPIO_Pin_List
   Selection       0x01,       "Pin-Pair #1"
   Selection       0x02,       "Pin-Pair #2"
   Selection       0x03,       "Pin-Pair #3"
-EndList  
+EndList
 
 List    &GMBus_Speed_List
   Selection       0x01,       "50 KHz"
@@ -3182,7 +3182,7 @@ Page      "Windows Graphics driver Configuration"
 
     Combo     $BIA_Aggress_Level, "\t\tDPST Aggressiveness Level (Mobile only)", &Pwr_Pref_List,
     Help      "This feature defines the Intel® Display Power Saving Technology aggressiveness level if and only if "
-              "the feature Intel® Display Power Saving Technology is enabled."   
+              "the feature Intel® Display Power Saving Technology is enabled."
               "\r\n\r\nThe following are the definitions for each level:"
               "\r\n1 - Maximum Quality - shall use no DPST "
               "\r\n2 - Provides  the user the maximum brightness for their embedded Local Flat Panel (LFP)while DPST is in use"
@@ -3594,7 +3594,7 @@ Page      "Integrated Display Configuration"
 
         EditNum   $MaxFullLuminance_01, "\tMaximum full frame luminance" , EHEX,
         Help      "Maximum Full frame luminance value.\r\n"
-                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"        
+                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"
 
         EditNum   $MaxLuminance_01,"\tMaximum Luminance" , EHEX,
         Help      "Maximum luminance value(Relatively smaller portion of screen).\r\n"
@@ -3975,7 +3975,7 @@ Page      "Integrated Display Configuration"
 
         EditNum   $MaxFullLuminance_02, "\tMaximum full frame luminance" , EHEX,
         Help      "Maximum Full frame luminance value.\r\n"
-                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"        
+                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"
 
         EditNum   $MaxLuminance_02,"\tMaximum Luminance" , EHEX,
         Help      "Maximum luminance value(Relatively smaller portion of screen).\r\n"
@@ -4355,7 +4355,7 @@ Page      "Integrated Display Configuration"
 
         EditNum   $MaxFullLuminance_03, "\tMaximum full frame luminance" , EHEX,
         Help      "Maximum Full frame luminance value.\r\n"
-                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"        
+                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"
 
         EditNum   $MaxLuminance_03,"\tMaximum Luminance" , EHEX,
         Help      "Maximum luminance value(Relatively smaller portion of screen).\r\n"
@@ -4737,7 +4737,7 @@ Page      "Integrated Display Configuration"
 
         EditNum   $MaxFullLuminance_04, "\tMaximum full frame luminance" , EHEX,
         Help      "Maximum Full frame luminance value.\r\n"
-                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"        
+                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"
 
         EditNum   $MaxLuminance_04,"\tMaximum Luminance" , EHEX,
         Help      "Maximum luminance value(Relatively smaller portion of screen).\r\n"
@@ -5119,7 +5119,7 @@ Page      "Integrated Display Configuration"
 
         EditNum   $MaxFullLuminance_05, "\tMaximum full frame luminance" , EHEX,
         Help      "Maximum Full frame luminance value.\r\n"
-                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"        
+                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"
 
         EditNum   $MaxLuminance_05,"\tMaximum Luminance" , EHEX,
         Help      "Maximum luminance value(Relatively smaller portion of screen).\r\n"
@@ -5131,7 +5131,7 @@ Page      "Integrated Display Configuration"
         Help      " Value shall define the gamma range, from 1.00 to 3.54, as follows: \r\n"
                   " Field Value = (Gamma (value in float) x 100) - 100 \n"
                   " Field values range from 00h through FFh. \n"
-                  " FFh = No gamma information shall be provided \n"   
+                  " FFh = No gamma information shall be provided \n"
 
       EndPage   ; Chromaticity Control
 
@@ -5504,7 +5504,7 @@ Page      "Integrated Display Configuration"
 
         EditNum   $MaxFullLuminance_06, "\tMaximum full frame luminance" , EHEX,
         Help      "Maximum Full frame luminance value.\r\n"
-                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"        
+                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"
 
         EditNum   $MaxLuminance_06,"\tMaximum Luminance" , EHEX,
         Help      "Maximum luminance value(Relatively smaller portion of screen).\r\n"
@@ -5886,7 +5886,7 @@ Page      "Integrated Display Configuration"
 
         EditNum   $MaxFullLuminance_07, "\tMaximum full frame luminance" , EHEX,
         Help      "Maximum Full frame luminance value.\r\n"
-                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"        
+                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"
 
         EditNum   $MaxLuminance_07,"\tMaximum Luminance" , EHEX,
         Help      "Maximum luminance value(Relatively smaller portion of screen).\r\n"
@@ -6268,7 +6268,7 @@ Page      "Integrated Display Configuration"
 
         EditNum   $MaxFullLuminance_08, "\tMaximum full frame luminance" , EHEX,
         Help      "Maximum Full frame luminance value.\r\n"
-                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"        
+                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"
 
         EditNum   $MaxLuminance_08,"\tMaximum Luminance" , EHEX,
         Help      "Maximum luminance value(Relatively smaller portion of screen).\r\n"
@@ -6649,7 +6649,7 @@ Page      "Integrated Display Configuration"
 
         EditNum   $MaxFullLuminance_09, "\tMaximum full frame luminance" , EHEX,
         Help      "Maximum Full frame luminance value.\r\n"
-                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"        
+                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"
 
         EditNum   $MaxLuminance_09,"\tMaximum Luminance" , EHEX,
         Help      "Maximum luminance value(Relatively smaller portion of screen).\r\n"
@@ -7031,7 +7031,7 @@ Page      "Integrated Display Configuration"
 
         EditNum   $MaxFullLuminance_10, "\tMaximum full frame luminance" , EHEX,
         Help      "Maximum Full frame luminance value.\r\n"
-                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"        
+                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"
 
         EditNum   $MaxLuminance_10,"\tMaximum Luminance" , EHEX,
         Help      "Maximum luminance value(Relatively smaller portion of screen).\r\n"
@@ -7411,7 +7411,7 @@ Page      "Integrated Display Configuration"
 
         EditNum   $MaxFullLuminance_11, "\tMaximum full frame luminance" , EHEX,
         Help      "Maximum Full frame luminance value.\r\n"
-                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"        
+                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"
 
         EditNum   $MaxLuminance_11,"\tMaximum Luminance" , EHEX,
         Help      "Maximum luminance value(Relatively smaller portion of screen).\r\n"
@@ -7791,7 +7791,7 @@ Page      "Integrated Display Configuration"
 
         EditNum   $MaxFullLuminance_12, "\tMaximum full frame luminance" , EHEX,
         Help      "Maximum Full frame luminance value.\r\n"
-                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"        
+                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"
 
         EditNum   $MaxLuminance_12,"\tMaximum Luminance" , EHEX,
         Help      "Maximum luminance value(Relatively smaller portion of screen).\r\n"
@@ -8174,7 +8174,7 @@ Page      "Integrated Display Configuration"
 
         EditNum   $MaxFullLuminance_13, "\tMaximum full frame luminance" , EHEX,
         Help      "Maximum Full frame luminance value.\r\n"
-                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"        
+                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"
 
         EditNum   $MaxLuminance_13,"\tMaximum Luminance" , EHEX,
         Help      "Maximum luminance value(Relatively smaller portion of screen).\r\n"
@@ -8555,7 +8555,7 @@ Page      "Integrated Display Configuration"
 
         EditNum   $MaxFullLuminance_14, "\tMaximum full frame luminance" , EHEX,
         Help      "Maximum Full frame luminance value.\r\n"
-                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"        
+                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"
 
         EditNum   $MaxLuminance_14,"\tMaximum Luminance" , EHEX,
         Help      "Maximum luminance value(Relatively smaller portion of screen).\r\n"
@@ -8937,7 +8937,7 @@ Page      "Integrated Display Configuration"
 
         EditNum   $MaxFullLuminance_15, "\tMaximum full frame luminance" , EHEX,
         Help      "Maximum Full frame luminance value.\r\n"
-                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"        
+                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"
 
         EditNum   $MaxLuminance_15,"\tMaximum Luminance" , EHEX,
         Help      "Maximum luminance value(Relatively smaller portion of screen).\r\n"
@@ -9318,7 +9318,7 @@ Page      "Integrated Display Configuration"
 
         EditNum   $MaxFullLuminance_16, "\tMaximum full frame luminance" , EHEX,
         Help      "Maximum Full frame luminance value.\r\n"
-                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"        
+                  "2 byte value, encoded in IEEE 754 half-precision binary floating point format"
 
         EditNum   $MaxLuminance_16,"\tMaximum Luminance" , EHEX,
         Help      "Maximum luminance value(Relatively smaller portion of screen).\r\n"
@@ -9559,7 +9559,7 @@ Page      "Integrated Display Configuration"
 
         Combo     $Int_EFP1_OnBoard_Voltage_swing, "\tVoltage Swing Level:", &DP_Link_VSwing_List,
         Help      "This feature allows for the selection of voltage swing level for the OnBoard redriver DP link.\r\n"
-                  "Swing-0 (0.4 V)\n" 
+                  "Swing-0 (0.4 V)\n"
                   "Swing-1 (0.6 V)\n"
                   "Swing-2 (0.8 V)\n"
         ; "Swing-3 (1.2 V)"
@@ -9577,7 +9577,7 @@ Page      "Integrated Display Configuration"
 
         Combo     $Int_EFP1_Dock_Voltage_swing, "\tVoltage Swing Level:", &DP_Link_VSwing_List,
         Help      "This feature allows for the selection of voltage swing level for the Dock redriver DP link.\r\n"
-                  "Swing-0 (0.4 V)\n" 
+                  "Swing-0 (0.4 V)\n"
                   "Swing-1 (0.6 V)\n"
                   "Swing-2 (0.8 V)\n"
         ; "Swing-3 (1.2 V)"
@@ -9711,7 +9711,7 @@ Page      "Integrated Display Configuration"
 
         Combo     $Int_EFP2_OnBoard_Voltage_swing, "\tVoltage Swing Level:", &DP_Link_VSwing_List,
         Help      "This feature allows for the selection of voltage swing level for the OnBoard redriver DP link.\n"
-                  "Swing-0 (0.4 V)\n" 
+                  "Swing-0 (0.4 V)\n"
                   "Swing-1 (0.6 V)\n"
                   "Swing-2 (0.8 V)\n"
         ; "Swing-3 (1.2 V)"
@@ -9729,7 +9729,7 @@ Page      "Integrated Display Configuration"
 
         Combo     $Int_EFP2_Dock_Voltage_swing, "\tVoltage Swing Level:", &DP_Link_VSwing_List,
         Help      "This feature allows for the selection of voltage swing level for the Dock redriver DP link."
-                  "Swing-0 (0.4 V)\n" 
+                  "Swing-0 (0.4 V)\n"
                   "Swing-1 (0.6 V)\n"
                   "Swing-2 (0.8 V)\n"
         ; "Swing-3 (1.2 V)"
@@ -9863,7 +9863,7 @@ Page      "Integrated Display Configuration"
 
         Combo     $Int_EFP3_OnBoard_Voltage_swing, "\tVoltage Swing Level:", &DP_Link_VSwing_List,
         Help      "This feature allows for the selection of voltage swing level for the OnBoard redriver DP link.\n"
-                  "Swing-0 (0.4 V)\n" 
+                  "Swing-0 (0.4 V)\n"
                   "Swing-1 (0.6 V)\n"
                   "Swing-2 (0.8 V)\n"
         ; "Swing-3 (1.2 V)"
@@ -9881,7 +9881,7 @@ Page      "Integrated Display Configuration"
 
         Combo     $Int_EFP3_Dock_Voltage_swing, "\tVoltage Swing Level:", &DP_Link_VSwing_List,
         Help      "This feature allows for the selection of voltage swing level for the Dock redriver DP link.\r\n"
-                  "Swing-0 (0.4 V)\n" 
+                  "Swing-0 (0.4 V)\n"
                   "Swing-1 (0.6 V)\n"
                   "Swing-2 (0.8 V)\n"
         ; "Swing-3 (1.2 V)"

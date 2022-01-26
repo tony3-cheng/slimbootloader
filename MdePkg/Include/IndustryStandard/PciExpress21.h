@@ -1,7 +1,7 @@
 /** @file
   Support for the latest PCI standard.
 
-  Copyright (c) 2006 - 2018, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2006 - 2021, Intel Corporation. All rights reserved.<BR>
   (C) Copyright 2016 Hewlett Packard Enterprise Development LP<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -90,6 +90,24 @@ typedef union {
   } Bits;
   UINT16   Uint16;
 } PCI_REG_PCIE_DEVICE_CONTROL;
+
+#define PCIE_MAX_PAYLOAD_SIZE_128B   0
+#define PCIE_MAX_PAYLOAD_SIZE_256B   1
+#define PCIE_MAX_PAYLOAD_SIZE_512B   2
+#define PCIE_MAX_PAYLOAD_SIZE_1024B  3
+#define PCIE_MAX_PAYLOAD_SIZE_2048B  4
+#define PCIE_MAX_PAYLOAD_SIZE_4096B  5
+#define PCIE_MAX_PAYLOAD_SIZE_RVSD1  6
+#define PCIE_MAX_PAYLOAD_SIZE_RVSD2  7
+
+#define PCIE_MAX_READ_REQ_SIZE_128B    0
+#define PCIE_MAX_READ_REQ_SIZE_256B    1
+#define PCIE_MAX_READ_REQ_SIZE_512B    2
+#define PCIE_MAX_READ_REQ_SIZE_1024B   3
+#define PCIE_MAX_READ_REQ_SIZE_2048B   4
+#define PCIE_MAX_READ_REQ_SIZE_4096B   5
+#define PCIE_MAX_READ_REQ_SIZE_RVSD1   6
+#define PCIE_MAX_READ_REQ_SIZE_RVSD2   7
 
 typedef union {
   struct {
@@ -250,15 +268,29 @@ typedef union {
     UINT32 NoRoEnabledPrPrPassing : 1;
     UINT32 LtrMechanism : 1;
     UINT32 TphCompleter : 2;
-    UINT32 Reserved : 4;
+    UINT32 LnSystemCLS : 2;
+    UINT32 TenBitTagCompleterSupported : 1;
+    UINT32 TenBitTagRequesterSupported : 1;
     UINT32 Obff : 2;
     UINT32 ExtendedFmtField : 1;
     UINT32 EndEndTlpPrefix : 1;
     UINT32 MaxEndEndTlpPrefixes : 2;
-    UINT32 Reserved2 : 8;
+    UINT32 EmergencyPowerReductionSupported : 2;
+    UINT32 EmergencyPowerReductionInitializationRequired : 1;
+    UINT32 Reserved3 : 4;
+    UINT32 FrsSupported : 1;
   } Bits;
   UINT32   Uint32;
 } PCI_REG_PCIE_DEVICE_CAPABILITY2;
+
+#define PCIE_COMPLETION_TIMEOUT_NOT_SUPPORTED           0
+#define PCIE_COMPLETION_TIMEOUT_RANGE_A_SUPPORTED       1
+#define PCIE_COMPLETION_TIMEOUT_RANGE_B_SUPPORTED       2
+#define PCIE_COMPLETION_TIMEOUT_RANGE_A_B_SUPPORTED     3
+#define PCIE_COMPLETION_TIMEOUT_RANGE_B_C_SUPPORTED     6
+#define PCIE_COMPLETION_TIMEOUT_RANGE_A_B_C_SUPPORTED   7
+#define PCIE_COMPLETION_TIMEOUT_RANGE_B_C_D_SUPPORTED   14
+#define PCIE_COMPLETION_TIMEOUT_RANGE_A_B_C_D_SUPPORTED 15
 
 #define PCIE_DEVICE_CAPABILITY_OBFF_MESSAGE BIT0
 #define PCIE_DEVICE_CAPABILITY_OBFF_WAKE    BIT1
@@ -272,8 +304,9 @@ typedef union {
     UINT16 AtomicOpEgressBlocking : 1;
     UINT16 IdoRequest : 1;
     UINT16 IdoCompletion : 1;
-    UINT16 LtrMechanism : 2;
-    UINT16 Reserved : 2;
+    UINT16 LtrMechanism : 1;
+    UINT16 EmergencyPowerReductionRequest : 1;
+    UINT16 TenBitTagRequesterEnable : 1;
     UINT16 Obff : 2;
     UINT16 EndEndTlpPrefixBlocking : 1;
   } Bits;
@@ -599,10 +632,30 @@ typedef struct {
 #define PCI_EXPRESS_EXTENDED_CAPABILITY_RESIZABLE_BAR_ID    0x0015
 #define PCI_EXPRESS_EXTENDED_CAPABILITY_RESIZABLE_BAR_VER1  0x1
 
+typedef union {
+  struct {
+    UINT32 Reserved:4;
+    UINT32 BarSizeCapability:28;
+  } Bits;
+  UINT32   Uint32;
+} PCI_EXPRESS_EXTENDED_CAPABILITIES_RESIZABLE_BAR_CAPABILITY;
+
+
+typedef union {
+  struct {
+    UINT32 BarIndex:3;
+    UINT32 Reserved:2;
+    UINT32 ResizableBarNumber:3;
+    UINT32 BarSize:6;
+    UINT32 Reserved2:2;
+    UINT32 BarSizeCapability:16;
+  } Bits;
+  UINT32   Uint32;
+} PCI_EXPRESS_EXTENDED_CAPABILITIES_RESIZABLE_BAR_CONTROL;
+
 typedef struct {
-  UINT32                                                 ResizableBarCapability;
-  UINT16                                                 ResizableBarControl;
-  UINT16                                                 Reserved;
+  PCI_EXPRESS_EXTENDED_CAPABILITIES_RESIZABLE_BAR_CAPABILITY ResizableBarCapability;
+  PCI_EXPRESS_EXTENDED_CAPABILITIES_RESIZABLE_BAR_CONTROL    ResizableBarControl;
 } PCI_EXPRESS_EXTENDED_CAPABILITIES_RESIZABLE_BAR_ENTRY;
 
 typedef struct {
@@ -610,7 +663,7 @@ typedef struct {
   PCI_EXPRESS_EXTENDED_CAPABILITIES_RESIZABLE_BAR_ENTRY  Capability[1];
 } PCI_EXPRESS_EXTENDED_CAPABILITIES_RESIZABLE_BAR;
 
-#define GET_NUMBER_RESIZABLE_BARS(x) (((x->Capability[0].ResizableBarControl) & 0xE0) >> 5)
+#define GET_NUMBER_RESIZABLE_BARS(x) (x->Capability[0].ResizableBarControl.Bits.ResizableBarNumber)
 
 #define PCI_EXPRESS_EXTENDED_CAPABILITY_ARI_CAPABILITY_ID    0x000E
 #define PCI_EXPRESS_EXTENDED_CAPABILITY_ARI_CAPABILITY_VER1  0x1

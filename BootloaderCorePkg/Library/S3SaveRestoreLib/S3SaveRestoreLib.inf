@@ -37,3 +37,4 @@
   gSmmInformationGuid
 
 [Pcd]
+  gPlatformCommonLibTokenSpaceGuid.PcdBuildSmmHobs

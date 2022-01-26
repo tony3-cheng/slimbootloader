@@ -1,6 +1,6 @@
 ## @file
 #
-#  Copyright (c) 2017-2019, Intel Corporation. All rights reserved.<BR>
+#  Copyright (c) 2017-2020, Intel Corporation. All rights reserved.<BR>
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -52,6 +52,7 @@
   $(IPP_PATH)/owndefs.h
   $(IPP_PATH)/pcpbnuarith.h
   $(IPP_PATH)/pcpbnu32misc.h
+  $(IPP_PATH)/pcprsa_pss_preproc.h
   $(IPP_PATH)/gsmodmethod.c
   $(IPP_PATH)/gsmodstuff.c
   $(IPP_PATH)/pcpbnca.c
@@ -67,6 +68,8 @@
   $(IPP_PATH)/pcpngrsakeypublic.c
   $(IPP_PATH)/pcpngrsamontstuff.c
   $(IPP_PATH)/pcpngrsassapkcsv15ca_rmf.c
+  $(IPP_PATH)/pcpngrsapss_rmf.c
+  $(IPP_PATH)/pcpmgf1ca_rmf.c
   $(IPP_PATH)/pcpsha256ca.c
   $(IPP_PATH)/pcpsha512ca.c
   $(IPP_PATH)/pcpsm3ca.c
@@ -83,6 +86,12 @@
   $(IPP_PATH)/Ia32/pcpsha512w7as.nasm
   $(IPP_PATH)/Ia32/pcpsha512g9as.nasm
 
+[Sources.X64]
+  $(IPP_PATH)/X64/pcpsha256u8as.nasm
+  $(IPP_PATH)/X64/pcpsha256nias.nasm
+  $(IPP_PATH)/X64/pcpsha512m7as.nasm
+  $(IPP_PATH)/X64/pcpsha512e9as.nasm
+
 [Packages]
   MdePkg/MdePkg.dec
   BootloaderCommonPkg/BootloaderCommonPkg.dec
@@ -95,7 +104,9 @@
 [FixedPcd]
   gPlatformCommonLibTokenSpaceGuid.PcdCryptoShaOptMask
   gPlatformCommonLibTokenSpaceGuid.PcdIppHashLibSupportedMask
+  gPlatformCommonLibTokenSpaceGuid.PcdCompSignSchemeSupportedMask
 
 [BuildOptions]
   MSFT:*_*_*_CC_FLAGS = -D_SLIMBOOT_OPT -D_ARCH_IA32 -D_IPP_LE
   GCC:*_*_*_CC_FLAGS  = -D_SLIMBOOT_OPT -D_ARCH_IA32 -D_IPP_LE -Wno-unused-but-set-variable
+  XCODE:*_*_*_CC_FLAGS  = -D_SLIMBOOT_OPT -D_ARCH_IA32 -D_IPP_LE

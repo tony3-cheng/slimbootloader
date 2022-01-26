@@ -33,6 +33,7 @@
   Silicon/CoffeelakePkg/CoffeelakePkg.dec
   Platform/CoffeelakeBoardPkg/CoffeelakeBoardPkg.dec
   Platform/CommonBoardPkg/CommonBoardPkg.dec
+  Silicon/CommonSocPkg/CommonSocPkg.dec
 
 [LibraryClasses]
   BaseLib
@@ -54,3 +55,7 @@
   gPlatformModuleTokenSpaceGuid.PcdPayloadBase
   gPlatformModuleTokenSpaceGuid.PcdPciMmcfgBase
   gPlatformCommonLibTokenSpaceGuid.PcdDebugPortNumber
+  gPlatformCommonLibTokenSpaceGuid.PcdDebugOutputDeviceMask
+  gCommonBoardTokenSpaceGuid.PcdGpioDebugPortPinPad
+  gCommonBoardTokenSpaceGuid.PcdGpioDebugPortMmioBase
+

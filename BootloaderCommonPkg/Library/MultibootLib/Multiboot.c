@@ -1,7 +1,7 @@
 /** @file
   This file Multiboot specification (implementation).
 
-  Copyright (c) 2014 - 2019, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2014 - 2020, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -43,11 +43,11 @@ GetMultibootHeader (
   UINT32                     Offset;
 
   // Multiboot header must be 32-bit aligned.
-  AlignedAddress = ((UINT32)ImageAddr + 3) & ~0x3;
+  AlignedAddress = ((UINT32)(UINTN)ImageAddr + 3) & ~0x3;
 
   // Multiboot header must completely within the first 8192 bytes of the image.
   for (Offset = 0; Offset < 8192 - sizeof (MULTIBOOT_HEADER); Offset += 4) {
-    MbHeader = (MULTIBOOT_HEADER *) (AlignedAddress + Offset);
+    MbHeader = (MULTIBOOT_HEADER *)(UINTN)(AlignedAddress + Offset);
     if ((MbHeader->Magic == MULTIBOOT_HEADER_MAGIC) &&
         (MbHeader->Magic + MbHeader->Flags + MbHeader->Checksum == 0)) {
       if ((MbHeader->Flags & (~SUPPORTED_FEATURES & 0xffff)) != 0) {
@@ -224,7 +224,7 @@ SetupMultibootInfo (
 
   // Arrange for passing this data to the image.
   MultiBoot->BootState.Eax = MULTIBOOT_INFO_MAGIC;
-  MultiBoot->BootState.Ebx = (UINT32) (MbInfo);
+  MultiBoot->BootState.Ebx = (UINT32)(UINTN)MbInfo;
 }
 
 
@@ -257,8 +257,8 @@ AlignMulitibootModules (
       }
       DEBUG ((DEBUG_INFO, "Align Module[%d] from 0x%x to 0x%p\n",
               Index, MbModule->Start, AlignedAddr));
-      CopyMem (AlignedAddr, (CONST VOID *)MbModule->Start, ModuleSize);
-      MbModule->Start = (UINT32) AlignedAddr;
+      CopyMem (AlignedAddr, (CONST VOID *)(UINTN)MbModule->Start, (UINTN)ModuleSize);
+      MbModule->Start = (UINT32)(UINTN)AlignedAddr;
     }
   }
 
@@ -281,10 +281,14 @@ SetupMultibootImage (
   )
 {
   EFI_STATUS                 Status;
-  UINT32                     *LoadAddr;
-  UINT32                     *LoadEnd;
-  UINT32                     *BssEnd;
+  UINT8                      *HeaderAddr;
+  UINT8                      *LoadAddr;
+  UINT8                      *LoadEnd;
+  UINT8                      *BssEnd;
   CONST MULTIBOOT_HEADER     *MbHeader;
+  UINT8                      *CopyStart;
+  UINT32                      ImgOffset;
+  UINT32                      ImgLength;
 
   if (MultiBoot == NULL) {
     return RETURN_INVALID_PARAMETER;
@@ -307,24 +311,27 @@ SetupMultibootImage (
     }
   }
 
-  LoadAddr = MbHeader->LoadAddr;
-  LoadEnd  = MbHeader->LoadEndAddr;
-  BssEnd   = MbHeader->BssEndAddr;
-  DEBUG ((DEBUG_INFO, "Mb: LoadAddr=0x%p, LoadEnd=0x%p , BssEnd=0x%p\n", LoadAddr, LoadEnd, BssEnd));
-  if (LoadEnd == NULL) {
-    // zero means "load the entire file"
-    CopyMem (LoadAddr, (UINT8 * )MultiBoot->BootFile.Addr, MultiBoot->BootFile.Size);
-    DEBUG ((DEBUG_INFO, "Mb: copy image to 0x%p, Size=0x%x\n", LoadAddr, MultiBoot->BootFile.Size));
-  } else {
-    CopyMem (LoadAddr, MultiBoot->BootFile.Addr, sizeof (UINT32) * (LoadEnd - LoadAddr));
-    DEBUG ((DEBUG_INFO, "Mb: copy image to 0x%p, Size=0x%x\n", LoadAddr, sizeof (UINT32) * (LoadEnd - LoadAddr)));
-    if ((UINT32)BssEnd != 0) {
+  HeaderAddr = MbHeader->HeaderAddr;
+  LoadAddr   = MbHeader->LoadAddr;
+  LoadEnd    = MbHeader->LoadEndAddr;
+  BssEnd     = MbHeader->BssEndAddr;
+  ImgOffset  = (UINT32)((UINT8 *)MbHeader - (UINT8 *)MultiBoot->BootFile.Addr - (HeaderAddr - LoadAddr));
+  ImgLength  = (UINT32)((LoadEnd == NULL) ? MultiBoot->BootFile.Size - ImgOffset : LoadEnd - LoadAddr);
+  if ((ImgOffset >= MultiBoot->BootFile.Size) || (ImgOffset + ImgLength > MultiBoot->BootFile.Size)) {
+    return RETURN_LOAD_ERROR;
+  }
+
+  DEBUG ((DEBUG_INFO, "Mb: LoadAddr=0x%p, LoadEnd=0x%p , BssEnd=0x%p, Size=0x%x\n", LoadAddr, LoadEnd, BssEnd, ImgLength));
+  CopyStart = (UINT8 *)MultiBoot->BootFile.Addr + ImgOffset;
+  CopyMem (LoadAddr, CopyStart, ImgLength);
+  if ((BssEnd != NULL) && (LoadEnd != NULL)) {
+    if (BssEnd > LoadEnd) {
       ZeroMem ((VOID *) LoadEnd, BssEnd - LoadEnd);
     }
   }
 
   SetupMultibootInfo (MultiBoot);
-  MultiBoot->BootState.EntryPoint = (UINT32) MbHeader->EntryAddr;
+  MultiBoot->BootState.EntryPoint = (UINT32)(UINTN)MbHeader->EntryAddr;
   return EFI_SUCCESS;
 }
 
@@ -375,7 +382,7 @@ DumpMbInfo (
     for (Index = 0; Index < Mi->ModsCount; Index++) {
       DEBUG ((DEBUG_INFO, "- Mod[%d].Start:      %08x\n", Index, Mod[Index].Start));
       DEBUG ((DEBUG_INFO, "- Mod[%d].End:        %08x\n", Index, Mod[Index].End));
-      DEBUG ((DEBUG_INFO, "- Mod[%d].String:     %08x\n", Index, (UINT32)Mod[Index].String));
+      DEBUG ((DEBUG_INFO, "- Mod[%d].String:     %08x\n", Index, (UINT32)(UINTN)Mod[Index].String));
     }
   }
 
@@ -391,7 +398,7 @@ DumpMbInfo (
 
   if ((Mi->Flags & MULTIBOOT_INFO_HAS_MMAP)) {
     for (Offs = 0; Offs < Mi->MmapLength; Offs += Map->Size + sizeof (Map->Size)) {
-      Map = (VOID *) (((UINT32) (Mi->MmapAddr)) + Offs);
+      Map = (VOID *)((UINTN)Mi->MmapAddr + Offs);
       DEBUG ((DEBUG_INFO, "%3x: ", Offs));
       DEBUG ((DEBUG_INFO, "%016lX", Map->BaseAddr));
       DEBUG ((DEBUG_INFO, "--%016lX", Map->Length));

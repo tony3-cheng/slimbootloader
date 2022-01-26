@@ -23,7 +23,7 @@ ReserveMemUnder1Mb (
   IN     UINT32              MemorySize
   )
 {
-  UINTN                      Index;
+  UINT32                     Index;
   UINT32                     Count;
   MULTIBOOT_MMAP             *MbMmap;
   UINT32                     FreeMemoryIndex;
@@ -130,9 +130,9 @@ GetVmmBootParam (
   ReserveMemUnder1Mb (BootOsMbi, KB_ (8));
 
   // 64KB, SBL should reserve it in e820
-  VmmBootParam->HeapAddr = (UINT32) VmmImageData->VmmHeapAddr.Addr;
+  VmmBootParam->HeapAddr = (UINT32)(UINTN)VmmImageData->VmmHeapAddr.Addr;
   // 4MB, SBL should reserve it in e820
-  VmmBootParam->VmmRuntimeAddr = (UINT32) VmmImageData->VmmRuntimeAddr.Addr;
+  VmmBootParam->VmmRuntimeAddr = (UINT32)(UINTN)VmmImageData->VmmRuntimeAddr.Addr;
 
   return EFI_SUCCESS;
 }
@@ -206,7 +206,7 @@ UpdateCmdLine (
 
   AsciiSPrint (ParamValue, sizeof (ParamValue), " ImageBootParamsAddr=0x%x", BootParams);
   AsciiStrCatS ((CHAR8 *)CmdFile->Addr, CmdBufLen, ParamValue);
-  CmdFile->Size = AsciiStrLen ((CHAR8 *)CmdFile->Addr);
+  CmdFile->Size = (UINT32)AsciiStrLen ((CHAR8 *)CmdFile->Addr);
   return EFI_SUCCESS;
 }
 

@@ -6,7 +6,7 @@
 **/
 
 #include <Library/DebugDataLib.h>
-
+#include <BootloaderCoreGlobal.h>
 
 /**
   Allocate Memory for Debug Test Cases.
@@ -59,7 +59,7 @@ S3DebugRestoreAndCompareCRC32 (
 
   DEBUG ((DEBUG_INFO, "Checking for unmatched-CRC Regions ...\n"));
   for (CrcRegionIdx = 0; SavedS3CrcTable[CrcRegionIdx].RegionSize != 0x00; CrcRegionIdx++) {
-    CalculateCrc32WithType ((UINT8 *) (VOID *) (SavedS3CrcTable[CrcRegionIdx].RegionBase),
+    CalculateCrc32WithType ((UINT8 *)(UINTN) SavedS3CrcTable[CrcRegionIdx].RegionBase,
                     (UINTN) (SavedS3CrcTable[CrcRegionIdx].RegionSize), Crc32TypeCastagnoli, &NewCrcValue);
     if (NewCrcValue != SavedS3CrcTable[CrcRegionIdx].RegionCrc32Value) {
       DEBUG ((DEBUG_INFO, "RegBase=0x%08X  RegLimit=0x%08X  RegSize=0x%08X  SavedS3CrcValue=0x%08X  NewCrcValue=0x%08X\n",
@@ -108,18 +108,14 @@ S3DebugCalculateCRC32 (
   UINT32                      CrcRegionIdx;
 
   CrcRegionIdx = *S3CrcRegionIdx;
-  if ( CrcRegionIdx >= (S3CrcTableSize / sizeof (S3_CRC_DATA)) ) {
+  if ( CrcRegionIdx >= DivU64x32 (S3CrcTableSize, sizeof (S3_CRC_DATA)) ) {
     DEBUG ((DEBUG_INFO, "S3CrcTable to over-flow! Returning\n"));
     return;
   }
 
   SubRegionBase = (UINT32)MemoryMapEntry->Base;
   SubRegionSize = S3_DEBUG_CRC32_REGION_SIZE;
-  if (MemoryMapEntry->Size % S3_DEBUG_CRC32_REGION_SIZE == 0) {
-    SubRegionCount = (UINT32) (MemoryMapEntry->Size / S3_DEBUG_CRC32_REGION_SIZE);
-  } else {
-    SubRegionCount = (UINT32) ((MemoryMapEntry->Size / S3_DEBUG_CRC32_REGION_SIZE) + 1);
-  }
+  SubRegionCount = (UINT32) DivU64x32 (MemoryMapEntry->Size + S3_DEBUG_CRC32_REGION_SIZE - 1, S3_DEBUG_CRC32_REGION_SIZE);
 
   for (SubRegionIndex = 0; SubRegionIndex < SubRegionCount; SubRegionIndex++) {
     S3CrcTable[CrcRegionIdx].RegionBase   = SubRegionBase;
@@ -134,7 +130,7 @@ S3DebugCalculateCRC32 (
                                             S3CrcTable[CrcRegionIdx].RegionBase - 1;
     }
     S3CrcTable[CrcRegionIdx].RegionLimit = S3CrcTable[CrcRegionIdx].RegionBase + S3CrcTable[CrcRegionIdx].RegionSize - 1;
-    CalculateCrc32WithType ((UINT8 *) (VOID *) (S3CrcTable[CrcRegionIdx].RegionBase), (UINTN) (S3CrcTable[CrcRegionIdx].RegionSize),
+    CalculateCrc32WithType ((UINT8 *)(UINTN)S3CrcTable[CrcRegionIdx].RegionBase, (UINTN) (S3CrcTable[CrcRegionIdx].RegionSize),
                     Crc32TypeCastagnoli, & (S3CrcTable[CrcRegionIdx].RegionCrc32Value));
     DEBUG ((DEBUG_INFO, "RegBase=0x%08X RegLimit=0x%08X RegSize=0x%08X  CrcValue=0x%08X\n",
             S3CrcTable[CrcRegionIdx].RegionBase, S3CrcTable[CrcRegionIdx].RegionLimit, S3CrcTable[CrcRegionIdx].RegionSize,

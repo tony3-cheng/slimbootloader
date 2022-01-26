@@ -44,7 +44,7 @@ typedef struct {
   NOTE:
   To simplify this function, leave returned CapabilityData for caller to unpack since there are
   many capability categories and only few categories will be used in firmware. It means the caller
-  need swap the byte order for the feilds in CapabilityData.
+  need swap the byte order for the fields in CapabilityData.
 
   @param[in]  Capability         Group selection; determines the format of the response.
   @param[in]  Property           Further definition of information.
@@ -98,11 +98,19 @@ Tpm2GetCapability (
   }
 
   //
+  // Fail if command failed
+  //
+  if (SwapBytes32(RecvBuffer.Header.responseCode) != TPM_RC_SUCCESS) {
+    DEBUG ((DEBUG_VERBOSE, "Tpm2GetCapability: Response Code error! 0x%08x\r\n", SwapBytes32(RecvBuffer.Header.responseCode)));
+    return EFI_DEVICE_ERROR;
+  }
+
+  //
   // Return the response
   //
   *MoreData = RecvBuffer.MoreData;
   //
-  // Does not unpack all possiable property here, the caller should unpack it and note the byte order.
+  // Does not unpack all possible property here, the caller should unpack it and note the byte order.
   //
   CopyMem (CapabilityData, &RecvBuffer.CapabilityData, RecvBufferSize - sizeof (TPM2_RESPONSE_HEADER) - sizeof (UINT8));
 
@@ -142,9 +150,18 @@ Tpm2GetCapabilityPcrs (
   }
 
   Pcrs->count = SwapBytes32 (TpmCap.data.assignedPCR.count);
+  if (Pcrs->count > HASH_COUNT) {
+    DEBUG ((DEBUG_VERBOSE, "Tpm2GetCapabilityPcrs - Pcrs->count error %x\n", Pcrs->count));
+    return EFI_DEVICE_ERROR;
+  }
+
   for (Index = 0; Index < Pcrs->count; Index++) {
     Pcrs->pcrSelections[Index].hash = SwapBytes16 (TpmCap.data.assignedPCR.pcrSelections[Index].hash);
     Pcrs->pcrSelections[Index].sizeofSelect = TpmCap.data.assignedPCR.pcrSelections[Index].sizeofSelect;
+    if (Pcrs->pcrSelections[Index].sizeofSelect > PCR_SELECT_MAX) {
+      DEBUG ((DEBUG_VERBOSE, "Tpm2GetCapabilityPcrs - sizeofSelect error %x\n", Pcrs->pcrSelections[Index].sizeofSelect));
+      return EFI_DEVICE_ERROR;
+    }
     CopyMem (Pcrs->pcrSelections[Index].pcrSelect, TpmCap.data.assignedPCR.pcrSelections[Index].pcrSelect,
              Pcrs->pcrSelections[Index].sizeofSelect);
   }

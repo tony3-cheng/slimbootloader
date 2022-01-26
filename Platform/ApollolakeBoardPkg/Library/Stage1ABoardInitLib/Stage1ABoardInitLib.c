@@ -11,7 +11,7 @@
 #include <Library/GpioLib.h>
 #include <Library/SerialPortLib.h>
 #include <Library/PlatformHookLib.h>
-#include <Library/BootGuardLib.h>
+#include <Library/BootGuardLib20.h>
 #include <Library/BootloaderCoreLib.h>
 #include <FsptUpd.h>
 #include <GpioDefines.h>
@@ -49,7 +49,7 @@ EarlyPlatformDataCheck (
   STITCH_DATA          *StitchData;
 
   // Stitching process might pass some plafform specific data.
-  StitchData = (STITCH_DATA *) 0xFFFFFFF4;
+  StitchData = (STITCH_DATA *)(UINTN)0xFFFFFFF4;
   if (StitchData->Marker != 0xAA) {
     // PlatformID will be deferred to be detected
     SetDebugPort ( PcdGet8 (PcdDebugPortNumber));
@@ -71,6 +71,7 @@ EarlyPlatformDataCheck (
 
 **/
 VOID
+EFIAPI
 BoardInit (
   IN  BOARD_INIT_PHASE  InitPhase
   )

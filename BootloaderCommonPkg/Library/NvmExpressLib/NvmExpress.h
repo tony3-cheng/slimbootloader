@@ -3,7 +3,7 @@
   NVM Express specification.
 
   (C) Copyright 2016 Hewlett Packard Enterprise Development LP<BR>
-  Copyright (c) 2013 - 2016, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2013 - 2020, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -27,15 +27,11 @@
 #include <Library/PciNvmCtrlLib.h>
 #include <Library/TimerLib.h>
 #include <Library/PciExpressLib.h>
+#include <Library/IoMmuLib.h>
 
 typedef struct _NVME_CONTROLLER_PRIVATE_DATA NVME_CONTROLLER_PRIVATE_DATA;
 typedef struct _NVME_DEVICE_PRIVATE_DATA     NVME_DEVICE_PRIVATE_DATA;
 typedef struct _NVME_BLKIO2_SUBTASK          NVME_BLKIO2_SUBTASK;
-typedef
-VOID
-(EFIAPI *ASYNC_IO_CALL_BACK) (
-  IN NVME_BLKIO2_SUBTASK         *SubtaskPtr
-  );
 
 #include <Protocol/NvmExpressPassthru.h>
 #include "NvmExpressBlockIo.h"
@@ -92,6 +88,7 @@ struct _NVME_CONTROLLER_PRIVATE_DATA {
   UINT32                              Signature;
   UINT32                              NvmeHCBase;
   UINT64                              PciAttributes;
+  UINTN                               PciBaseAddr;
   EFI_NVM_EXPRESS_PASS_THRU_MODE      PassThruMode;
   EFI_NVM_EXPRESS_PASS_THRU_PROTOCOL  Passthru;
 
@@ -110,6 +107,7 @@ struct _NVME_CONTROLLER_PRIVATE_DATA {
   // 6th 4kB boundary is the start of I/O completion queue #2.
   //
   UINT8                               *Buffer;
+  UINT8                               *BufferPciAddr;
 
   //
   // Pointers to 4kB aligned submission & completion queues.
@@ -239,7 +237,7 @@ struct _NVME_BLKIO2_SUBTASK {
 
   BOOLEAN                                  IsLast;
   UINT32                                   NamespaceId;
-  ASYNC_IO_CALL_BACK                                Event;
+  EFI_EVENT                                Event;
   EFI_NVM_EXPRESS_PASS_THRU_COMMAND_PACKET *CommandPacket;
   //
   // The BlockIo2 request this subtask belongs to
@@ -269,7 +267,7 @@ typedef struct {
   VOID                                     *PrpListHost;
   VOID                                     *MapData;
   VOID                                     *MapMeta;
-  ASYNC_IO_CALL_BACK                       CallerEvent;
+  EFI_EVENT                                CallerEvent;
 } NVME_PASS_THRU_ASYNC_REQ;
 
 #define NVME_PASS_THRU_ASYNC_REQ_FROM_THIS(a) \
@@ -316,7 +314,7 @@ NvmExpressPassThru (
   IN     EFI_NVM_EXPRESS_PASS_THRU_PROTOCOL          *This,
   IN     UINT32                                      NamespaceId,
   IN OUT EFI_NVM_EXPRESS_PASS_THRU_COMMAND_PACKET    *Packet,
-  IN     ASYNC_IO_CALL_BACK                          *Event OPTIONAL
+  IN     EFI_EVENT                                   Event OPTIONAL
   );
 
 /**

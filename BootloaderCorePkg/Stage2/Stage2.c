@@ -1,12 +1,11 @@
 /** @file
 
-  Copyright (c) 2016 - 2019, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2016 - 2021, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
 
 #include "Stage2.h"
-
 
 /**
   Callback function to add performance measure point during component loading.
@@ -67,11 +66,12 @@ PreparePayload (
   EFI_STATUS                     Status;
   UINT32                         Dst;
   UINT32                         DstLen;
-  BOOLEAN                        IsNormalPld;
+  VOID                          *DstAdr;
   UINT32                         PayloadId;
   UINT32                         ContainerSig;
   UINT32                         ComponentName;
   UINT8                          BootMode;
+  UINT64                         SignatureBuf;
 
   BootMode = GetBootMode();
   //
@@ -82,13 +82,11 @@ PreparePayload (
   }
   // Load payload to PcdPayloadLoadBase.
   PayloadId   = GetPayloadId ();
-  DEBUG ((DEBUG_INFO, "Loading Payload ID 0x%08X\n", PayloadId));
-  IsNormalPld = (PayloadId == 0) ? TRUE : FALSE;
   if (BootMode == BOOT_ON_FLASH_UPDATE) {
     ContainerSig  = COMP_TYPE_PAYLOAD_FWU;
     ComponentName = FLASH_MAP_SIG_FWUPDATE;
   } else {
-    if (IsNormalPld) {
+    if (PayloadId == 0) {
       ContainerSig  = COMP_TYPE_PAYLOAD;
       ComponentName = FLASH_MAP_SIG_PAYLOAD;
     } else {
@@ -96,6 +94,8 @@ PreparePayload (
       ComponentName = PayloadId;
     }
   }
+  SignatureBuf = ComponentName;
+  DEBUG ((DEBUG_INFO, "Loading Payload ID %4a\n", (CHAR8 *)&SignatureBuf));
 
   Dst = PcdGet32 (PcdPayloadExeBase);
   if (FixedPcdGetBool (PcdPayloadLoadHigh)) {
@@ -107,8 +107,9 @@ PreparePayload (
 
   AddMeasurePoint (0x3100);
   DstLen = 0;
+  DstAdr = (VOID *)(UINTN)Dst;
   Status = LoadComponentWithCallback (ContainerSig, ComponentName,
-                                     (VOID *)&Dst, &DstLen, LoadComponentCallback);
+                                      &DstAdr, &DstLen, LoadComponentCallback);
   if (EFI_ERROR (Status)) {
     DEBUG ((DEBUG_ERROR, "Loading payload error - %r !", Status));
     return 0;
@@ -116,6 +117,7 @@ PreparePayload (
 
   AddMeasurePoint (0x3150);
 
+  Dst = (UINT32)(UINTN)DstAdr;
   Stage2Param->PayloadActualLength = DstLen;
   DEBUG ((DEBUG_INFO, "Load Payload ID 0x%08X @ 0x%08X\n", PayloadId, Dst));
   return Dst;
@@ -136,7 +138,7 @@ NormalBootPath (
   UINT32                         *Dst;
   PAYLOAD_ENTRY                   PldEntry;
   VOID                           *PldHobList;
-  UINT32                          PldBase;
+  UINTN                          PldBase;
   LOADER_GLOBAL_DATA             *LdrGlobal;
   EFI_STATUS                      Status;
   BOOLEAN                         CallBoardNotify;
@@ -146,13 +148,15 @@ NormalBootPath (
   UINT8                          *CmdLine;
   UINT32                          CmdLineLen;
   UINT32                          UefiSig;
-  UINT8                           OrgVal;
-
+  UINT32                          HobSize;
+  UINT16                          PldMachine;
+  LOADED_PAYLOAD_INFO             PayloadInfo;
+  UNIVERSAL_PAYLOAD_EXTRA_DATA   *PldImgInfo;
 
   LdrGlobal = (LOADER_GLOBAL_DATA *)GetLoaderGlobalDataPointer();
 
   // Load payload
-  Dst = (UINT32 *)PreparePayload (Stage2Param);
+  Dst = (UINT32 *)(UINTN)PreparePayload (Stage2Param);
   if (Dst == NULL) {
     CpuHalt ("Failed to load payload !");
   }
@@ -163,22 +167,44 @@ NormalBootPath (
   UefiSig  = 0;
   PldBase  = 0;
   PldEntry = NULL;
+  PldMachine = IS_X64 ? IMAGE_FILE_MACHINE_X64 : IMAGE_FILE_MACHINE_I386;
 
   Status  = EFI_SUCCESS;
   if (Dst[0] == 0x00005A4D) {
     // It is a PE format
     DEBUG ((DEBUG_INFO, "PE32 Format Payload\n"));
-    Status = PeCoffRelocateImage ((UINT32)Dst);
+    Status = PeCoffRelocateImage ((UINT32)(UINTN)Dst);
     if (!EFI_ERROR(Status)) {
-      Status = PeCoffLoaderGetEntryPoint (Dst, (VOID *)&PldEntry);
+      Status = PeCoffLoaderGetMachine (Dst, &PldMachine);
+      if (!EFI_ERROR(Status)) {
+        Status = PeCoffLoaderGetEntryPoint (Dst, (VOID *)&PldEntry);
+      }
     }
   } else if (Dst[10] == EFI_FVH_SIGNATURE) {
     // It is a FV format
     DEBUG ((DEBUG_INFO, "FV Format Payload\n"));
     UefiSig = Dst[0];
-    Status  = LoadFvImage (Dst, Stage2Param->PayloadActualLength, (VOID **)&PldEntry);
-  } else if (IsElfImage (Dst)) {
-    Status = LoadElfImage (Dst, (VOID *)&PldEntry);
+    Status  = LoadFvImage (Dst, Stage2Param->PayloadActualLength, (VOID **)&PldEntry, &PldMachine);
+  } else if (IsElfFormat ((CONST UINT8 *)Dst)) {
+    DEBUG ((DEBUG_INFO, "ELF Format Payload\n"));
+    // Assume Universal Payload first
+    ZeroMem (&PayloadInfo, sizeof(PayloadInfo));
+    Status = LoadElfPayload (Dst, &PayloadInfo);
+    if (!EFI_ERROR(Status)) {
+      if (PayloadInfo.Info.Identifier == UNIVERSAL_PAYLOAD_IDENTIFIER) {
+        DEBUG ((DEBUG_INFO, "Universal Payload %a v%08X\n", PayloadInfo.Info.ImageId, PayloadInfo.Info.Revision));
+        HobSize    = sizeof (UNIVERSAL_PAYLOAD_EXTRA_DATA) + sizeof(UNIVERSAL_PAYLOAD_EXTRA_DATA_ENTRY) * PayloadInfo.ImageCount;
+        PldImgInfo = (UNIVERSAL_PAYLOAD_EXTRA_DATA *)BuildGuidHob (&gUniversalPayloadExtraDataGuid, HobSize);
+        if (PldImgInfo != NULL) {
+          ZeroMem (PldImgInfo, HobSize);
+          PldImgInfo->Header.Revision = 0;
+          PldImgInfo->Count = PayloadInfo.ImageCount;
+          CopyMem (&PldImgInfo->Entry[0], &PayloadInfo.LoadedImage, sizeof(UNIVERSAL_PAYLOAD_EXTRA_DATA_ENTRY) * PayloadInfo.ImageCount);
+        }
+      }
+      PldMachine = (UINT16)PayloadInfo.Machine;
+      PldEntry   = (PAYLOAD_ENTRY)PayloadInfo.EntryPoint;
+    }
   } else {
     if (FeaturePcdGet (PcdLinuxPayloadEnabled)) {
       if (IsBzImage (Dst)) {
@@ -191,10 +217,19 @@ NormalBootPath (
         Status = LoadComponent (FLASH_MAP_SIG_EPAYLOAD, SIGNATURE_32 ('C', 'M', 'D', 'L'),
                                 (VOID **)&CmdLine, &CmdLineLen);
         if (!EFI_ERROR (Status)) {
-          OrgVal = CmdLine[CmdLineLen];
+          // Limit max command line length
+          if (CmdLineLen > CMDLINE_LENGTH_MAX - 1) {
+            CmdLineLen = CMDLINE_LENGTH_MAX - 1;
+          }
           CmdLine[CmdLineLen] = 0;
           DEBUG ((DEBUG_INFO, "Kernel command line: \n%a\n", CmdLine));
-          CmdLine[CmdLineLen] = OrgVal;
+        }
+
+        // Try to load InitRd if it exists. If loading fails, continue booting
+        Status = LoadComponent (FLASH_MAP_SIG_EPAYLOAD, SIGNATURE_32 ('I', 'N', 'R', 'D'),
+                                (VOID **)&InitRd, &InitRdLen);
+        if (!EFI_ERROR (Status)) {
+          DEBUG ((DEBUG_INFO, "InitRD is loaded at 0x%x:0x%x\n", InitRd, InitRdLen));
         }
         PldEntry = (PAYLOAD_ENTRY)(UINTN)LinuxBoot;
         Status   = LoadBzImage (Dst, InitRd, InitRdLen, CmdLine, CmdLineLen);
@@ -212,12 +247,6 @@ NormalBootPath (
   AddMeasurePoint (0x31B0);
   ASSERT_EFI_ERROR (Status);
 
-  if (FixedPcdGetBool (PcdSmpEnabled)) {
-    DEBUG ((DEBUG_INIT, "MP Init%a\n", DebugCodeEnabled() ? " (Done)" : ""));
-    Status = MpInit (EnumMpInitDone);
-    AddMeasurePoint (0x31C0);
-  }
-
   BoardInit (EndOfStages);
 
   PayloadId = GetPayloadId ();
@@ -233,6 +262,14 @@ NormalBootPath (
     CallBoardNotify = FALSE;
   } else {
     CallBoardNotify = TRUE;
+  }
+
+  if (FixedPcdGetBool (PcdSmpEnabled)) {
+    // Only delay MpInitDone for OsLoader
+    if ((PayloadId != 0) || (GetBootMode() == BOOT_ON_FLASH_UPDATE)) {
+      Status = MpInit (EnumMpInitDone);
+      AddMeasurePoint (0x31C0);
+    }
   }
 
   if (CallBoardNotify) {
@@ -254,8 +291,26 @@ NormalBootPath (
 
   DEBUG ((DEBUG_INFO, "Payload entry: 0x%08X\n", PldEntry));
   if (PldEntry != NULL) {
+    if (IS_X64) {
+      if (PldMachine == IMAGE_FILE_MACHINE_I386) {
+        DEBUG ((DEBUG_INFO, "Thunk back to x86 mode\n"));
+      }
+    } else {
+      if (PldMachine == IMAGE_FILE_MACHINE_X64) {
+        DEBUG ((DEBUG_INFO, "Switch to x64 mode\n"));
+      }
+    }
     DEBUG ((DEBUG_INIT, "Jump to payload\n\n"));
-    PldEntry (PldHobList, (VOID *)PldBase);
+    if (PldMachine == IMAGE_FILE_MACHINE_X64) {
+      // Need to call in x64 long mode
+      Execute64BitCode ((UINT64)(UINTN)PldEntry, (UINT64)(UINTN)PldHobList,
+                        (UINT64)(UINTN)PldBase, FALSE);
+    } else {
+      // Need to call in x86 compatible mode
+      Execute32BitCode ((UINT64)(UINTN)PldEntry, (UINT64)(UINTN)PldHobList,
+                        (UINT64)(UINTN)PldBase, FALSE);
+    }
+
   }
 }
 
@@ -277,10 +332,12 @@ S3ResumePath (
   S3Data    = (S3_DATA *)LdrGlobal->S3DataPtr;
 
   if (FixedPcdGetBool (PcdSmpEnabled)) {
-    DEBUG ((DEBUG_INFO, "MP Init (Done)\n"));
     MpInit (EnumMpInitDone);
     AddMeasurePoint (0x31C0);
   }
+
+  // Call the board notification
+  BoardInit (EndOfStages);
 
   // Call board and FSP Notify ReadyToBoot
   BoardNotifyPhase (ReadyToBoot);
@@ -331,6 +388,8 @@ SecStartup (
   S3_DATA                        *S3Data;
   PLATFORM_SERVICE               *PlatformService;
   VOID                           *SmbiosEntry;
+  BOOLEAN                         SplashPostPci;
+  UINT8                           SmmRebaseMode;
 
   // Initialize HOB
   LdrGlobal = (LOADER_GLOBAL_DATA *)GetLoaderGlobalDataPointer();
@@ -346,6 +405,11 @@ SecStartup (
   // Deallocate temporary memory used by previous stage
   FreeTemporaryMemory (NULL);
 
+  if (IS_X64) {
+    // Build full physical space 1:1 mapping page table
+    CreateIdentityMappingPageTables (0);
+  }
+
   // Init all services
   InitializeService ();
 
@@ -359,7 +423,7 @@ SecStartup (
   Status = PcdSet32S (PcdGraphicsVbtAddress,   PCD_GET32_WITH_ADJUST (PcdGraphicsVbtAddress) + Delta);
   Status = PcdSet32S (PcdSplashLogoAddress,    PCD_GET32_WITH_ADJUST (PcdSplashLogoAddress) + Delta);
 
-  LdrGlobal->LdrHobList = (VOID *)LdrGlobal->MemPoolEnd;
+  LdrGlobal->LdrHobList = (VOID *)(UINTN)LdrGlobal->MemPoolEnd;
   BuildHobHandoffInfoTable (
     BootMode,
     (EFI_PHYSICAL_ADDRESS) (UINTN)LdrGlobal->LdrHobList,
@@ -376,9 +440,8 @@ SecStartup (
   // Save NVS data
   NvsData = GetFspNvsDataBuffer (LdrGlobal->FspHobList, &MrcDataLen);
   if ((NvsData != NULL) && (MrcDataLen > 0)) {
-    DEBUG ((DEBUG_INFO, "Save MRC Training Data (0x%p 0x%06X) ... ", NvsData, MrcDataLen));
     SubStatus = SaveNvsData (NvsData, MrcDataLen);
-    DEBUG ((DEBUG_INFO, "%X\n", SubStatus));
+    DEBUG ((DEBUG_INFO, "Save MRC Training Data (0x%p 0x%06X) ... %r\n", NvsData, MrcDataLen, SubStatus));
   }
 
   DEBUG ((DEBUG_INIT, "Silicon Init\n"));
@@ -388,6 +451,10 @@ SecStartup (
   FspResetHandler (Status);
   ASSERT_EFI_ERROR (Status);
 
+  if (FixedPcdGetBool (PcdSmbiosEnabled)) {
+    InitSmbiosStringPtr ();
+  }
+
   BoardInit (PostSiliconInit);
   AddMeasurePoint (0x3040);
 
@@ -395,14 +462,28 @@ SecStartup (
   BuildBaseInfoHob (Stage2Param);
 
   // Display splash
+  SplashPostPci = FALSE;
   if (FixedPcdGetBool (PcdSplashEnabled)) {
-    DisplaySplash ();
+    Status = DisplaySplash ();
     AddMeasurePoint (0x3050);
+    if (Status == EFI_NOT_FOUND) {
+      SplashPostPci = TRUE;
+    }
+  }
+
+  // Skip SMM rebase if booting UEFI payload when AUTO mode is used
+  SmmRebaseMode = PcdGet8 (PcdSmmRebaseMode);
+  if (SmmRebaseMode == SMM_REBASE_AUTO) {
+    if (GetPayloadId () == UEFI_PAYLOAD_ID_SIGNATURE) {
+      SmmRebaseMode = SMM_REBASE_DISABLE;
+    } else {
+      SmmRebaseMode = SMM_REBASE_ENABLE;
+    }
+    (VOID) PcdSet8S (PcdSmmRebaseMode, SmmRebaseMode);
   }
 
   // MP Init phase 1
   if (FixedPcdGetBool (PcdSmpEnabled)) {
-    DEBUG ((DEBUG_INFO, "MP Init (Wakeup)\n"));
     Status = MpInit (EnumMpInitWakeup);
   } else {
     DEBUG ((DEBUG_INIT, "BSP Init\n"));
@@ -412,11 +493,22 @@ SecStartup (
 
   // MP Init phase 2
   if (FixedPcdGetBool (PcdSmpEnabled) && !EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_INFO, "MP Init (Run)\n"));
     Status = MpInit (EnumMpInitRun);
     AddMeasurePoint (0x3080);
   }
   ASSERT_EFI_ERROR (Status);
+
+  //
+  // Allocate SMBIOS tables' memory, set Base and call Smbios init
+  //
+  if (FixedPcdGetBool (PcdSmbiosEnabled)) {
+    SmbiosEntry = AllocateZeroPool (PcdGet16(PcdSmbiosTablesSize));
+    Status = PcdSet32S (PcdSmbiosTablesBase, (UINT32)(UINTN)SmbiosEntry);
+    Status = SmbiosInit ();
+    if (EFI_ERROR(Status)) {
+      DEBUG ((DEBUG_INFO, "SMBIOS init Status = %r\n", Status));
+    }
+  }
 
   // PCI Enumeration
   BoardInit (PrePciEnumeration);
@@ -427,7 +519,7 @@ SecStartup (
     DEBUG ((DEBUG_INIT, "PCI Enum\n"));
     Status = PciEnumeration (MemPool);
     AddMeasurePoint (0x30A0);
-
+    UpdateGraphicsHob ();
     BoardInit (PostPciEnumeration);
     AddMeasurePoint (0x30B0);
 
@@ -437,8 +529,13 @@ SecStartup (
         AddMeasurePoint (0x30C0);
       }
     }
-
     ASSERT_EFI_ERROR (Status);
+
+    if (FixedPcdGetBool (PcdSplashEnabled)) {
+      if (SplashPostPci) {
+        DisplaySplash ();
+      }
+    }
   }
 
   // ACPI Initialization
@@ -453,7 +550,7 @@ SecStartup (
 
       S3Data = (S3_DATA *)LdrGlobal->S3DataPtr;
       if (BootMode != BOOT_ON_S3_RESUME) {
-        PlatformUpdateAcpiGnvs ((VOID *)AcpiGnvs);
+        PlatformUpdateAcpiGnvs ((VOID *)(UINTN)AcpiGnvs);
         S3Data->AcpiGnvs = AcpiGnvs;
         S3Data->AcpiBase = AcpiBase;
         DEBUG ((DEBUG_INIT, "ACPI Init\n"));
@@ -475,18 +572,6 @@ SecStartup (
     }
   }
 
-  //
-  // Allocate SMBIOS tables' memory, set Base and call Smbios init
-  //
-  if (FixedPcdGetBool (PcdSmbiosEnabled)) {
-    SmbiosEntry = AllocateZeroPool (PcdGet16(PcdSmbiosTablesSize));
-    Status = PcdSet32S (PcdSmbiosTablesBase, (UINT32)SmbiosEntry);
-    Status = SmbiosInit ();
-    if (EFI_ERROR(Status)) {
-      DEBUG ((DEBUG_INFO, "SMBIOS init Status = %r\n", Status));
-    }
-  }
-
   PlatformService = (PLATFORM_SERVICE *) GetServiceBySignature (PLATFORM_SERVICE_SIGNATURE);
   if (PlatformService != NULL) {
     PlatformService->ResetSystem = ResetSystem;
@@ -494,6 +579,18 @@ SecStartup (
 
   BoardInit (PrePayloadLoading);
   AddMeasurePoint (0x30E0);
+
+  // Trigger SMI to enable SMRR valid bit if required
+  if (SmmRebaseMode == SMM_REBASE_ENABLE) {
+    DEBUG ((DEBUG_INFO, "Enable SMRR\n"));
+    SendSmiIpiAllExcludingSelf ();
+    SendSmiIpi (GetApicId());
+  }
+
+  // Finalize Smbios (add Type127 and cheksum)
+  if (FixedPcdGetBool (PcdSmbiosEnabled)) {
+    FinalizeSmbios ();
+  }
 
   // Continue boot flow
   if (ACPI_ENABLED() && (BootMode == BOOT_ON_S3_RESUME)) {

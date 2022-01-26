@@ -1,6 +1,6 @@
 ## @ GenCapsuleFirmware.py
 #
-# Copyright (c) 2017, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2017-2021, Intel Corporation. All rights reserved.<BR>
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 ##
@@ -16,7 +16,6 @@ import binascii
 from ctypes import *
 
 sys.dont_write_bytecode = True
-from BuildUtility import rsa_sign_file, gen_pub_key
 from CommonUtility import *
 
 class FmpCapsuleImageHeaderClass(object):
@@ -115,6 +114,7 @@ class FmpCapsuleImageHeaderClass(object):
     def DumpInfo(self, padding=''):
         if not self._Valid:
             raise ValueError
+
         print(
             padding +
             'EFI_FIRMWARE_MANAGEMENT_CAPSULE_IMAGE_HEADER.Version                = {Version:08X}'.format(
@@ -198,6 +198,15 @@ class FmpCapsuleHeaderClass(object):
         if Index > len(self._EmbeddedDriverList):
             raise ValueError
         return self._EmbeddedDriverList[Index]
+
+    def GetEmbeddedDriverCount(self):
+        return len(self._EmbeddedDriverList)
+
+    def GetPayload(self, Index):
+        return self._PayloadList[Index]
+
+    def GetPayloadCount(self):
+        return len(self._PayloadList)
 
     def AddPayload(self,
                    UpdateImageTypeId,
@@ -384,7 +393,10 @@ class FmpPayloadHeaderClass(object):
 FIRMWARE_UPDATE_IMAGE_FILE_GUID = uuid.UUID('{1A3EAE58-B580-4fef-ACA3-A16D9E00DF5F}')
 #0x1a3eae58, 0xb580, 0x4fef, 0xac, 0xa3, 0xa1, 0x6d, 0x9e, 0x0, 0xdf, 0x5f);
 
-class Firmware_Update_Header(Structure):
+class FirmwareUpdateHeader(Structure):
+
+  CAPSULE_FLAG_FORCE_BIOS_UPDATE = 0x80000000
+
   _fields_ = [
     ('FileGuid',           ARRAY(c_uint8, 16)),
     ('HeaderSize',         c_uint32),
@@ -400,14 +412,14 @@ class Firmware_Update_Header(Structure):
   ]
 
 
-def SignImage(RawData, OutFile, HashType, PrivKey):
+def SignImage(RawData, OutFile, HashType, SignScheme, PrivKey, ForceBiosUpdate):
 
     #
     # Generate the new image layout
     # 1. write firmware update header
     #
-    unsigned_image = bytearray(sizeof(Firmware_Update_Header))
-    header = Firmware_Update_Header.from_buffer(unsigned_image, 0)
+    unsigned_image = bytearray(sizeof(FirmwareUpdateHeader))
+    header = FirmwareUpdateHeader.from_buffer(unsigned_image, 0)
 
     file_size = len(RawData)
 
@@ -417,10 +429,15 @@ def SignImage(RawData, OutFile, HashType, PrivKey):
     elif key_type ==  'RSA3072':
         key_size = 384
 
+    if HashType == 'AUTO':
+        HashType = adjust_hash_type(PrivKey)
+
     header.FileGuid         = (c_ubyte *16).from_buffer_copy(FIRMWARE_UPDATE_IMAGE_FILE_GUID.bytes_le)
-    header.HeaderSize       = sizeof(Firmware_Update_Header)
+    header.HeaderSize       = sizeof(FirmwareUpdateHeader)
     header.FirmwreVersion   = 1
     header.CapsuleFlags     = 0
+    if ForceBiosUpdate:
+        header.CapsuleFlags  |= FirmwareUpdateHeader.CAPSULE_FLAG_FORCE_BIOS_UPDATE
     header.ImageOffset      = header.HeaderSize
     header.ImageSize        = file_size
     header.SignatureOffset  = header.ImageOffset + header.ImageSize
@@ -436,7 +453,7 @@ def SignImage(RawData, OutFile, HashType, PrivKey):
     fwupdate_bin_file = 'fwupdate_unsigned.bin'
     open(fwupdate_bin_file, 'wb').write(unsigned_image + RawData)
 
-    rsa_sign_file(PrivKey, pubkey_file, HashType, fwupdate_bin_file, OutFile, True, True )
+    rsa_sign_file(PrivKey, pubkey_file, HashType, SignScheme, fwupdate_bin_file, OutFile, True, True )
 
     os.remove(pubkey_file)
     os.remove(fwupdate_bin_file)
@@ -448,6 +465,8 @@ def main():
         'MISC': '66030B7A-47D1-4958-B73D-00B44B9DD4B6',  # SBL  COMPONENT
         'CSME': '43AEF186-0CA5-4230-B1BD-193FB4627201',  # IFWI ME/CSME
         'CSMD': '4A467997-A909-4678-910C-E0FE1C9056EA',  # CSME Update driver
+        'CMDI': '9034cab1-4d19-4856-a3cd-f074263c4a4d',  # Command request
+
     }
 
     def ValidateUnsignedInteger(Argument):
@@ -479,10 +498,12 @@ def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument('-p',  '--payload', nargs=2, action='append', type=str, required=True, help='Specify payload information including GUID, FileName')
-    parser.add_argument('-k',  '--priv_key', dest='PrivKey', type=str, required=True, help='Private RSA 2048 key in PEM format to sign image')
-    parser.add_argument('-a',  '--alg_hash', dest='HashType', type=str, default='SHA2_256', help='Hash type for signing. Supported types SHA2_256')
+    parser.add_argument('-k',  '--priv_key', dest='PrivKey', type=str, required=True, help='Key Id or Private RSA 2048/RSA3072 key in PEM format to sign image')
+    parser.add_argument('-a',  '--alg_hash', dest='HashType', type=str, choices=['SHA2_256', 'SHA2_384', 'AUTO'], default='AUTO', help='Hash type for signing. For AUTO hash type will be choosen based on key length')
+    parser.add_argument('-s',  '--sign_scheme', dest='SignScheme', type=str, choices=['RSA_PKCS1', 'RSA_PSS'], default='RSA_PSS', help='Signing Scheme types')
     parser.add_argument('-o',  '--output', dest='NewImage', type=str, required=True, help='Output file for signed image')
     parser.add_argument("-v",  "--verbose", dest='Verbose', action="store_true", help= "Turn on verbose output with informational messages printed, including capsule headers and warning messages.")
+    parser.add_argument("-f",  "--force_bios_update", dest='ForceBiosUpdate', action="store_true", help= "Force update whole BIOS region in a single shot.")
 
     #
     # Parse command line arguments
@@ -526,6 +547,15 @@ def main():
         Guid = ValidateRegistryFormatGuid(PldUuid)
         FmpCapsuleHeader.AddPayload(Guid, Result, '', HardwareInstance)
 
+    if args.ForceBiosUpdate:
+        if FmpCapsuleHeader.GetPayloadCount() != 1  or  FmpCapsuleHeader.GetEmbeddedDriverCount() != 0:
+            raise Exception ("When '-f' flag is enabled, only one component is supported in capsule !")
+        Payload = FmpCapsuleHeader.GetPayload(0)
+        if str(Payload[0]) != PredefinedUuidDict['BIOS'].lower():
+            raise Exception ("When '-f' flag is enabled, only BIOS component is supported in capsule !")
+        if len(Payload[1]) & 0xFFF:
+            raise Exception ("BIOS component size is not 4KB aligned !")
+
     Result = FmpCapsuleHeader.Encode()
 
     #
@@ -537,9 +567,19 @@ def main():
     #
     # Create final capsule
     #
-    SignImage(Result, args.NewImage, args.HashType, args.PrivKey)
-
+    SignImage(Result, args.NewImage, args.HashType, args.SignScheme, args.PrivKey, args.ForceBiosUpdate)
     print('Success')
+
+    #
+    # Warn the user for "-f" option
+    #
+    if args.ForceBiosUpdate:
+       print ("\nWAINING: ")
+       print (  "  It might be risky to force BIOS region update since any firmware update failure might\n"
+                "  not be recoverable and cause system in a non-bootable state. If it occurs, external \n"
+                "  flash programmer has to be used to reprogram the full IFWI image. This feature is only\n"
+                "  for development purpose, please use it with extreme caution !!!\n")
+
 
 
 if __name__ == '__main__':

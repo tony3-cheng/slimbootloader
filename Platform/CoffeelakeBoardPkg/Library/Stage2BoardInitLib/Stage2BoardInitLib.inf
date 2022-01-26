@@ -54,6 +54,7 @@
   PsdLib
   S3SaveRestoreLib
   BoardSupportLib
+  VtdPmrLib
 
 [Guids]
   gSmmInformationGuid
@@ -76,6 +77,7 @@
   gPlatformCommonLibTokenSpaceGuid.PcdMeasuredBootEnabled
   gPlatformCommonLibTokenSpaceGuid.PcdVerifiedBootEnabled
   gPlatformModuleTokenSpaceGuid.PcdSmramTsegBase
+  gPlatformModuleTokenSpaceGuid.PcdSmramTsegSize
   gPlatformModuleTokenSpaceGuid.PcdSmmRebaseMode
   gPlatformModuleTokenSpaceGuid.PcdFramebufferInitEnabled
   gPlatformModuleTokenSpaceGuid.PcdPsdBiosEnabled
@@ -84,3 +86,7 @@
   gPlatformModuleTokenSpaceGuid.PcdSmbiosTablesBase
   gPlatformModuleTokenSpaceGuid.PcdSmbiosEnabled
   gPlatformCommonLibTokenSpaceGuid.PcdEmmcHs400SupportEnabled
+  gPlatformCommonLibTokenSpaceGuid.PcdDmaProtectionEnabled
+  gPlatformCommonLibTokenSpaceGuid.PcdDmaBufferAlignment
+  gPlatformCommonLibTokenSpaceGuid.PcdDmaBufferSize
+  gPlatformModuleTokenSpaceGuid.PcdPciResourceMem64Base

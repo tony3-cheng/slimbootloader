@@ -1,11 +1,12 @@
 /** @file
 
-  Copyright (c) 2017 - 2019, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2017 - 2021, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
 
 #include "OsLoader.h"
+
 
 UINT8    mCurrentBoot;
 VOID    *mEntryStack;
@@ -62,6 +63,7 @@ UpdateLoadedImage (
   MULTIBOOT_IMAGE            *MultiBoot;
   COMMON_IMAGE               *CommonImage;
   PLATFORM_SERVICE           *PlatformService;
+  CHAR8                      *TypeStr;
 
   PlatformService = NULL;
   Status = EFI_SUCCESS;
@@ -73,21 +75,29 @@ UpdateLoadedImage (
     CopyMem (&CommonImage->BootFile, &File[0], sizeof (IMAGE_DATA));
     if (IsMultiboot (File[0].Addr)) {
       LoadedImage->Flags |= LOADED_IMAGE_MULTIBOOT;
-      DEBUG ((DEBUG_INFO, "One multiboot file in boot image file .... \n"));
+      TypeStr = "Multiboot";
     } else if (IsTePe32Image (File[0].Addr, NULL) && \
                (* (UINT32 *)File[0].Addr == EFI_IMAGE_DOS_SIGNATURE)) {
       // Add extra check to ensure it is a PE32 image generated from payload build.
       // Please note vmlinuxz is also following PE32 format, but it should
       // be handled as Linux image boot path
-      LoadedImage->Flags |= LOADED_IMAGE_PE32;
-      DEBUG ((DEBUG_INFO, "One PE32 file in boot image file .... \n"));
+      LoadedImage->Flags |= LOADED_IMAGE_PE;
+      TypeStr = "PE";
     } else if (IsValidFvHeader ((VOID *)File[0].Addr))  {
       LoadedImage->Flags |= LOADED_IMAGE_FV;
-      DEBUG ((DEBUG_INFO, "One FV file in boot iamge file .... \n"));
-    } else {
+      TypeStr = "FV";
+    } else if (IsBzImage((VOID *)File[0].Addr)) {
       LoadedImage->Flags |= LOADED_IMAGE_LINUX;
-      DEBUG ((DEBUG_INFO, "One file in boot image file, take it as bzImage .... \n"));
+      TypeStr = "Kernel";
+    } else if (IsElfFormat ((VOID *)File[0].Addr))  {
+      LoadedImage->Flags |= LOADED_IMAGE_ELF;
+      TypeStr = "ELF";
+    } else {
+      DEBUG ((DEBUG_INFO, "Unknown file type !\n"));
+      return EFI_UNSUPPORTED;
     }
+
+    DEBUG ((DEBUG_INFO, "One %a file in boot image file .... \n", TypeStr));
     return EFI_SUCCESS;
   }
 
@@ -152,8 +162,8 @@ UpdateLoadedImage (
         CopyMem (&MultiBoot->MbModuleData[ModuleIndex].ImgFile, &File[Index + 1], sizeof (IMAGE_DATA));
 
         MultiBoot->MbModule[ModuleIndex].String = (UINT8 *) MultiBoot->MbModuleData[ModuleIndex].CmdFile.Addr;
-        MultiBoot->MbModule[ModuleIndex].Start  = (UINT32) MultiBoot->MbModuleData[ModuleIndex].ImgFile.Addr;
-        MultiBoot->MbModule[ModuleIndex].End    = (UINT32) MultiBoot->MbModuleData[ModuleIndex].ImgFile.Addr
+        MultiBoot->MbModule[ModuleIndex].Start  = (UINT32)(UINTN)MultiBoot->MbModuleData[ModuleIndex].ImgFile.Addr;
+        MultiBoot->MbModule[ModuleIndex].End    = (UINT32)(UINTN)MultiBoot->MbModuleData[ModuleIndex].ImgFile.Addr
           + MultiBoot->MbModuleData[ModuleIndex].ImgFile.Size;
 
         ModuleIndex++;
@@ -177,7 +187,7 @@ UpdateLoadedImage (
   @param[in]      BootOption    Current boot option
   @param[in, out] LoadedImage   Loaded Image information.
 
-  @retval  RETURN_SUCCESS       Parse IAS image successfully
+  @retval  RETURN_SUCCESS       Parse container image successfully
   @retval  Others               There is error when parsing IAS image.
 **/
 EFI_STATUS
@@ -193,12 +203,12 @@ ParseContainerImage (
   IMAGE_DATA                  File[MAX_IAS_SUB_IMAGE];
   UINT8                       Index;
 
-  ContainerHdr = (CONTAINER_HDR  *)LoadedImage->IasImage.Addr;
+  ContainerHdr = (CONTAINER_HDR  *)LoadedImage->ImageData.Addr;
   if (ContainerHdr->Signature != CONTAINER_BOOT_SIGNATURE) {
     return EFI_UNSUPPORTED;
   }
 
-  Status = RegisterContainer ((UINT32) ContainerHdr, LoadComponentCallback);
+  Status = RegisterContainer ((UINT32)(UINTN)ContainerHdr, LoadComponentCallback);
   if (EFI_ERROR (Status)) {
     DEBUG ((DEBUG_INFO, "Image given is not a valid CONTAINER image\n"));
     return EFI_LOAD_ERROR;
@@ -206,7 +216,7 @@ ParseContainerImage (
 
   ZeroMem (File, sizeof (File));
 
-  DEBUG ((DEBUG_INFO, "CONTAINER size = 0x%x, image type = 0x%x, # of components = %d\n", LoadedImage->IasImage.Size, ContainerHdr->ImageType, ContainerHdr->Count));
+  DEBUG ((DEBUG_INFO, "CONTAINER size = 0x%x, image type = 0x%x, # of components = %d\n", LoadedImage->ImageData.Size, ContainerHdr->ImageType, ContainerHdr->Count));
 
   // Enumerate all components
   Index = 0;
@@ -249,13 +259,44 @@ ParseContainerImage (
   DEBUG ((DEBUG_INFO, "Unregister done - %r!\n", Status));
 
   // Mask upper nibble in ImageType so that UpdateLoadedImage() supports both IAS and CONTAINER Image types
-  Status = UpdateLoadedImage (ContainerHdr->Count, File, LoadedImage, ContainerHdr->ImageType & 0xF);
+  Status = UpdateLoadedImage (Index, File, LoadedImage, ContainerHdr->ImageType & 0xF);
 
   if (EFI_ERROR (Status)) {
     UnloadLoadedImage (LoadedImage);
   }
 
   AddMeasurePoint (0x40A0);
+  return Status;
+}
+
+/**
+  Parse a single component image
+
+  This function will parse a single image.
+  This image could be TE/PE/FV or multi-boot format.
+
+  @param[in]      BootOption    Current boot option
+  @param[in, out] LoadedImage   Loaded Image information.
+
+  @retval  RETURN_SUCCESS       Parse component image successfully
+  @retval  Others               There is error when parsing IAS image.
+**/
+EFI_STATUS
+ParseComponentImage (
+  IN     OS_BOOT_OPTION      *BootOption,
+  IN OUT LOADED_IMAGE        *LoadedImage
+  )
+{
+  IMAGE_DATA                 File;
+  EFI_STATUS                 Status;
+
+  File.Addr = LoadedImage->ImageData.Addr;
+  File.Size = LoadedImage->ImageData.Size;
+  File.AllocType = ImageAllocateTypePointer;
+  Status = UpdateLoadedImage (1, &File, LoadedImage, 0);
+  if (EFI_ERROR (Status)) {
+    UnloadLoadedImage (LoadedImage);
+  }
   return Status;
 }
 
@@ -285,7 +326,7 @@ ParseIasImage (
   COMPONENT_CALLBACK_INFO    CompInfo;
   EFI_STATUS                 Status;
 
-  IasImage = IsIasImageValid (LoadedImage->IasImage.Addr, LoadedImage->IasImage.Size, &IasImageInfo);
+  IasImage = IsIasImageValid (LoadedImage->ImageData.Addr, LoadedImage->ImageData.Size, &IasImageInfo);
   if (IasImage == NULL) {
     DEBUG ((DEBUG_INFO, "Image given is not a valid IAS image\n"));
     return EFI_LOAD_ERROR;
@@ -307,7 +348,7 @@ ParseIasImage (
 
   ZeroMem (File, sizeof (File));
   NumFiles = IasGetFiles (IasImage, sizeof (File) / sizeof ((File)[0]), File);
-  DEBUG ((DEBUG_INFO, "IAS size = 0x%x, file number: %d\n", LoadedImage->IasImage.Size, NumFiles));
+  DEBUG ((DEBUG_INFO, "IAS size = 0x%x, file number: %d\n", LoadedImage->ImageData.Size, NumFiles));
 
   ImageType = IAS_IMAGE_TYPE (IasImage->ImageType);
   DEBUG ((DEBUG_INFO, "IAS Image Type = 0x%x\n", ImageType));
@@ -338,13 +379,15 @@ SetupBootImage (
   )
 {
   EFI_STATUS                 Status;
-  UINT32                    *EntryPoint;
+  UINTN                      EntryPoint;
   UINT8                     *NewCmdBuffer;
   MULTIBOOT_IMAGE           *MultiBoot;
   IMAGE_DATA                *CmdFile;
   IMAGE_DATA                *BootFile;
   LINUX_IMAGE               *LinuxImage;
+  LOADED_PAYLOAD_INFO        PayloadInfo;
   UINT32                     Size;
+  UINT16                     Machine;
 
   //
   // Allocate a cmd line buffer and init it with config file or default value
@@ -358,10 +401,10 @@ SetupBootImage (
   CmdFile = &LoadedImage->Image.Common.CmdFile;
   Size = 0;
   if (CmdFile->Addr != NULL && CmdFile->Size != 0) {
-    Size = GetFromConfigFile (NewCmdBuffer, CMDLINE_LENGTH_MAX, (UINT8 *)CmdFile->Addr, CmdFile->Size);
+    Size = (UINT32)GetFromConfigFile (NewCmdBuffer, CMDLINE_LENGTH_MAX, (UINT8 *)CmdFile->Addr, CmdFile->Size);
   }
   if (Size == 0) {
-    Size = AsciiStrSize (DEFAULT_COMMAND_LINE);
+    Size = (UINT32)AsciiStrSize (DEFAULT_COMMAND_LINE);
     CopyMem (NewCmdBuffer, DEFAULT_COMMAND_LINE, Size);
   }
   // Free Allocated Memory earlier first
@@ -375,35 +418,38 @@ SetupBootImage (
   BootFile = &LoadedImage->Image.Common.BootFile;
 
   MultiBoot = &LoadedImage->Image.MultiBoot;
-  if (IsElfImage (BootFile->Addr)) {
+    if (IsElfFormat ((CONST UINT8 *)BootFile->Addr)) {
     DEBUG ((DEBUG_INFO, "Boot image is ELF format...\n"));
-    Status = LoadElfImage (BootFile->Addr, (VOID *)&EntryPoint);
+    EntryPoint = 0;
+    ZeroMem (&PayloadInfo, sizeof(PayloadInfo));
+    Status = LoadElfPayload (BootFile->Addr, &PayloadInfo);
     if (!EFI_ERROR (Status)) {
+      EntryPoint = PayloadInfo.EntryPoint;
       if (IsMultiboot (BootFile->Addr)) {
         DEBUG ((DEBUG_INFO, "and Image is Multiboot format\n"));
         SetupMultibootInfo (MultiBoot);
       }
-      MultiBoot->BootState.EntryPoint = (UINT32)EntryPoint;
+      MultiBoot->BootState.EntryPoint = (UINT32)(UINTN)EntryPoint;
     }
   } else if (IsMultiboot (BootFile->Addr)) {
     DEBUG ((DEBUG_INFO, "Boot image is Multiboot format...\n"));
     Status = SetupMultibootImage (MultiBoot);
-  } else if ((LoadedImage->Flags & LOADED_IMAGE_PE32) != 0) {
+  } else if ((LoadedImage->Flags & LOADED_IMAGE_PE) != 0) {
     DEBUG ((DEBUG_INFO, "Boot image is PE32 format\n"));
-    Status = PeCoffRelocateImage ((UINT32)BootFile->Addr);
+    Status = PeCoffRelocateImage ((UINT32)(UINTN)BootFile->Addr);
     if (!EFI_ERROR (Status)) {
       Status = PeCoffLoaderGetEntryPoint (BootFile->Addr, (VOID **)&EntryPoint);
     }
     if (!EFI_ERROR (Status)) {
       // Reuse MultiBoot structure to store the PE32 entry point information
-      MultiBoot->BootState.EntryPoint = (UINT32)EntryPoint;
+      MultiBoot->BootState.EntryPoint = (UINT32)(UINTN)EntryPoint;
     }
   } else if ((LoadedImage->Flags & LOADED_IMAGE_FV) != 0) {
     DEBUG ((DEBUG_INFO, "Boot image is FV format\n"));
-    Status = LoadFvImage ((UINT32 *)BootFile->Addr, BootFile->Size, (VOID **)&EntryPoint);
+    Status = LoadFvImage ((UINT32 *)BootFile->Addr, BootFile->Size, (VOID **)&EntryPoint, &Machine);
     if (!EFI_ERROR (Status)) {
       // Reuse MultiBoot structure to store the FV entry point information
-      MultiBoot->BootState.EntryPoint = (UINT32)EntryPoint;
+      MultiBoot->BootState.EntryPoint = (UINT32)(UINTN)EntryPoint;
     }
   } else {
     DEBUG ((DEBUG_INFO, "Assume BzImage...\n"));
@@ -465,7 +511,7 @@ PrintStackHeapInfo (
     StackBot = DetectUsedStackBottom (StackTop, PcdGet32 (PcdPayloadStackSize));
     DEBUG ((
              DEBUG_INFO,
-             "Payload stack: 0x%X (0x%X used)\n\n",
+             "Payload stack: 0x%X (0x%X used)\n",
              PcdGet32 (PcdPayloadStackSize),
              StackTop - StackBot
              ));
@@ -491,6 +537,46 @@ DeinitBootDevices (
 }
 
 /**
+  Checks whether the platform is a pre-production part; or in manufacturing mode or debug mode.
+
+  @retval  TRUE    Platform is a pre-production part; or in manufacturing mode or debug mode.
+  @retval  FALSE   Platfomr is not a pre-production part; or in manufacturing mode or debug mode.
+**/
+BOOLEAN
+PlatformDebugStateEnabled (
+  IN UINT16 HwState
+  )
+{
+  MSR_IA32_FEATURE_CONTROL_REGISTER Ia32FeatureControlMsr;
+  MSR_IA32_DEBUG_INTERFACE_REGISTER DebugInterfaceMsr;
+
+  //
+  // Check for Platform in Pre-production or in Manufaturing mode or secure debug mode
+  //
+  if((HwState & HWSTATE_IN_MANU_SECURE_DEBUG_MODE) || (HwState & HWSTATE_PLATFORM_PRE_PRODUCTION)){
+    return TRUE;
+  }
+
+  //
+  // Check for Sample part
+  //
+  Ia32FeatureControlMsr.Uint64 = AsmReadMsr64 (MSR_IA32_FEATURE_CONTROL);
+  if (Ia32FeatureControlMsr.Bits.Lock == 0) {
+    return TRUE;
+  }
+
+  //
+  // Check for Debug mode
+  //
+  DebugInterfaceMsr.Uint64 = AsmReadMsr64 (MSR_IA32_DEBUG_INTERFACE);
+  if (DebugInterfaceMsr.Bits.Enable) {
+    return TRUE;
+  }
+
+  return FALSE;
+}
+
+/**
   This function will send FSP notification, indicate ReadyToBoot event to TPM and print
   performance data.
 
@@ -505,6 +591,7 @@ BeforeOSJump (
   PLATFORM_SERVICE          *PlatformService;
   LOADER_PLATFORM_INFO      *LoaderPlatformInfo;
   DEBUG_LOG_BUFFER_HEADER   *LogBufHdr;
+  UINT8                      PlatformDebugEnabled;
 
   PlatformService = (PLATFORM_SERVICE *) GetServiceBySignature (PLATFORM_SERVICE_SIGNATURE);
   if ((PlatformService != NULL) && (PlatformService->NotifyPhase != NULL)) {
@@ -518,7 +605,10 @@ BeforeOSJump (
     return ;
   }
   if (FeaturePcdGet (PcdMeasuredBootEnabled) && (LoaderPlatformInfo->LdrFeatures & FEATURE_MEASURED_BOOT)) {
-    TpmIndicateReadyToBoot ();
+    PlatformDebugEnabled = PlatformDebugStateEnabled (LoaderPlatformInfo->HwState);
+    if(TpmIndicateReadyToBoot (PlatformDebugEnabled) != EFI_SUCCESS) {
+      DEBUG ((DEBUG_ERROR, "FAILED to complete TPM ReadyToBoot actions. \n"));
+    }
   }
   AddMeasurePoint (0x4100);
 
@@ -542,7 +632,7 @@ BeforeOSJump (
 /**
   Start boot image
 
-  This function will jump to kernel entry point.
+  This function will jump to image entry point.
 
   @param[in]  LoadedImage       Loaded boot image information.
 
@@ -556,6 +646,12 @@ StartBooting (
 {
   MULTIBOOT_IMAGE            *MultiBoot;
   EFI_STATUS                 Status;
+  PLD_MOD_PARAM              PldModParam;
+  OS_BOOT_OPTION_LIST       *OsBootOptionList;
+  UINT32                     CurrIdx;
+  CHAR8                     *PathPtr;
+  CHAR8                      ModCmdLineBuf[16];
+  PRE_OS_ENTRYPOINT          EntryPoint;
 
   DEBUG_CODE_BEGIN();
   PrintStackHeapInfo ();
@@ -563,37 +659,58 @@ StartBooting (
 
   Status = EFI_SUCCESS;
 
-  if ((LoadedImage->Flags & LOADED_IMAGE_LINUX) != 0) {
-    if (FeaturePcdGet (PcdPreOsCheckerEnabled) && IsPreOsCheckerLoaded ()) {
-      BeforeOSJump ("Starting Pre-OS Checker ...");
-      StartPreOsChecker (GetLinuxBootParams ());
-    } else {
-      BeforeOSJump ("Starting Kernel ...");
-      LinuxBoot ((VOID *)(UINTN)PcdGet32 (PcdPayloadHobList), NULL);
-    }
+  if ((LoadedImage->Flags & LOADED_IMAGE_RUN_EXTRA) != 0) {
+    DEBUG ((DEBUG_INIT, "Call PRE-OS image entry point...\n"));
+    MultiBoot  = &LoadedImage->Image.MultiBoot;
+    EntryPoint = (PRE_OS_ENTRYPOINT)(UINTN)MultiBoot->BootState.EntryPoint;
+    EntryPoint((VOID *)(UINTN)PcdGet32(PcdPayloadHobList));
+  } else if ((LoadedImage->Flags & LOADED_IMAGE_LINUX) != 0) {
+    BeforeOSJump ("Starting Kernel ...");
+    LinuxBoot ((VOID *)(UINTN)PcdGet32 (PcdPayloadHobList), NULL);
     Status = EFI_DEVICE_ERROR;
+  } else if ((LoadedImage->Flags & LOADED_IMAGE_ELF) != 0) {
+    BeforeOSJump ("Starting ELF ...");
+    MultiBoot  = &LoadedImage->Image.MultiBoot;
+    EntryPoint = (PRE_OS_ENTRYPOINT)(UINTN)MultiBoot->BootState.EntryPoint;
+    EntryPoint((VOID *)(UINTN)PcdGet32(PcdPayloadHobList));
   } else if ((LoadedImage->Flags & LOADED_IMAGE_MULTIBOOT) != 0) {
-    DEBUG ((DEBUG_INIT, "Jumping into ELF or Multiboot image entry point...\n"));
+    DEBUG ((DEBUG_INIT, "Jumping Multiboot image entry point...\n"));
     MultiBoot = &LoadedImage->Image.MultiBoot;
     if (MultiBoot->BootState.EntryPoint == 0) {
       DEBUG ((DEBUG_ERROR, "EntryPoint is not found\n"));
       return RETURN_INVALID_PARAMETER;
     }
+
     BeforeOSJump ("Starting MB Kernel ...");
     JumpToMultibootOs((IA32_BOOT_STATE*)&MultiBoot->BootState);
     Status = EFI_DEVICE_ERROR;
 
-  } else if ((LoadedImage->Flags & (LOADED_IMAGE_PE32 | LOADED_IMAGE_FV)) != 0) {
+  } else if ((LoadedImage->Flags & (LOADED_IMAGE_PE | LOADED_IMAGE_FV)) != 0) {
     MultiBoot = &LoadedImage->Image.MultiBoot;
     BeforeOSJump ("Jumping into FV/PE32 ...");
+
+    if (FeaturePcdGet (PcdPayloadModuleEnabled)) {
+      OsBootOptionList = GetBootOptionList ();
+      if (OsBootOptionList == NULL) {
+        return EFI_NOT_FOUND;
+      }
+      CurrIdx = mCurrentBoot;
+      PathPtr = (CHAR8 *)OsBootOptionList->OsBootOption[CurrIdx].Image[0].FileName;
+      ModCmdLineBuf[0] = 0;
+      ZeroMem (&PldModParam, sizeof(PLD_MOD_PARAM));
+      PldModParam.GetProcAddress = GetProcAddress;
+      PldModParam.CmdLineBuf     = ModCmdLineBuf;
+      PldModParam.CmdLineLen     = sizeof(ModCmdLineBuf);
+      PayloadModuleInit (&PldModParam, PathPtr);
+    }
 
     //
     // Use switch stack to ensure stack will be rolled back to original point.
     //
     SwitchStack (
-      (SWITCH_STACK_ENTRY_POINT)MultiBoot->BootState.EntryPoint,
-      (VOID *)PcdGet32 (PcdPayloadHobList),
-      NULL,
+      (SWITCH_STACK_ENTRY_POINT)(UINTN)MultiBoot->BootState.EntryPoint,
+      (VOID *)(UINTN)PcdGet32 (PcdPayloadHobList),
+      FeaturePcdGet (PcdPayloadModuleEnabled) ? &PldModParam : NULL,
       (VOID *)((UINT8 *)mEntryStack + 8)
       );
     Status = EFI_DEVICE_ERROR;
@@ -691,11 +808,10 @@ FindBootPartitions (
   EFI_STATUS                Status;
   UINT8                     HwPart;
 
-  DEBUG ((DEBUG_INFO, "Try to find boot partition\n"));
-
   ASSERT (OsBootOption != NULL);
 
   HwPart = OsBootOption->HwPart;
+  DEBUG ((DEBUG_INFO, "Try to find boot partition for HW part %d\n", HwPart));
 
   Status = FindPartitions (HwPart, HwPartHandle);
   if (EFI_ERROR (Status)) {
@@ -733,19 +849,20 @@ InitBootFileSystem (
 {
   EFI_STATUS      Status;
   UINT32          SwPart;
-  UINT32          FsType;
+  UINT32          DevType;
   INT32           BootSlot;
+  OS_FILE_SYSTEM_TYPE  FsType;
 
   ASSERT (OsBootOption != NULL);
 
   SwPart = OsBootOption->SwPart;
   FsType = OsBootOption->FsType;
-
+  DevType = OsBootOption->DevType;
   DEBUG ((DEBUG_INFO, "Init File system\n"));
-  if ((OS_FILE_SYSTEM_TYPE)FsType < EnumFileSystemMax) {
+  if ((DevType != OsBootDeviceSpi) && (DevType != OsBootDeviceMemory) && (FsType < EnumFileSystemMax)) {
     Status = InitFileSystem (SwPart, FsType, HwPartHandle, FsHandle);
     if (EFI_ERROR (Status)) {
-      DEBUG ((DEBUG_INFO, "No partitions found, Status = %r\n", Status));
+      DEBUG ((DEBUG_INFO, "No file system found, Status = %r\n", Status));
       return Status;
     }
   } else {
@@ -809,6 +926,8 @@ ParseBootImages (
       }
     } else if ((LoadedImage->Flags & LOADED_IMAGE_IAS) != 0) {
       Status = ParseIasImage (OsBootOption, LoadedImage);
+    } else if ((LoadedImage->Flags & LOADED_IMAGE_COMPONENT) != 0) {
+      Status = ParseComponentImage (OsBootOption, LoadedImage);
     }
 
     if (EFI_ERROR (Status)) {
@@ -828,11 +947,29 @@ SetupBootImages (
   )
 {
   LOADED_IMAGE        *LoadedImage;
-  LOADED_IMAGE        *LoadedTrustyImage;
+  LOADED_IMAGE        *LoadedPreOsImage;
+  LOADED_IMAGE        *LoadedExtraImage;
   EFI_STATUS           Status;
+  UINT8                Type;
+
+  //
+  // Check if extra images exist and need setup
+  //
+  for (Type = LoadImageTypeExtra0; Type < LoadImageTypeMax; Type++) {
+    Status = GetLoadedImageByType (LoadedImageHandle, Type, &LoadedExtraImage);
+    if (EFI_ERROR (Status)) {
+      break;
+    }
+    if ((LoadedExtraImage != NULL) && ((LoadedExtraImage->Flags & LOADED_IMAGE_RUN_EXTRA) != 0)) {
+      Status = SetupBootImage (LoadedExtraImage);
+      if (EFI_ERROR (Status)) {
+        return Status;
+      }
+    }
+  }
 
   GetLoadedImageByType (LoadedImageHandle, LoadImageTypeNormal, &LoadedImage);
-  GetLoadedImageByType (LoadedImageHandle, LoadImageTypeTrusty, &LoadedTrustyImage);
+  GetLoadedImageByType (LoadedImageHandle, LoadImageTypePreOs, &LoadedPreOsImage);
 
   //
   // Normal type image is mandatory
@@ -846,9 +983,9 @@ SetupBootImages (
   if (EFI_ERROR (Status)) {
     return Status;
   }
-  if (LoadedTrustyImage != NULL) {
-    DEBUG ((DEBUG_INFO, "SetupBootImage ImageType-%d\n", LoadImageTypeTrusty));
-    Status = SetupBootImage (LoadedTrustyImage);
+  if (LoadedPreOsImage != NULL) {
+    DEBUG ((DEBUG_INFO, "SetupBootImage ImageType-%d\n", LoadImageTypePreOs));
+    Status = SetupBootImage (LoadedPreOsImage);
   }
 
   return Status;
@@ -874,7 +1011,7 @@ UpdateBootParameters (
   )
 {
   LOADED_IMAGE        *LoadedImage;
-  LOADED_IMAGE        *LoadedTrustyImage;
+  LOADED_IMAGE        *LoadedPreOsImage;
   LOADED_IMAGE        *LoadedExtraImages;
   EFI_STATUS           Status;
 
@@ -883,9 +1020,9 @@ UpdateBootParameters (
   if (EFI_ERROR (Status)) {
     return Status;
   }
-  Status = GetLoadedImageByType (LoadedImageHandle, LoadImageTypeTrusty, &LoadedTrustyImage);
+  Status = GetLoadedImageByType (LoadedImageHandle, LoadImageTypePreOs, &LoadedPreOsImage);
   Status = GetLoadedImageByType (LoadedImageHandle, LoadImageTypeExtra0, &LoadedExtraImages);
-  return UpdateOsParameters (OsBootOption, LoadedImage, LoadedTrustyImage, LoadedExtraImages);
+  return UpdateOsParameters (OsBootOption, LoadedImage, LoadedPreOsImage, LoadedExtraImages);
 }
 
 EFI_STATUS
@@ -895,15 +1032,39 @@ StartBootImages (
   )
 {
   LOADED_IMAGE        *LoadedImage;
+  LOADED_IMAGE        *LoadedPreOsImage;
+  LOADED_IMAGE        *LoadedExtraImage;
   EFI_STATUS           Status;
+  UINT8                Type;
 
-  Status = GetLoadedImageByType (LoadedImageHandle, LoadImageTypeTrusty, &LoadedImage);
-  if (EFI_ERROR (Status)) {
-    Status = GetLoadedImageByType (LoadedImageHandle, LoadImageTypeNormal, &LoadedImage);
+  //
+  // Check if extra images exist and need start before OS image.
+  //
+  for (Type = LoadImageTypeExtra0; Type < LoadImageTypeMax; Type++) {
+    Status = GetLoadedImageByType (LoadedImageHandle, Type, &LoadedExtraImage);
+    if (EFI_ERROR (Status)) {
+      break;
+    }
+    if ((LoadedExtraImage != NULL) && ((LoadedExtraImage->Flags & LOADED_IMAGE_RUN_EXTRA) != 0)) {
+      // For now, only RTCM will be supported.
+      Status = CallExtraModule (PLD_EXTRA_MOD_RTCM, LoadedExtraImage);
+      if (EFI_ERROR (Status)) {
+        return Status;
+      }
+    }
   }
 
-  if (!EFI_ERROR (Status)) {
+  Status = GetLoadedImageByType (LoadedImageHandle, LoadImageTypeNormal, &LoadedImage);
+  if (EFI_ERROR (Status)) {
+    return Status;
+  }
+
+  Status = GetLoadedImageByType (LoadedImageHandle, LoadImageTypePreOs, &LoadedPreOsImage);
+  if (EFI_ERROR (Status)) {
     Status = StartBooting (LoadedImage);
+  } else {
+    // PreOs found, need start PreOS
+    Status = StartPreOsBooting (LoadedPreOsImage, LoadedImage);
   }
 
   return Status;
@@ -925,10 +1086,16 @@ BootOsImage (
   IN  OS_BOOT_OPTION         *OsBootOption
   )
 {
-  EFI_STATUS        Status;
-  EFI_HANDLE        HwPartHandle;
-  EFI_HANDLE        FsHandle;
-  EFI_HANDLE        LoadedImageHandle;
+  EFI_STATUS           Status;
+  EFI_HANDLE           HwPartHandle;
+  EFI_HANDLE           FsHandle;
+  EFI_HANDLE           LoadedImageHandle;
+  DEVICE_BLOCK_INFO    DevBlkInfo;
+  UINT8                OldHwPart;
+  UINT8                HwPart;
+  UINT8                StartPart;
+  UINT8                EndPart;
+  OS_BOOT_MEDIUM_TYPE  MediaType;
 
   HwPartHandle      = NULL;
   FsHandle          = NULL;
@@ -944,33 +1111,94 @@ BootOsImage (
     goto Exit;
   }
 
-  //
-  // Find Boot Partition
-  //
-  Status = FindBootPartitions (OsBootOption, &HwPartHandle);
-  if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_INFO, "Failed to Find Boot Partitions - HwPart %d\n", OsBootOption->HwPart));
-    goto Exit;
-  }
 
   //
-  // Init File System
+  // For USB devices, try to boot from each of them until a success or
+  // reaching the end of the list. This is because it is hard to have fixed
+  // order on the USB devices if multiple devices exist in system.
   //
-  Status = InitBootFileSystem (OsBootOption, HwPartHandle, &FsHandle);
-  if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_INFO, "Failed to Initialize Boot File System - SwPart %d\n", OsBootOption->SwPart));
-    goto Exit;
+  MediaType = MediaGetInterfaceType ();
+  OldHwPart = OsBootOption->HwPart;
+  if ((MediaType == OsBootDeviceUsb) && (OldHwPart == 0xFF)) {
+    StartPart = 0;
+    EndPart   = 0x10;
+  } else {
+    StartPart = OldHwPart;
+    EndPart   = OldHwPart;
   }
 
-  //
-  // Load Boot Image
-  //
-  Status = LoadBootImages (OsBootOption, HwPartHandle, FsHandle, &LoadedImageHandle);
-  if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_INFO, "Failed to Load Boot Image\n"));
-    goto Exit;
+  for (HwPart = StartPart; HwPart <= EndPart; HwPart++) {
+
+    OsBootOption->HwPart = HwPart;
+
+    //
+    // Check if it is a valid HW part using MediaGetMediaInfo
+    //
+    Status = MediaGetMediaInfo (HwPart, &DevBlkInfo);
+    if (EFI_ERROR (Status)) {
+      break;
+    }
+
+    DEBUG ((DEBUG_INFO, "Try HwPart %d\n", HwPart));
+
+    //
+    // Find Boot Partition
+    //
+    Status = FindBootPartitions (OsBootOption, &HwPartHandle);
+    if (EFI_ERROR (Status)) {
+      DEBUG ((DEBUG_INFO, "Failed to Find Boot Partitions - HwPart %d\n", OsBootOption->HwPart));
+    }
+
+    //
+    // Init File System
+    //
+    if (!EFI_ERROR (Status)) {
+      Status = InitBootFileSystem (OsBootOption, HwPartHandle, &FsHandle);
+      if (EFI_ERROR (Status)) {
+        DEBUG ((DEBUG_INFO, "Failed to Initialize Boot File System - SwPart %d\n", OsBootOption->SwPart));
+      }
+    }
+
+    //
+    // Load Boot Image
+    //
+    if (!EFI_ERROR (Status)) {
+      Status = LoadBootImages (OsBootOption, HwPartHandle, FsHandle, &LoadedImageHandle);
+      if (EFI_ERROR (Status)) {
+        DEBUG ((DEBUG_INFO, "Failed to Load Boot Image\n"));
+      }
+    }
+
+    //
+    // Error handling
+    //
+    if (EFI_ERROR (Status)) {
+      if (LoadedImageHandle != NULL) {
+        UnloadBootImages (LoadedImageHandle, FALSE);
+        LoadedImageHandle = NULL;
+      }
+
+      if (FsHandle != NULL) {
+        CloseFileSystem (FsHandle);
+        FsHandle = NULL;
+      }
+
+      if (HwPartHandle != NULL) {
+        ClosePartitions (HwPartHandle);
+        HwPartHandle = NULL;
+      }
+    } else {
+      break;
+    }
+
   }
+
   AddMeasurePoint (0x4070);
+  OsBootOption->HwPart = OldHwPart;
+
+  if (EFI_ERROR (Status)) {
+    goto Exit;
+  }
 
   //
   // Parse Boot Image
@@ -1007,7 +1235,7 @@ BootOsImage (
 
 Exit:
   if (LoadedImageHandle != NULL) {
-    UnloadBootImages (LoadedImageHandle);
+    UnloadBootImages (LoadedImageHandle, FALSE);
   }
 
   if (FsHandle != NULL) {
@@ -1028,16 +1256,18 @@ DEBUG_CODE_END();
 /**
   Initialize platform console.
 
+  @param[in]  ForceFbConsole   Always initialize frame buffer
+
   @retval  EFI_NOT_FOUND    No additional console was found.
   @retval  EFI_SUCCESS      Console has been initialized successfully.
   @retval  Others           There is error during console initialization.
 **/
 EFI_STATUS
-InitConsole (
-  VOID
+LocalConsoleInit (
+  IN  BOOLEAN   ForceFbConsole
 )
 {
-  UINT32                    CtrlPciBase;
+  UINTN                     CtrlPciBase;
   EFI_STATUS                Status;
   UINT32                    Height;
   UINT32                    Width;
@@ -1056,7 +1286,7 @@ InitConsole (
     }
   }
 
-  if (PcdGet32 (PcdConsoleOutDeviceMask) & ConsoleOutFrameBuffer) {
+  if (((PcdGet32 (PcdConsoleOutDeviceMask) & ConsoleOutFrameBuffer) != 0) || ForceFbConsole) {
     GfxInfoHob = (EFI_PEI_GRAPHICS_INFO_HOB *)GetGuidHobData (NULL, NULL, &gEfiGraphicsInfoHobGuid);
     if (GfxInfoHob != NULL) {
       Width  = GfxInfoHob->GraphicsMode.HorizontalResolution;
@@ -1089,7 +1319,7 @@ RunShell (
   IN  UINTN    Timeout
   )
 {
-  InitConsole ();
+  LocalConsoleInit (FALSE);
 
   Shell (Timeout);
 }
@@ -1111,7 +1341,6 @@ PayloadMain (
   )
 {
   OS_BOOT_OPTION_LIST   *OsBootOptionList;
-  LOADER_PLATFORM_INFO  *LoaderPlatformInfo;
   OS_BOOT_OPTION         OsBootOption;
   BOOLEAN                BootShell;
   UINTN                  ShellTimeout;
@@ -1119,7 +1348,6 @@ PayloadMain (
   UINT8                  BootIdx;
 
   mEntryStack = Param;
-  LoaderPlatformInfo = (LOADER_PLATFORM_INFO *)GetLoaderPlatformInfoPtr();
 
   DEBUG ((DEBUG_INFO, "\n\n====================Os Loader====================\n\n"));
   AddMeasurePoint (0x4010);
@@ -1135,11 +1363,15 @@ PayloadMain (
       BootShell    = TRUE;
     }
   } else {
-    if (OsBootOptionList->BootToShell != 0) {
-      BootShell    = TRUE;
-    } else if (DebugCodeEnabled ()) {
-      ShellTimeout = (UINTN)PcdGet16 (PcdPlatformBootTimeOut);
-      BootShell    = TRUE;
+    if (OsBootOptionList->RestrictedBoot != 0) {
+      BootShell    = FALSE;
+    } else {
+      if (OsBootOptionList->BootToShell != 0) {
+        BootShell    = TRUE;
+      } else if (DebugCodeEnabled ()) {
+        ShellTimeout = (UINTN)PcdGet16 (PcdPlatformBootTimeOut);
+        BootShell    = TRUE;
+      }
     }
   }
 
@@ -1147,15 +1379,6 @@ PayloadMain (
     RunShell (ShellTimeout);
   }
   AddMeasurePoint (0x4020);
-
-  //
-  // Load PreOsChecker
-  //
-  if (LoaderPlatformInfo != NULL) {
-    if (FeaturePcdGet (PcdPreOsCheckerEnabled) && (LoaderPlatformInfo->LdrFeatures & FEATURE_PRE_OS_CHECKER_BOOT)) {
-      LoadPreOsChecker ();
-    }
-  }
 
   while (OsBootOptionList != NULL) {
 
@@ -1166,30 +1389,42 @@ PayloadMain (
 
     // Load and run Image in order from OsImageList
     BootIdx = 0;
-    CurrIdx = GetCurrentBootOption (OsBootOptionList, mCurrentBoot);
+    CurrIdx = GetCurrentBootOption (OsBootOptionList, 0);
     while  (BootIdx < OsBootOptionList->OsBootOptionCount) {
+      mCurrentBoot = CurrIdx;
       DEBUG ((DEBUG_INFO, "\n======== Try Booting with Boot Option %d ========\n", CurrIdx));
 
       // Get current boot option and try boot
       CopyMem ((VOID *)&OsBootOption, (VOID *)&OsBootOptionList->OsBootOption[CurrIdx], sizeof (OS_BOOT_OPTION));
       BootOsImage (&OsBootOption);
 
-      // Move to next boot option
-      CurrIdx = GetNextBootOption (OsBootOptionList, CurrIdx);
-      if (CurrIdx >= OsBootOptionList->OsBootOptionCount) {
-        CurrIdx = 0;
+      // De-init the current boot devices
+      // If USB keyboard console is used, don't DeInit USB yet at this moment.
+      // It will be handled just before transfering to OS.
+      if (!((OsBootOption.DevType == OsBootDeviceUsb) &&
+          ((PcdGet32 (PcdConsoleInDeviceMask) & ConsoleInUsbKeyboard) != 0))) {
+        MediaInitialize (0, DevDeinit);
       }
-      BootIdx++;
+
+      if (OsBootOptionList->RestrictedBoot != 0) {
+        // Restricted boot should not try other boot option
+        break;
+      } else {
+        // Move to next boot option
+        CurrIdx = GetNextBootOption (OsBootOptionList, CurrIdx);
+        if (CurrIdx >= OsBootOptionList->OsBootOptionCount) {
+          CurrIdx = 0;
+        }
+        BootIdx++;
+      }
     }
 
-    if (DebugCodeEnabled ()) {
+    if (DebugCodeEnabled () && (OsBootOptionList->RestrictedBoot == 0)) {
+      // Restricted boot should not fall back to shell
       RunShell (0);
     } else {
       break;
     }
-
-    // De-init boot devices while restarting payload.
-    DeinitBootDevices ();
   }
 
   CpuHalt (NULL);

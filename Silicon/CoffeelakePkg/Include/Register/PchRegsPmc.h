@@ -20,6 +20,7 @@
 #define R_ACPI_IO_PM1_STS                        0x00
 #define B_ACPI_IO_PM1_STS_WAK                    BIT15
 #define B_ACPI_IO_PM1_STS_PRBTNOR                BIT11
+#define B_ACPI_IO_PM1_STS_PRBTN                  BIT8
 #define R_ACPI_IO_PM1_EN_MASK                    0xFFFF0000
 #define B_ACPI_IO_PM1_EN_PWRBTN_EN               BIT24
 
@@ -45,9 +46,14 @@
 #define B_ACPI_IO_SMI_EN_EOS                     BIT1
 #define B_ACPI_IO_SMI_EN_GBL_SMI                 BIT0
 
+#define R_ACPI_IO_SMI_STS                        0x34
+
 #define R_ACPI_IO_GPE_CNTL                       0x40
 
 #define R_ACPI_IO_OC_WDT_CTL                     0x54
+
+#define R_ACPI_IO_GPE0_EN_127_96                 0x7C
+#define B_ACPI_IO_GPE0_STS_127_96_PME_B0         BIT13
 
 #define R_TCO_IO_TCO1_STS                        0x04
 #define R_TCO_IO_TCO1_CNT                        0x08

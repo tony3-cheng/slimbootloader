@@ -58,6 +58,7 @@ GetFirstFfsFileInFv (
     FvExHeader  = (EFI_FIRMWARE_VOLUME_EXT_HEADER *)(((UINT8 *)FvHeader) + FvHeader->ExtHeaderOffset);
     CurrentFile = (EFI_FFS_FILE_HEADER *)(((UINT8 *)FvExHeader) + FvExHeader->ExtHeaderSize);
   }
+  CurrentFile = (EFI_FFS_FILE_HEADER *) ALIGN_POINTER (CurrentFile, 8);
   return CurrentFile;
 }
 
@@ -90,7 +91,7 @@ GetFfsFileByName (
   EFI_FFS_FILE_HEADER             *CurrentFile;
   EFI_FFS_FILE_HEADER             *NextFile;
   EFI_FFS_FILE_HEADER             *EndFile;
-  UINT32                           Offset;
+  UINTN                            Offset;
 
   //
   // Verify library has been initialized.
@@ -161,7 +162,7 @@ GetFfsFileByType (
   EFI_FFS_FILE_HEADER             *NextFile;
   EFI_FFS_FILE_HEADER             *EndFile;
   UINT32                           Count;
-  UINT32                           Offset;
+  UINTN                            Offset;
 
   //
   // Verify library has been initialized.
@@ -289,6 +290,7 @@ GetSectionByType (
   @param[in]  FvBase                   Point to the boot firmware volume.
   @param[in]  FvLength                 The actural length of FV.
   @param[out] EntryPoint               The pointer to receive SecCore entry point.
+  @param[out] Machine                  The pointer to receive machine type.
 
   @retval RETURN_SUCCESS               The FV is loaded successfully.
   @retval Others                       Failed to load the FV.
@@ -298,7 +300,8 @@ EFIAPI
 LoadFvImage (
   IN  UINT32                            *FvBase,
   IN  UINT32                             FvLength,
-  OUT VOID                             **EntryPoint
+  OUT VOID                             **EntryPoint,
+  OUT UINT16                            *Machine   OPTIONAL
   )
 {
   EFI_STATUS                            Status;
@@ -327,20 +330,24 @@ LoadFvImage (
   }
 
   // Check preferred image base
-  SecCoreImageBase = (UINTN)Section;
-  Status = PeCoffGetPreferredBase ((VOID *)SecCoreImageBase, &PreferredBase);
+  SecCoreImageBase = (UINT32)(UINTN)Section;
+  Status = PeCoffGetPreferredBase ((VOID *)(UINTN)SecCoreImageBase, &PreferredBase);
   if (EFI_ERROR (Status)) {
     return Status;
   }
 
   // Move FV to preferred base if required
-  Gap = (UINT32)(UINTN)PreferredBase - SecCoreImageBase;
+  Gap = (UINT32)PreferredBase - SecCoreImageBase;
   if (Gap != 0) {
     CopyMem ((UINT8 *)FvHeader + Gap, FvHeader, FvLength);
     SecCoreImageBase += Gap;
   }
 
-  Status = PeCoffLoaderGetEntryPoint ((VOID *)SecCoreImageBase, EntryPoint);
+  Status = PeCoffLoaderGetMachine ((VOID *)(UINTN)SecCoreImageBase, Machine);
+  if (EFI_ERROR(Status)) {
+    return Status;
+  }
 
+  Status = PeCoffLoaderGetEntryPoint ((VOID *)(UINTN)SecCoreImageBase, EntryPoint);
   return Status;
 }

@@ -39,12 +39,14 @@
   SerialPortLib
   DebugLogBufferLib
   DebugPrintErrorLevelLib
+  PagingLib
 
 [Guids]
   gLoaderLibraryDataGuid
   gLoaderPlatformDataGuid
   gBootLoaderServiceGuid
   gBootLoaderVersionGuid
+  gLoaderPciRootBridgeInfoGuid
 
 [Pcd]
   gPlatformCommonLibTokenSpaceGuid.PcdMaxLibraryDataEntry
@@ -54,3 +56,6 @@
   gPayloadTokenSpaceGuid.PcdGlobalDataAddress
   gPlatformCommonLibTokenSpaceGuid.PcdEmmcMaxRwBlockNumber
   gPlatformCommonLibTokenSpaceGuid.PcdPcdLibId
+  gPlatformCommonLibTokenSpaceGuid.PcdDmaProtectionEnabled
+  gPlatformCommonLibTokenSpaceGuid.PcdDmaBufferSize
+  gPlatformCommonLibTokenSpaceGuid.PcdDmaBufferAlignment

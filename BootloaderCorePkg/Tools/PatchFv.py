@@ -163,7 +163,7 @@ class Symbols:
         # If the fvDir is not a directory, then raise an exception
         #
         if not os.path.isdir(fvDir):
-            raise Exception ("'%s' is not a valid directory!" % FvDir)
+            raise Exception ("'%s' is not a valid directory!" % fvDir)
 
         #
         # If the Guid.xref is not existing in fvDir, then raise an exception
@@ -306,10 +306,11 @@ class Symbols:
             match = re.match("^EFI_BASE_ADDRESS\s*=\s*(0x[a-fA-F0-9]+)", rptLine)
             if match is not None:
                 self.fdBase = int(match.group(1), 16) - fvOffset
+                break
             rptLine  = fdIn.readline()
         fdIn.close()
         if self.fdBase == 0xFFFFFFFF:
-            raise Exception("Could not find EFI_BASE_ADDRESS in INF file!" % fvFile)
+            raise Exception("Could not find EFI_BASE_ADDRESS in INF file!" % infFile)
         return 0
 
     #
@@ -363,9 +364,11 @@ class Symbols:
         foundModHdr = False
         while (rptLine != "" ):
             if rptLine[0] != ' ':
-                #DxeIpl (Fixed Flash Address, BaseAddress=0x00fffb4310, EntryPoint=0x00fffb4958)
-                #(GUID=86D70125-BAA3-4296-A62F-602BEBBB9081 .textbaseaddress=0x00fffb4398 .databaseaddress=0x00fffb4178)
-                match = re.match("([_a-zA-Z0-9\-]+)\s\(.+BaseAddress=(0x[0-9a-fA-F]+),\s+EntryPoint=(0x[0-9a-fA-F]+)\)", rptLine)
+                #DxeIpl (Fixed Flash Address, BaseAddress=0x00fffb4310, EntryPoint=0x00fffb4958,Type=PE)
+                match = re.match("([_a-zA-Z0-9\-]+)\s\(.+BaseAddress=(0x[0-9a-fA-F]+),\s+EntryPoint=(0x[0-9a-fA-F]+),\s*Type=\w+\)", rptLine)
+                if match is None:
+                    #DxeIpl (Fixed Flash Address, BaseAddress=0x00fffb4310, EntryPoint=0x00fffb4958)
+                    match = re.match("([_a-zA-Z0-9\-]+)\s\(.+BaseAddress=(0x[0-9a-fA-F]+),\s+EntryPoint=(0x[0-9a-fA-F]+)\)", rptLine)
                 if match is not None:
                     foundModHdr = True
                     modName = match.group(1)
@@ -374,6 +377,7 @@ class Symbols:
                     self.dictModBase['%s:BASE'  % modName] = int (match.group(2), 16)
                     self.dictModBase['%s:ENTRY' % modName] = int (match.group(3), 16)
                     self.dictSymbolAddress["%s:BASE" % modName] = match.group(2)
+                #(GUID=86D70125-BAA3-4296-A62F-602BEBBB9081 .textbaseaddress=0x00fffb4398 .databaseaddress=0x00fffb4178)
                 match = re.match("\(GUID=([A-Z0-9\-]+)\s+\.textbaseaddress=(0x[0-9a-fA-F]+)\s+\.databaseaddress=(0x[0-9a-fA-F]+)\)", rptLine)
                 if match is not None:
                     if foundModHdr:
@@ -402,6 +406,7 @@ class Symbols:
     #
     #  retval      0           Parsed MOD MAP file successfully
     #  retval      1           There is no moduleEntryPoint in modSymbols
+    #  retval      2           There is no offset for moduleEntryPoint in modSymbols
     #
     def parseModMapFile(self, moduleName, mapFile):
         #
@@ -423,10 +428,17 @@ class Symbols:
             matchKeyGroupIndex = 2
             matchSymbolGroupIndex  = 1
             prefix = '_'
+        elif reportLine.strip().find("XCODE") != -1:
+            #XCODE
+            #0x00001E29      0x00000013      [ 53] __ModuleEntryPoint
+            patchMapFileMatchString = "(0x[0-9a-fA-F]{8})\s+0x[0-9a-fA-F]{8}\s+\[.*\]\s+(\w+)$"
+            matchKeyGroupIndex = 2
+            matchSymbolGroupIndex  = 1
+            prefix = ''
         else:
             #MSFT
-            #0003:00000190       _gComBase                  00007a50     SerialPo
-            patchMapFileMatchString =  "^\s[0-9a-fA-F]{4}:[0-9a-fA-F]{8}\s+(\w+)\s+([0-9a-fA-F]{8}\s+)"
+            #0003:00000190       _gComBase                     00007a50     SerialPort
+            patchMapFileMatchString =  "^\s[0-9a-fA-F]{4}:[0-9a-fA-F]{8}\s+(\w+)\s+([0-9a-fA-F]{8,16})\s+"
             matchKeyGroupIndex = 1
             matchSymbolGroupIndex  = 2
             prefix = ''
@@ -434,7 +446,10 @@ class Symbols:
         for reportLine in reportLines:
             match = re.match(patchMapFileMatchString, reportLine)
             if match is not None:
-                modSymbols[prefix + match.group(matchKeyGroupIndex)] = match.group(matchSymbolGroupIndex)
+                if prefix == '' and len(match.group(matchSymbolGroupIndex)) > 10:
+                    prefix = '_'
+                keyname = '%s' % (prefix + match.group(matchKeyGroupIndex))
+                modSymbols[keyname] = match.group(matchSymbolGroupIndex)
 
         # Handle extra module patchable PCD variable in Linux map since it might have different format
         # .data._gPcd_BinaryPatch_PcdVpdBaseAddress
@@ -457,13 +472,13 @@ class Symbols:
         if not moduleEntryPoint in modSymbols:
             return 1
 
-        modEntry = '%s:%s' % (moduleName,moduleEntryPoint)
+        modEntry = '%s:%s' % (moduleName, moduleEntryPoint)
         if not modEntry in self.dictSymbolAddress:
             modKey = '%s:ENTRY' % moduleName
             if modKey in self.dictModBase:
                 baseOffset = self.dictModBase['%s:ENTRY' % moduleName] - int(modSymbols[moduleEntryPoint], 16)
             else:
-               return 2
+                return 2
         else:
             baseOffset = int(self.dictSymbolAddress[modEntry], 16) - int(modSymbols[moduleEntryPoint], 16)
         for symbol in modSymbols:
@@ -498,7 +513,7 @@ class Symbols:
     #
     #  Get current character
     #
-    #  retval      elf.string[self.index]
+    #  retval      self.string[self.index]
     #  retval      ''                       Exception
     #
     def getCurr(self):

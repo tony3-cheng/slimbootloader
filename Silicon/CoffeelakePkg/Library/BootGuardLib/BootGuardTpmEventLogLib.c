@@ -266,16 +266,18 @@ FindFitEntryData (
 
   FitTableOffset = *(UINT64 *)(UINTN)(BASE_4GB - 0x40);
   FitEntry = (FIRMWARE_INTERFACE_TABLE_ENTRY *)(UINTN)FitTableOffset;
-  if (FitEntry[0].Address != *(UINT64 *)"_FIT_   ") {
-    return NULL;
-  }
-  if (FitEntry[0].Type != FIT_TABLE_TYPE_HEADER) {
-    return NULL;
-  }
-  EntryNum = *(UINT32 *)(&FitEntry[0].Size[0]) & 0xFFFFFF;
-  for (Index = 0; Index < EntryNum; Index++) {
-    if (FitEntry[Index].Type == Type) {
-      return (VOID *)(UINTN)FitEntry[Index].Address;
+  if (FitEntry != NULL) {
+    if (FitEntry[0].Address != *(UINT64 *)"_FIT_   ") {
+      return NULL;
+    }
+    if (FitEntry[0].Type != FIT_TABLE_TYPE_HEADER) {
+      return NULL;
+    }
+    EntryNum = *(UINT32 *)(&FitEntry[0].Size[0]) & 0xFFFFFF;
+    for (Index = 0; Index < EntryNum; Index++) {
+      if (FitEntry[Index].Type == Type) {
+        return (VOID *)(UINTN)FitEntry[Index].Address;
+      }
     }
   }
 
@@ -543,7 +545,7 @@ CreateIbbHash (
   if (Sha256Init (&HashCtx,  sizeof (HASH_CTX)) == RETURN_SUCCESS) {
     for (Index = 0; Index < BpmIbb->SegmentCount; Index++) {
       if (BpmIbb->IbbSegment[Index].Flags == IBB_SEGMENT_FLAG_IBB) {
-        Sha256Update (&HashCtx, (VOID *)BpmIbb->IbbSegment[Index].Base, BpmIbb->IbbSegment[Index].Size);
+        Sha256Update (&HashCtx, (VOID *)(UINTN)BpmIbb->IbbSegment[Index].Base, BpmIbb->IbbSegment[Index].Size);
       }
     }
 

@@ -12,7 +12,6 @@
 #include <Library/PciLib.h>
 #include <Library/PcdLib.h>
 #include <Library/GpioLib.h>
-#include <Library/SiGpioLib.h>
 #include <Library/ConfigDataLib.h>
 #include <Library/SocInitLib.h>
 #include <Library/BoardInitLib.h>
@@ -41,6 +40,7 @@
 #include <Library/SpiFlashLib.h>
 #include <Library/TpmLib.h>
 #include <Library/VtdLib.h>
+#include <Library/VtdPmrLib.h>
 #include <RegAccess.h>
 #include <IndustryStandard/Pci.h>
 #include <IndustryStandard/Acpi.h>
@@ -68,6 +68,10 @@
 #include <Guid/SmmInformationGuid.h>
 #include <Library/HdaLib.h>
 #include <Register/RegsSpi.h>
+#include <Register/Intel/Cpuid.h>
+#include <CseMsg.h>
+#include <Library/GpioLibApl.h>
+#include <Library/PlatformHookLib.h>
 
 #define IOC_UART_PPR_CLK_N_DIV        0x64
 #define IOC_UART_PPR_CLK_M_DIV        0x40
@@ -115,23 +119,5 @@ UpdateSeedListInfo (
 **/
 EFI_STATUS
 GenerateSeeds (
-  VOID
-  );
-
-/**
-  Get the serial port stride size.
-
-**/
-UINT8
-GetSerialPortStrideSize (
-  VOID
-  );
-
-/**
-  Get the physical serial port base address.
-
-**/
-UINT32
-GetSerialPortBase (
   VOID
   );

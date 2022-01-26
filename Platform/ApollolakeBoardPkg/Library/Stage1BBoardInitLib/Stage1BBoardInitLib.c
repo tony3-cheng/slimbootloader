@@ -28,12 +28,13 @@
 #include <Library/RleCompressLib.h>
 #include <PlatformBase.h>
 #include <RegAccess.h>
-#include <Library/BootGuardLib.h>
+#include <Library/BootGuardLib20.h>
 #include <Library/TpmLib.h>
 #include <Library/LoaderLib.h>
 #include <Library/HeciLib.h>
 #include <Library/BootloaderCommonLib.h>
 #include <Library/BoardSupportLib.h>
+#include <Library/SocInitLib.h>
 #include <FspmUpd.h>
 #include <GpioDefines.h>
 #include <PlatformBase.h>
@@ -46,7 +47,14 @@
 #include <ConfigDataStruct.h>
 #include <PlatformData.h>
 #include <Register/RegsSpi.h>
+#include <Library/TimerLib.h>
+#include <Library/SideBandLib.h>
+#include <Library/InternalIpcLib.h>
+#include "ScRegs/SscRegs.h"
+#include <MeBiosPayloadData.h>
+#include <Library/GpioLibApl.h>
 
+#define APL_FSP_STACK_TOP       0xFEF40000
 #define MRC_PARAMS_BYTE_OFFSET_MRC_VERSION 14
 
 CONST PLT_DEVICE  mPlatformDevices[]= {
@@ -56,7 +64,8 @@ CONST PLT_DEVICE  mPlatformDevices[]= {
   {{0x00001D00}, OsBootDeviceUfs   , 0 },
   {{0x00000D02}, OsBootDeviceSpi   , 0 },
   {{0x00001500}, OsBootDeviceUsb   , 0 },
-  {{0x01000000}, OsBootDeviceMemory, 0 }
+  {{0x01000000}, OsBootDeviceMemory, 0 },
+  {{0x00000200}, PlatformDeviceGraphics, 0},
 };
 
 CONST CHAR16 *BootDeviceType[] = { L"eMMC", L"UFS", L"SPI" };
@@ -162,7 +171,7 @@ CONST UINT16 mGpMrbModuleIdOffset[] = {
 };
 
 CONST UINT16 mUp2ModuleIdOffset[] = {
-  0x00D8, 0x00E0
+  0x00D8, 0x00E0, 0x00F0
 };
 
 typedef struct {
@@ -228,540 +237,6 @@ CONST MEMORY_SKU_CONFIG mMemorySkuConfig[] = {
   }
 };
 
-
-// X001 >>>
-// PMC Device Byte List
-#define	  Obf		                0x01
-#define   Ibf		                0x02
-
-#define	  A9610_DEVICE_NONE			          0x00
-#define	  A9610_DEVICE_1			            0x00
-#define	  A9610_DEVICE_2			            0x01
-
-#define	  A9610_CMD_READ_BOARD_INFO   		0x53
-#define	  A9610_CMD_WRITE_BOARD_INFO  		0x52
-
-#define	  A9610_CMD_READ_SYSTEM       		0x55
-#define	  A9610_CMD_WRITE_SYSTEM      		0x54
-
-#define WRITE_ACPI_RAM                  0x30
-#define READ_ACPI_RAM                   0x31
-
-#define   A9610_PMC_CMD_PORT	            0x66
-#define   A9610_PMC_DATA_PORT	            0x62 
-
-#define   EC_CMD_PORT	              0x66
-#define   EC_DATA_PORT	            0x62
-
-
-#define	  A9610_CTRL_BOARD_NAME			      0x10
-#define	  A9610_CTRL_MANUFACTURER_NAME		0x11
-#define	  A9610_CTRL_CHIP_NAME			      0x12
-#define	  A9610_CTRL_PLATFORM_TYPE		    0x13
-#define	  A9610_CTRL_PLATFORM_VERSION		  0x14
-
-#define READ_EC_FIRMWARE_VERSION        0x4B
-#define FIRMWARE_VERSION_IN_BIOS        0x00
-#define FIRMWARE_VERSION_IN_PROJECT     0x07
-
-
-#define A9610_ACTIVATE_VALUE	0x1
-#define A9610_DEACTIVATE_VALUE	0x0
-#define A9610_CONFIG_MODE_ENTER_VALUE	0x87
-#define A9610_CONFIG_MODE_EXIT_VALUE	0xaa
-
-#define A9610_CONFIG_INDEX	0x299
-#define A9610_CONFIG_DATA	0x29a
-
-#define A9610_PMC1_BASE_ADDRESS	0x2f0
-
-
-#define A9610_LDN_LPT	0xa
-#define A9610_LDN_PS2K	0xb
-#define A9610_LDN_PS2M	0xb
-#define A9610_LDN_GPIO0	0x24
-#define A9610_LDN_GPIO1	0x25
-#define A9610_LDN_PMC0	0xc
-#define A9610_LDN_PMC1	0xd
-#define A9610_LDN_CAN0	0x18
-#define A9610_LDN_CAN1	0x19
-#define A9610_LDN_I2C0	0x20
-#define A9610_LDN_I2C1	0x21
-#define A9610_LDN_SMBUS0	0x22
-#define A9610_LDN_SMBUS1	0x23
-#define A9610_LDN_PMCMB	0xe
-#define A9610_LDN_EC	0xf
-#define A9610_LDN_UART1	0x2
-#define A9610_LDN_UART2	0x3
-#define A9610_LDN_UART3	0x4
-#define A9610_LDN_UART4	0x5
-#define A9610_LDN_UART5	0x6
-#define A9610_LDN_UART6	0x7
-#define A9610_LDN_UART7	0x8
-#define A9610_LDN_UART8	0x9
-#define A9610_LDN_UART9	0x10 
-
-#define A9610_LDN_SEL_REGISTER	0x7
-#define A9610_ACTIVATE_REGISTER	0x30
-#define A9610_BASE1_HI_REGISTER	0x60
-#define A9610_BASE1_LO_REGISTER	0x61
-#define A9610_BASE2_HI_REGISTER	0x62
-#define A9610_BASE2_LO_REGISTER	0x63
-#define A9610_IRQ1_REGISTER	0x70
-#define A9610_IRQ2_REGISTER	0x72
-#define A9610_DMA1_REGISTER	0x74
-#define A9610_DMA2_REGISTER	0x75 
-
-const
-BXT_GPIO_PAD_INIT  mGpioInitTblLPC[] = {
-  /*                  Group Pin#:  pad_name,    PMode,GPIO_Config,HostSw,GPO_STATE,INT_Trigger,  Wake_Enabled ,Term_H_L,Inverted, GPI_ROUT, IOSstae, IOSTerm,MMIO_Offset,Community */
-  BXT_GPIO_PAD_CONF (L"SMB_CLK",                    M1,     NA,   NA,  NA,   NA, Wake_Disabled, P_20K_H,    NA,    NA, IOS_Masked, SAME, GPIO_PADBAR + 0x0100,  SOUTHWEST),
-  BXT_GPIO_PAD_CONF (L"SMB_DATA",                   M1,     NA,   NA,  NA,   NA, Wake_Disabled, P_20K_H,    NA,    NA, IOS_Masked, SAME, GPIO_PADBAR + 0x0108,  SOUTHWEST),
-  BXT_GPIO_PAD_CONF (L"LPC_ILB_SERIRQ",             M1,     NA,   NA,  NA,   NA, Wake_Disabled, P_20K_H,    NA,    NA, IOS_Masked, SAME, GPIO_PADBAR + 0x0110,  SOUTHWEST),
-  BXT_GPIO_PAD_CONF (L"LPC_CLKOUT0",                M1,     NA,   NA,  NA,   NA, Wake_Disabled, P_NONE,     NA,    NA, IOS_Masked, SAME, GPIO_PADBAR + 0x0118,  SOUTHWEST),
-  BXT_GPIO_PAD_CONF (L"LPC_CLKOUT1",                M1,     NA,   NA,  NA,   NA, Wake_Disabled, P_NONE,     NA,    NA, IOS_Masked, SAME, GPIO_PADBAR + 0x0120,  SOUTHWEST),
-  BXT_GPIO_PAD_CONF (L"LPC_AD0",                    M1,     NA,   NA,  NA,   NA, Wake_Disabled, P_20K_H,    NA,    NA, IOS_Masked, SAME, GPIO_PADBAR + 0x0128,  SOUTHWEST),
-  BXT_GPIO_PAD_CONF (L"LPC_AD1",                    M1,     NA,   NA,  NA,   NA, Wake_Disabled, P_20K_H,    NA,    NA, IOS_Masked, SAME, GPIO_PADBAR + 0x0130,  SOUTHWEST),
-  BXT_GPIO_PAD_CONF (L"LPC_AD2",                    M1,     NA,   NA,  NA,   NA, Wake_Disabled, P_20K_H,    NA,    NA, IOS_Masked, SAME, GPIO_PADBAR + 0x0138,  SOUTHWEST),
-  BXT_GPIO_PAD_CONF (L"LPC_AD3",                    M1,     NA,   NA,  NA,   NA, Wake_Disabled, P_20K_H,    NA,    NA, IOS_Masked, SAME, GPIO_PADBAR + 0x0140,  SOUTHWEST),
-  BXT_GPIO_PAD_CONF (L"LPC_CLKRUNB",                M1,     NA,   NA,  NA,   NA, Wake_Disabled, P_20K_H,    NA,    NA, IOS_Masked, SAME, GPIO_PADBAR + 0x0148,  SOUTHWEST),
-  BXT_GPIO_PAD_CONF (L"LPC_FRAMEB",                 M1,     NA,   NA,  NA,   NA, Wake_Disabled, P_20K_H,    NA,    NA, IOS_Masked, SAME, GPIO_PADBAR + 0x0150,  SOUTHWEST),
-};
-
-
-#define   CHIP_VEN_CODE         0xFA      // I-ITE, E-ENE
-#define   CHIP_CODE             0xFB      // FOR ITE, 12-8512, 16-8516
-#define   PROJ_NAME_CODE        0xFC      //
-#define   PROJ_TYPE_CODE        0xFD      // S-SOM, P-PCM
-#define   FW_MAJ_VER_NUMBER     0xFE
-#define   FW_MIN_VER_NUMBER     0xFF
-#define   DEFAULT_STRING_SIZE   0x20
-
-
-
-typedef struct _BOARD_ID_DATA{
-    UINT8       BoardID;
-    CHAR8       Brdstr[8];
-    CHAR16*     Board_name;
-} BOARD_ID_DATA;
-
-BOARD_ID_DATA BoardIDTable[]= {
-    {0x00, {'S','O','M','-','2','5','6','9'}, L"SOM-2569"},
-    {0x01, {'S','O','M','-','3','5','6','9'}, L"SOM-3569"},
-    {0x02, {'S','O','M','-','6','8','6','9'}, L"SOM-6869"},
-    {0x03, {'S','O','M','-','7','5','6','9'}, L"SOM-7569"},
-};
-
-typedef struct _SIO_CHIP_DATA{
-    UINT8       VenderID;
-    UINT8       ChipID;
-    UINT8       CodeID;
-    UINT16      ConfigIndex;
-    UINT16      ConfigData;
-    CHAR16*     Chip_name;
-} SIO_CHIP_DATA;
-
-SIO_CHIP_DATA SioChipTable[]= {
-    {0x52, 0x10, 0x00, 0x299, 0x29A,  L"RDC-9610 SW"},
-    {0x52, 0x10, 0x80, 0x299, 0x29A,  L"RDC-9610 FW"},
-    {0x49, 0x28, 0x00, 0x29C, 0x29D,  L"ITE-8528"},
-    {0x49, 0x21, 0x00, 0x29C, 0x29D,  L"ITE-5121"},
-};
-
-typedef struct _BOARD_INFORMATION{
-    UINT8       BoardID;
-    UINT8       SioChipIndex;
-    UINT16      CfgIndex;
-    UINT16      CfgData;
-    UINT16      EcIndex;
-    UINT16      EcData;
-    UINT8       Protocal;
-} BOARD_INFORMATION;
-
-BOARD_INFORMATION mBoardInfo;
-
-typedef struct _SIO_INIT_DATA{
-    UINT16      Reg16;
-    UINT8       AndData8;   // 0x00 means register don't need AndMask
-                            // only write OrData8 to regisrer.
-    UINT8       OrData8;
-} SIO_INIT_DATA;
-
-SIO_INIT_DATA A9610InitTable[]= {
-    // -----------------------------
-    //|  Addr | DataMask  | DataValue |
-    // -----------------------------
-
-    {A9610_CONFIG_INDEX, 0x00, A9610_CONFIG_MODE_ENTER_VALUE},
-    {A9610_CONFIG_INDEX, 0x00, A9610_CONFIG_MODE_ENTER_VALUE},
-
-    //------------------------------------------------------------------
-    // Program and initialize some logical device if needed.
-    //------------------------------------------------------------------
-    // Select device LDN 0C
-        {A9610_CONFIG_INDEX, 0x00, A9610_LDN_SEL_REGISTER},
-        {A9610_CONFIG_DATA,  0x00, A9610_LDN_PMC0},
-        // Activate Device
-        {A9610_CONFIG_INDEX, 0x00, A9610_ACTIVATE_REGISTER},
-        {A9610_CONFIG_DATA,  0x00, A9610_ACTIVATE_VALUE},
-    // Select device LDN 0D
-        {A9610_CONFIG_INDEX, 0x00, A9610_LDN_SEL_REGISTER},
-        {A9610_CONFIG_DATA,  0x00, A9610_LDN_PMC1},
-        // Program Base Addr 
-        {A9610_CONFIG_INDEX, 0x00, A9610_BASE1_LO_REGISTER},
-        {A9610_CONFIG_DATA,  0x00, (UINT8)((A9610_PMC1_BASE_ADDRESS+0x02) & 0xFF)},
-        {A9610_CONFIG_INDEX, 0x00, A9610_BASE1_HI_REGISTER},
-        {A9610_CONFIG_DATA,  0x00, (UINT8)((A9610_PMC1_BASE_ADDRESS+0x02) >> 8)},
-        {A9610_CONFIG_INDEX, 0x00, A9610_BASE2_LO_REGISTER},
-        {A9610_CONFIG_DATA,  0x00, (UINT8)((A9610_PMC1_BASE_ADDRESS+0x06) & 0xFF)},
-        {A9610_CONFIG_INDEX, 0x00, A9610_BASE2_HI_REGISTER},
-        {A9610_CONFIG_DATA,  0x00, (UINT8)((A9610_PMC1_BASE_ADDRESS+0x06) >> 8)},
-        // Activate Device
-        {A9610_CONFIG_INDEX, 0x00, A9610_ACTIVATE_REGISTER},
-        {A9610_CONFIG_DATA,  0x00, A9610_ACTIVATE_VALUE},
-
-    {A9610_CONFIG_INDEX, 0x00, A9610_CONFIG_MODE_EXIT_VALUE},
-};
-
-
-void 
-A9610Init(
-    IN  SIO_INIT_DATA  *Table,
-    IN  UINT8   Count
-)
-{
-    UINT8   i;
-    UINT8   Value8;
-
-    for (i=0;i<Count;i++) {
-      
-      if (Table[i].AndData8 == 0x00)  
-        Value8 = Table[i].OrData8;
-      else 
-        Value8 = (IoRead8(Table[i].Reg16) & Table[i].AndData8) | Table[i].OrData8;
-      
-      IoWrite8 (Table[i].Reg16, Value8 );
-    }
-
-}
-
-
-
-//----------------------------------------------------------------------------
-// Procedure:	EcIbFree
-//----------------------------------------------------------------------------
-EFI_STATUS
-PmcIbFree ()
-{
-	UINTN   Status = EFI_SUCCESS;
-	UINTN   Timeout = 100000;
-    
-	do {
-		Status = IoRead8(A9610_PMC_CMD_PORT);
-		Timeout--;
-		if(Timeout==0) return EFI_TIMEOUT;
-	} while (Status & Ibf); 
-	
-	return EFI_SUCCESS;
-}
-
-//----------------------------------------------------------------------------
-// Procedure:	EcObFull
-//----------------------------------------------------------------------------
-EFI_STATUS
-PmcObFull ()
-{
-	UINTN   Status = EFI_SUCCESS;
-	UINTN   Timeout = 100000;
-    
-	do {
-		Status = IoRead8(A9610_PMC_CMD_PORT);
-		Timeout--;
-		if(Timeout==0) return EFI_TIMEOUT;
-	} while (!(Status & Obf));
-	
-	return EFI_SUCCESS;
-}
-
-// read data if obf
-//----------------------------------------------------------------------------
-// Procedure:	read data if obf
-//----------------------------------------------------------------------------
-EFI_STATUS
-CheckPmcObf ()
-{
-	UINTN   Status = EFI_SUCCESS;
-	UINTN   Timeout = 100000;
-	UINT8   temp = 0;
-	do {
-		Status = IoRead8(A9610_PMC_CMD_PORT);
-		if(Status & Obf) temp = IoRead8(A9610_PMC_DATA_PORT);
-
-		Timeout--;
-		if(Timeout==0) return EFI_TIMEOUT;
-	} while (Status & Obf);
-
-	return EFI_SUCCESS;
-}
-
-//----------------------------------------------------------------------------
-// Procedure:	EcPmcWriteCmd
-//----------------------------------------------------------------------------
-EFI_STATUS
-EcPmcWriteCmd (UINT8	cmd)
-{
-	UINTN   Status = EFI_SUCCESS;
-
-	Status = CheckPmcObf();
-	if(EFI_ERROR(Status)) return Status;
-
-	Status = PmcIbFree();
-	if(!EFI_ERROR(Status)) IoWrite8(A9610_PMC_CMD_PORT, (UINT8)cmd);
-
-//  DEBUG ((DEBUG_ERROR, "EcPmcWriteCmd:CommandByte(cmd) %r \n",cmd,Status));
-
-	return Status;
-}
-
-//----------------------------------------------------------------------------
-// Procedure:	EcPmcWriteData
-//----------------------------------------------------------------------------
-EFI_STATUS
-EcPmcWriteData (UINT8	data)
-{
-	UINTN   Status = EFI_SUCCESS;
-
-	Status = PmcIbFree();
-	if(!EFI_ERROR(Status)) IoWrite8(A9610_PMC_DATA_PORT, (UINT8)data);
-
-//  DEBUG ((DEBUG_ERROR, "EcPmcWriteData:DataByte(data) %r \n",data,Status));
-	
-	return Status;
-}
-
-//----------------------------------------------------------------------------
-// Procedure:	EcPmcReadData
-//----------------------------------------------------------------------------
-EFI_STATUS
-EcPmcReadData (UINT8 *pData)
-{
-	UINTN   Status = EFI_SUCCESS;
-
-	Status = PmcObFull();
-    
-	if(!EFI_ERROR(Status)) *pData = IoRead8(A9610_PMC_DATA_PORT);
-	return Status;
-}
-
-//----------------------------------------------------------------------------
-// Procedure:	EcPmcWrite_Protocol
-//----------------------------------------------------------------------------
-EFI_STATUS
-EcPmcWrite_Protocol (UINT8 CommandByte, UINT8 ControlByte, UINT8 DeviceByte, UINT8 PayloadSizeByte, UINT8 *PayloadByte)
-{
-	UINTN   Status = EFI_SUCCESS;
-	UINT8   i = 1;
-	
-	Status=EcPmcWriteCmd(CommandByte);
-	if(EFI_ERROR(Status)) return Status;
-	Status=EcPmcWriteData(ControlByte);
-	if(EFI_ERROR(Status)) return Status;
-	Status=EcPmcWriteData(DeviceByte);
-	if(EFI_ERROR(Status)) return Status;
-	Status=EcPmcWriteData(PayloadSizeByte);
-	if(EFI_ERROR(Status)) return Status;
-	for(i=0; i<PayloadSizeByte; i++) {
-		Status=EcPmcWriteData(PayloadByte[i]);
-		if(EFI_ERROR(Status)) return Status;
-	}
-        
-	return Status;
-}
-
-//----------------------------------------------------------------------------
-// Procedure:	EcPmcRead_Protocol
-//----------------------------------------------------------------------------
-EFI_STATUS
-EcPmcRead_Protocol (UINT8 CommandByte, UINT8 ControlByte, UINT8 DeviceByte, UINT8 PayloadSizeByte, UINT8 *PayloadByte)
-{
-	UINTN   Status = EFI_SUCCESS;
-	UINT8   i = 1;
-
-	Status=EcPmcWriteCmd(CommandByte);
-
-	if(EFI_ERROR(Status)) return Status;
-	Status=EcPmcWriteData(ControlByte);
-	if(EFI_ERROR(Status)) return Status;
-	Status=EcPmcWriteData(DeviceByte);
-	if(EFI_ERROR(Status)) return Status;
-	Status=EcPmcWriteData(PayloadSizeByte);
-	if(EFI_ERROR(Status)) return Status;
-	for(i=0; i<PayloadSizeByte; i++) {
-		Status=EcPmcReadData(&PayloadByte[i]);
-		if(EFI_ERROR(Status)) return Status;
-	}
-
-	return Status;
-}
-
-
-//----------------------------------------------------------------------------
-// Procedure:	EcPmcRead
-//----------------------------------------------------------------------------
-EFI_STATUS
-EcPmcRead (UINT8 Command, UINT8 Offset, UINT8 Length, UINT8 *Data)
-{
-        EFI_STATUS      Status;
-        UINT8           i;
-
-        Status=EcPmcWriteCmd(Command);
-        if(EFI_ERROR(Status)) return Status;
-        Status=EcPmcWriteData(Offset);
-        if(EFI_ERROR(Status)) return Status;
-        Status=EcPmcWriteData(Length);
-        if(EFI_ERROR(Status)) return Status;
-        for(i=0; i<Length; i++) {
-                Status=EcPmcReadData(&Data[i]);
-                if(EFI_ERROR(Status)) return Status;
-        }
-        return Status;
-}
-
-//----------------------------------------------------------------------------
-// Procedure:	EcPmcReadRam
-//----------------------------------------------------------------------------
-EFI_STATUS
-EcPmcReadRam (UINT8 Command, UINT8 Offset, UINT8 *Data)
-{
-        EFI_STATUS      Status;
-
-        Status=EcPmcWriteCmd(Command);
-        if(EFI_ERROR(Status)) return Status;
-        Status=EcPmcWriteData(Offset);
-        if(EFI_ERROR(Status)) return Status;
-        Status=EcPmcReadData(Data);
-        if(EFI_ERROR(Status)) return Status;
-        return Status;
-}
-
-//----------------------------------------------------------------------------
-// Procedure:	GetAdvantechBoardId
-//----------------------------------------------------------------------------
-
-static
-UINT16
-GetAdvantechBoardId (
-  VOID
-  )
-{
-  EFI_STATUS  Status        = EFI_SUCCESS;
-  UINT32            PciPchMmBase;
-  UINT32            PciData32;
-//  UINT8             ECIndex; 
-//  UINT8             ECData; 
-  UINT8	            ArrayPayloadData[DEFAULT_STRING_SIZE];
-  UINT8             BrdId = 0xFF; 
-  UINT8             i; 
-  UINT8             SioId[3]; 
-
-  //
-  // Init LPC pin setting
-  //
-  GpioPadConfigTable (sizeof (mGpioInitTblLPC) / sizeof (mGpioInitTblLPC[0]), (BXT_GPIO_PAD_INIT *)mGpioInitTblLPC);
-
-  //
-  // Set LPC IO decode
-  //
-  PciPchMmBase = MM_PCI_ADDRESS (0, 31, 0, 0);
-  PciData32 = MmioRead32 (PciPchMmBase);
-
-  PciData32 = MmioRead32 (PciPchMmBase+0x80);
-  PciData32 = 0x3F0F0000;
-  MmioWrite32 (PciPchMmBase+0x80,  PciData32);
-
-  PciData32 = MmioRead32 (PciPchMmBase+0x80);
-  DEBUG ((DEBUG_ERROR, "LPC 0x80: 0x%04X\n", PciData32));
-
-
-  PciData32 = MmioRead32 (PciPchMmBase+0x84);
-  PciData32 = 0x00FC0201;
-  MmioWrite32 (PciPchMmBase+0x84,  PciData32);
-
-  //
-  // Port 62/66 and Io space 0x200~0x2FF are actived
-  //
-//  ECIndex = IoRead8 (EC_CMD_PORT);
-//  ECData = IoRead8 (EC_DATA_PORT);
-//  DEBUG ((DEBUG_ERROR, "EC: 0x%02X ,0x%02X\n", ECIndex, ECData));
-
-  if ((IoRead8 (EC_CMD_PORT) == 0xFF) && (IoRead8 (EC_DATA_PORT) == 0xFF)) {
-    A9610Init (A9610InitTable, sizeof(A9610InitTable)/sizeof(SIO_INIT_DATA));
-    mBoardInfo.CfgIndex = 0x299;
-    mBoardInfo.CfgData = 0x29A;
-    mBoardInfo.EcIndex = 0x66;
-    mBoardInfo.EcData = 0x62;
-
-  } else {
-    mBoardInfo.CfgIndex = 0x29C;
-    mBoardInfo.CfgData = 0x29D;
-    mBoardInfo.EcIndex = 0x29A;
-    mBoardInfo.EcData = 0x299;
-  
-  }
-
-  Status = EcPmcReadRam (0x80, 0xFA, &SioId[0]);
-
-  IoWrite8 (0x80, SioId[0]);
-
-  Status = EcPmcReadRam (0x80, 0xFB, &SioId[1]);
-  Status = EcPmcReadRam (0x80, 0xFC, &SioId[2]);
-
-  for( i = 0; i < sizeof(SioChipTable)/sizeof(SIO_CHIP_DATA); i++ ) {
-//    if ((SioChipTable[i].VenderID == SioId[0]) && (SioChipTable[i].ChipID == SioId[1]) && (SioChipTable[i].CodeID == SioId[2])) {
-    if ((SioChipTable[i].VenderID == SioId[0]) && (SioChipTable[i].ChipID == SioId[1])) {
-
-      if (! ((SioId[0] == 0x52) && (SioId[1] == 0x10)))
-        mBoardInfo.SioChipIndex = i;
-
-      if ((SioId[0] == 0x52) && (SioId[1] == 0x10) && (SioChipTable[i].CodeID == SioId[2])) {
-        mBoardInfo.SioChipIndex = i;
-        mBoardInfo.Protocal = SioChipTable[i].CodeID;
-      } 
-      
-    }
-  }
-
-
-  ZeroMem (ArrayPayloadData, DEFAULT_STRING_SIZE);
-  
-  Status =  EcPmcRead(0x41, FIRMWARE_VERSION_IN_PROJECT, 8, ArrayPayloadData);
-
-
-  for (i = 0; i < sizeof(BoardIDTable)/sizeof(BOARD_ID_DATA); i++) {
-    if ((CompareMem (ArrayPayloadData, BoardIDTable[i].Brdstr, 0x8))  == 0)
-      mBoardInfo.BoardID =  BoardIDTable[i].BoardID;
-  }
-
-//  DEBUG ((DEBUG_ERROR, "Ec Info: %s \n", SioChipTable[mBoardInfo.SioChipIndex].Chip_name));
-
-  for (i = 0; i < sizeof(BoardIDTable)/sizeof(BOARD_ID_DATA); i++)
-    if (mBoardInfo.BoardID == BoardIDTable[i].BoardID)
-//    DEBUG ((DEBUG_ERROR, "BoardInfo.BoardID       = %s \n" ,BoardIDTable[i].Board_name));
-    DEBUG ((DEBUG_ERROR, "BoardName (%x/%x/%x): %s ; Ec: %s\n" ,SioId[0],SioId[1],SioId[2],BoardIDTable[i].Board_name,SioChipTable[mBoardInfo.SioChipIndex].Chip_name));
-//  DEBUG ((DEBUG_ERROR, "BoardInfo.BoardID       = %d \n" ,mBoardInfo.BoardID));
-//  DEBUG ((DEBUG_ERROR, "BoardInfo.SioChipIndex  = %d \n" ,mBoardInfo.SioChipIndex));
-//  DEBUG ((DEBUG_ERROR, "BoardInfo.CfgIndex      = 0x%04x \n" ,mBoardInfo.CfgIndex));
-//  DEBUG ((DEBUG_ERROR, "BoardInfo.CfgData       = 0x%04x \n" ,mBoardInfo.CfgData));
-//  DEBUG ((DEBUG_ERROR, "BoardInfo.EcIndex       = 0x%04x \n" ,mBoardInfo.EcIndex));
-//  DEBUG ((DEBUG_ERROR, "BoardInfo.EcData        = 0x%04x \n" ,mBoardInfo.EcData));
-//  DEBUG ((DEBUG_ERROR, "BoardInfo.Protocal      = %d \n" ,mBoardInfo.Protocal));
-
-//  CpuDeadLoop ();
-//  BrdId = 3;
-    BrdId = mBoardInfo.BoardID;
-  return BrdId;
-}
-// X001 <<<
 
 
 /**
@@ -1002,7 +477,7 @@ ModuleIdInitialize (
       ModuleId |= (UINT16) (PadConfg0.r.GPIORxState << Index);
     }
     PlatformData = (PLATFORM_DATA *)GetPlatformDataPtr ();
-    PlatformData->ModuleIdInfo.ModuleId = ModuleId & 0x3;
+    PlatformData->ModuleIdInfo.ModuleId = ModuleId & 0x7;
 
     break;
 
@@ -1045,6 +520,7 @@ SetDebugLevelFromCfgData (
 
 **/
 VOID
+EFIAPI
 UpdateFspConfig (
   VOID     *FspmUpdPtr
   )
@@ -1146,7 +622,7 @@ UpdateFspConfig (
   // The NVS buffer will be loaded to PcdStage1BLoadBase FindNvsData()
   // The PcdStage1BLoadBase is not used any more after Stage1B is loaded, so reuse it to save CAR space.
   //
-  Fspmcfg->VariableNvsBufferPtr      = (VOID *)PcdGet32 (PcdStage1BLoadBase);
+  Fspmcfg->VariableNvsBufferPtr      = (VOID *)(UINTN)APL_FSP_STACK_TOP;
 
   //
   // This will be done by configuration data
@@ -1156,18 +632,7 @@ UpdateFspConfig (
 
     DEBUG ((DEBUG_INFO, "UP2 memory SKU ID is 0x%x\n", PlatformData->ModuleIdInfo.Bits.MemSkuId));
     switch (PlatformData->ModuleIdInfo.Bits.MemSkuId) {
-      case 0: /* 2GB */
-        Fspmcfg->DualRankSupportEnable = 0;
-        Fspmcfg->Ch0_RankEnable        = 1;
-        Fspmcfg->Ch0_DramDensity       = 2;
-        Fspmcfg->Ch1_RankEnable        = 1;
-        Fspmcfg->Ch1_DramDensity       = 2;
-
-        Fspmcfg->Ch2_RankEnable        = 0;
-        Fspmcfg->Ch3_RankEnable        = 0;
-        break;
-      case 1: /* 4GB */
-        Fspmcfg->DualRankSupportEnable = 1;
+      case 5: /* 4GB */
         Fspmcfg->Ch0_RankEnable        = 1;
         Fspmcfg->Ch0_DramDensity       = 2;
         Fspmcfg->Ch1_RankEnable        = 1;
@@ -1177,8 +642,7 @@ UpdateFspConfig (
         Fspmcfg->Ch3_RankEnable        = 1;
         Fspmcfg->Ch3_DramDensity       = 2;
         break;
-      case 2: /* 8GB */
-        Fspmcfg->DualRankSupportEnable = 1;
+      case 6: /* 8GB */
         Fspmcfg->Ch0_RankEnable        = 3;
         Fspmcfg->Ch0_DramDensity       = 2;
         Fspmcfg->Ch1_RankEnable        = 3;
@@ -1188,7 +652,25 @@ UpdateFspConfig (
         Fspmcfg->Ch3_RankEnable        = 3;
         Fspmcfg->Ch3_DramDensity       = 2;
         break;
-      default:
+
+      case 7: /* 8GB */
+        Fspmcfg->Ch0_RankEnable        = 1;
+        Fspmcfg->Ch0_DramDensity       = 4;
+        Fspmcfg->Ch1_RankEnable        = 1;
+        Fspmcfg->Ch1_DramDensity       = 4;
+        Fspmcfg->Ch2_RankEnable        = 1;
+        Fspmcfg->Ch2_DramDensity       = 4;
+        Fspmcfg->Ch3_RankEnable        = 1;
+        Fspmcfg->Ch3_DramDensity       = 4;
+        break;
+
+      default: /* 2GB */
+        Fspmcfg->Ch0_RankEnable        = 1;
+        Fspmcfg->Ch0_DramDensity       = 2;
+        Fspmcfg->Ch1_RankEnable        = 1;
+        Fspmcfg->Ch1_DramDensity       = 2;
+        Fspmcfg->Ch2_RankEnable        = 0;
+        Fspmcfg->Ch3_RankEnable        = 0;
         break;
     };
 
@@ -1321,7 +803,7 @@ EarlyBootDeviceInit (
 )
 {
   EFI_STATUS  Status        = EFI_SUCCESS;
-  UINT32      EmmcHcPciBase;
+  UINTN       EmmcHcPciBase;
 
   EmmcHcPciBase = GetDeviceAddr (OsBootDeviceEmmc, 0);
   EmmcHcPciBase = TO_MM_PCI_ADDRESS (EmmcHcPciBase);
@@ -1330,7 +812,7 @@ EarlyBootDeviceInit (
 
 
   /* Configure EMMC GPIO Pad */
-  GpioPadConfigTable (ARRAY_SIZE(mGpioInitTblEMMC), (BXT_GPIO_PAD_INIT *)mGpioInitTblEMMC);
+  GpioConfigurePads (ARRAY_SIZE(mGpioInitTblEMMC), (GPIO_INIT_CONFIG *) (UINTN) mGpioInitTblEMMC);
   DEBUG ((DEBUG_INFO, "Early GpioInit for EMMC\n"));
 
   MmioWrite32 (EmmcHcPciBase + PCI_BASE_ADDRESSREG_OFFSET, Base);
@@ -1366,15 +848,28 @@ EarlyBootDeviceInit (
 BOOLEAN
 IsFirmwareUpdate ()
 {
-  UINT16          FirmwareUpdateStatus;
+  EFI_STATUS        Status;
+  UINT16            FwuReq;
+  FLASH_MAP        *FlashMapPtr;
+  FW_UPDATE_STATUS  FwUpdStatus;
+  UINT32            OffsetInBiosRgn;
+  UINT32            RsvdBase;
 
-  //
-  // This is platform specific method. Here just use COMS.
-  //
-  IoWrite8 (0x70, FWU_BOOT_MODE_OFFSET);
-  FirmwareUpdateStatus = IoRead8 (0x71);
+  // Check if state machine is set to capsule processing mode.
+  FlashMapPtr = GetFlashMapPtr ();
+  Status = GetComponentInfoByPartition (FLASH_MAP_SIG_BLRESERVED, FALSE, &RsvdBase, NULL);
+  if (!EFI_ERROR (Status) && (FlashMapPtr != NULL)) {
+    OffsetInBiosRgn = FlashMapPtr->RomSize + RsvdBase;
+    ZeroMem (&FwUpdStatus, sizeof(FwUpdStatus));
+    SpiFlashRead (FlashRegionBios, OffsetInBiosRgn, sizeof(FwUpdStatus), (VOID *)&FwUpdStatus);
+    if (CheckStateMachine (&FwUpdStatus) == EFI_SUCCESS) {
+      return TRUE;
+    }
+  }
 
-  if (FirmwareUpdateStatus == FWU_BOOT_MODE_VALUE) {
+  // Check if platform firmware update trigger is set.
+  FwuReq = (MmioRead32 (PMC_BASE_ADDRESS + R_PMC_BIOS_SCRATCHPAD) >> 16) & 0xFF;
+  if ((FwuReq & 0x0F) != 0) {
     return TRUE;
   }
 
@@ -1466,6 +961,7 @@ LoadExternalConfigData (
   Get the reset reason from the PMC registers.
 **/
 VOID
+EFIAPI
 UpdateResetReason (
   VOID
   )
@@ -1693,7 +1189,7 @@ IocInitialize (
   Status = UartPortInitialize (IocUartData->DeviceIndex);
   ASSERT_EFI_ERROR (Status);
 
-  PciBar = GetUartBaseAddress (IocUartData->DeviceIndex);
+  PciBar = (UINT32)GetUartBaseAddress (IocUartData->DeviceIndex);
   ASSERT (PciBar != 0xFFFFFFFF);
 
   Status = UartGpioInitialize (IocUartData->DeviceIndex);
@@ -1822,12 +1318,15 @@ PrintMrcInfo (
   VOID
   )
 {
-  LOADER_GLOBAL_DATA       *LdrGlobal;
+  VOID                     *FspHobList;
   UINT8                    *MrcParamsData;
   UINT32                    MrcVersion;
 
-  LdrGlobal     = (LOADER_GLOBAL_DATA *)GetLoaderGlobalDataPointer ();
-  MrcParamsData = GetGuidHobData (LdrGlobal->FspHobList, NULL, &gFspNonVolatileStorageHobGuid);
+  MrcParamsData = NULL;
+  FspHobList = GetFspHobListPtr ();
+  if (FspHobList != NULL) {
+    MrcParamsData = GetGuidHobData (FspHobList, NULL, &gFspNonVolatileStorageHobGuid);
+  }
   if (MrcParamsData == NULL) {
     DEBUG((DEBUG_ERROR, "MRC: MRC Save Restore Params HOB not valid!\n"));
     return;
@@ -1855,10 +1354,6 @@ PlatformIdInitialize (
 {
   UINT16     PlatformId;
 
-// X001 >>>
-  PlatformId = GetAdvantechBoardId ();
-  if (PlatformId == 0xFF)
-// X001 <<<
   PlatformId = (UINT16)GetBoardIdFromGpioPins ();
 
   if (PlatformId != 0xFF) {
@@ -1906,7 +1401,7 @@ EarlyPcieLinkUp (
   UINT8               ClkReqNum;
 
   if (GetPlatformId () == PLATFORM_ID_GPMRB) {
-    GpioPadConfigTable (ARRAY_SIZE (mGpioInitWifiTbl), (BXT_GPIO_PAD_INIT *)mGpioInitWifiTbl);
+    GpioConfigurePads (ARRAY_SIZE (mGpioInitWifiTbl), (GPIO_INIT_CONFIG *) (UINTN) mGpioInitWifiTbl);
 
     // WiFi module specific
     PortIndex = 5;
@@ -1921,7 +1416,7 @@ EarlyPcieLinkUp (
     MmioWrite8 (Address, Data8);
     DEBUG ((DEBUG_INFO, "Address = 0x%08X Value = 0x%X\n", Address, Data8));
 
-    Address = MM_PCI_ADDRESS (0, SC_PCIE_ROOT_PORT_BUS (PortIndex), SC_PCIE_ROOT_PORT_FUNC (PortIndex), 0);
+    Address = (UINT32)MM_PCI_ADDRESS (0, SC_PCIE_ROOT_PORT_BUS (PortIndex), SC_PCIE_ROOT_PORT_FUNC (PortIndex), 0);
     DEBUG ((DEBUG_INFO, "RpBase = 0x%08X\n", Address));
     MmioOr16 (Address + R_PCH_PCIE_XCAP, B_PCIE_XCAP_SI);
   }
@@ -1935,28 +1430,26 @@ ProcessMbpData (
   VOID
   )
 {
-  LOADER_GLOBAL_DATA       *LdrGlobal;
   MBP_CMD_RESP_DATA        *MBPHeader;
   MBP_ITEM_HEADER          *MBPItem;
   MBP_CURRENT_BOOT_MEDIA   *MBPCurrentMedia;
-  MBP_VERSION              *MBPVersion;
+  MBP_FW_VERSION_NAME      *MBPVersion;
   PLATFORM_DATA            *PlatformData;
   CDATA_BLOB               *UserCfgData;
   EFI_STATUS               Status;
 
-  LdrGlobal = (LOADER_GLOBAL_DATA *)GetLoaderGlobalDataPointer ();
-  MBPHeader = GetGuidHobData(LdrGlobal->FspHobList, NULL, &gEfiHeciMbpDataHobGuid);
+  MBPHeader = (MBP_CMD_RESP_DATA *)MeGetMeBiosPayloadHob ();
   if (MBPHeader == NULL) {
     DEBUG((DEBUG_ERROR, "CSE: MBP Data HOB not valid!\n"));
     return;
   }
 
-  MBPItem   = (MBP_ITEM_HEADER*)(MBPHeader + 1);
+  MBPItem      = (MBP_ITEM_HEADER *)(MBPHeader + 1);
   PlatformData = (PLATFORM_DATA *)GetPlatformDataPtr ();
 
   while ((UINT32*)MBPItem < (UINT32*)MBPHeader + MBPHeader->Length) {
-    if ((MBPItem->AppID == MBP_APP_ID_KERNEL) && (MBPItem->ItemID == MBP_ITEM_ID_FW_VER_NAME)) {
-      MBPVersion = (MBP_VERSION *)(MBPItem + 1);
+    if ((MBPItem->Fields.AppId == MBP_APP_ID_KERNEL) && (MBPItem->Fields.ItemId == MBP_ITEM_ID_FW_VER_NAME)) {
+      MBPVersion = (MBP_FW_VERSION_NAME *)(MBPItem + 1);
       DEBUG ((DEBUG_INIT, "CSE: FW %d.%d.%d.%d, VB: %d, MB: %d\n",
               MBPVersion->MajorVersion,
               MBPVersion->MinorVersion,
@@ -1965,11 +1458,11 @@ ProcessMbpData (
               PlatformData->BtGuardInfo.Bpm.Vb,
               PlatformData->BtGuardInfo.Bpm.Mb));
     }
-    if ((MBPItem->AppID == MBP_APP_ID_NVM) && (MBPItem->ItemID == MBP_ITEM_ID_CURRENT_BOOT_MEDIA)) {
+    if ((MBPItem->Fields.AppId == MBP_APP_ID_NVM) && (MBPItem->Fields.ItemId == MBP_ITEM_ID_CURRENT_BOOT_MEDIA)) {
       MBPCurrentMedia = (MBP_CURRENT_BOOT_MEDIA *)(MBPItem + 1);
       DEBUG((DEBUG_INFO, "CSE: boot dev #%d: %s\n", MBPCurrentMedia->PhysicalData, BootDeviceType[MBPCurrentMedia->PhysicalData]));
     }
-    if ((MBPItem->AppID == MBP_APP_ABL_SIG) && (MBPItem->ItemID == MBP_ITEM_ID_IAFW_IBB_SIG)) {
+    if ((MBPItem->Fields.AppId == MBP_APP_ABL_SIG) && (MBPItem->Fields.ItemId == MBP_ITEM_ID_IAFW_IBB_SIG)) {
       UserCfgData = (CDATA_BLOB *)(MBPItem + 1);
       DumpHex (2, 0, 128, (VOID *)UserCfgData);
       if (UserCfgData->Signature == CFG_DATA_SIGNATURE) {
@@ -1984,17 +1477,16 @@ ProcessMbpData (
       }
     }
 
-    MBPItem = (MBP_ITEM_HEADER*)((UINT32*)MBPItem + MBPItem->Length);
+    MBPItem = (MBP_ITEM_HEADER*)((UINT32*)MBPItem + MBPItem->Fields.Length);
 
     //
     // Prevent faulty items that could run this loop infinitely
     //
-    if (MBPItem->Length == 0)
+    if (MBPItem->Fields.Length == 0)
       break;
 
   }
 }
-
 
 /**
   Configure the GPIO output ports
@@ -2053,7 +1545,7 @@ PcieRpPwrRstInit (
     return;
   }
 
-  PowerResetData    = (PCIE_RP_PIN_CTRL *) PcieRpConfigData->PcieRpPinCtrlData0;
+  PowerResetData    = (PCIE_RP_PIN_CTRL *)&PcieRpConfigData->PcieRpReset0;
   for (Idx1 = 0; Idx1 < PCIE_MAX_ROOT_PORTS; Idx1++) {
     if (!PowerResetData->PcieRpReset0.Skip) {
       ConfigureGpioOutPad(PowerResetData->PcieRpReset0.Community, PowerResetData->PcieRpReset0.PadNum, PowerResetData->PcieRpReset0.Drive ^ 1, 0);
@@ -2164,30 +1656,30 @@ PlatformFeaturesInit (
   )
 {
   FEATURES_CFG_DATA           *FeaturesCfgData;
-  LOADER_GLOBAL_DATA          *LdrGlobal;
   PLAT_FEATURES               *PlatformFeatures;
   DYNAMIC_CFG_DATA            *DynamicCfgData;
   PLATFORM_DATA               *PlatformData;
+  UINT32                       LdrFeatures;
 
   // Set common features
-  LdrGlobal = (LOADER_GLOBAL_DATA *)GetLoaderGlobalDataPointer ();
-  LdrGlobal->LdrFeatures |= FeaturePcdGet (PcdAcpiEnabled)?FEATURE_ACPI:0;
-  LdrGlobal->LdrFeatures |= FeaturePcdGet (PcdVerifiedBootEnabled)?FEATURE_VERIFIED_BOOT:0;
-  LdrGlobal->LdrFeatures |= FeaturePcdGet (PcdMeasuredBootEnabled)?FEATURE_MEASURED_BOOT:0;
+  LdrFeatures  = GetFeatureCfg ();
+  LdrFeatures |= FeaturePcdGet (PcdAcpiEnabled)?FEATURE_ACPI:0;
+  LdrFeatures |= FeaturePcdGet (PcdVerifiedBootEnabled)?FEATURE_VERIFIED_BOOT:0;
+  LdrFeatures |= FeaturePcdGet (PcdMeasuredBootEnabled)?FEATURE_MEASURED_BOOT:0;
 
   // Update feature by configuration data.
   FeaturesCfgData = (FEATURES_CFG_DATA *) FindConfigDataByTag(CDATA_FEATURES_TAG);
   if (FeaturesCfgData != NULL) {
     if (FeaturesCfgData->Features.Acpi == 0) {
-      LdrGlobal->LdrFeatures &= ~FEATURE_ACPI;
+      LdrFeatures &= ~FEATURE_ACPI;
     }
 
     if (FeaturesCfgData->Features.MeasuredBoot == 0) {
-      LdrGlobal->LdrFeatures &= ~FEATURE_MEASURED_BOOT;
+      LdrFeatures &= ~FEATURE_MEASURED_BOOT;
     }
 
     if (FeaturesCfgData->Features.eMMCTuning != 0) {
-      LdrGlobal->LdrFeatures |= FEATURE_MMC_TUNING;
+      LdrFeatures |= FEATURE_MMC_TUNING;
     }
 
     // Update platform specific feature from configuration data.
@@ -2202,20 +1694,126 @@ PlatformFeaturesInit (
   PlatformData  = (PLATFORM_DATA *)GetPlatformDataPtr ();
   if (PlatformData != NULL) {
     if (PlatformData->BtGuardInfo.Bpm.Mb == 0) {
-      LdrGlobal->LdrFeatures &= ~FEATURE_MEASURED_BOOT;
+      LdrFeatures &= ~FEATURE_MEASURED_BOOT;
     }
     if (PlatformData->BtGuardInfo.Bpm.Vb == 0) {
-      LdrGlobal->LdrFeatures &= ~FEATURE_VERIFIED_BOOT;
+      LdrFeatures &= ~FEATURE_VERIFIED_BOOT;
     }
   }
 
   // Update features by dynamic configuration data
   DynamicCfgData = (DYNAMIC_CFG_DATA *) FindConfigDataByTag (CDATA_DYNAMIC_TAG);
   if ((DynamicCfgData != NULL) && (DynamicCfgData->EmmcTuningEnforcement != 0)) {
-    LdrGlobal->LdrFeatures |= FEATURE_MMC_FORCE_TUNING;
+    LdrFeatures |= FEATURE_MMC_FORCE_TUNING;
   }
+
+  SetFeatureCfg (LdrFeatures);
 }
 
+/**
+    USB3, PCie, SATA, eDP, DP, eMMC, SD and SDIO SSC
+    Partially implemented PeiHighSpeedSerialInterfaceSSCInit and PeiDDRSSCInit
+    to disable SSC in LCPLL_CTRL_1 and LJ1PLL_CTRL
+**/
+STATIC
+VOID
+EFIAPI
+SetSscDisable (
+  VOID
+  )
+{
+  EFI_STATUS                        Status;
+  LCPLL_CR_RW_CONTROL_1             LCPLL_CTRL_1;
+  LCPLL_CR_RW_CONTROL_2             LCPLL_CTRL_2;
+  UINT32                            BufferSize = 0;
+  SSC_IPC_BUFFER                    WBuf;
+
+  //
+  // static table for the SSC settings (corresponding with the SSC settings 0~-0.5%, 0.1% stepping)
+  // Modulation Freq = 32KHz
+  //
+  SSC_SETTING                     SSC_Select_Table[] = {{No_SSC, 0x12B, 0},
+                                                        {M01_SSC, 0x12B, 0x1062},
+                                                        {M02_SSC, 0x12B, 0x2BB0},
+                                                        {M03_SSC, 0x12B, 0x46FF},
+                                                        {M04_SSC, 0x12B, 0x624D},
+                                                        {M05_SSC, 0x12B, 0x7D9C}};
+
+  //
+  //static table for the clock bending settings (corresponding with the clock bending settings 1.3%, 0.6%, 0, -0.9%)
+  //
+  CLOCK_BENDING_SETTING           CLK_Bending_Table[] = {{Clk_Bending_13, 0xA00000, 0x7E},
+                                                         {Clk_Bending_06, 0xC00000, 0x7D},
+                                                         {No_Clk_Bending, 0x0, 0x7D},
+                                                         {Clk_Bending_M09, 0xDB6C20, 0x7B}};
+
+  DEBUG ((DEBUG_INFO, "SetSscDisable()\n"));
+  //
+  // default value of the 4 SSC setting registers
+  //
+  WBuf.LJ1PLL_CTRL_1.Data = 0x00;
+  WBuf.LJ1PLL_CTRL_2.Data = 0x0888812B;
+  WBuf.LJ1PLL_CTRL_3 = 0x7D000000;
+  WBuf.LJ1PLL_CTRL_5.Data = 0x7D000000;
+  BufferSize = sizeof (UINT32) * 4;
+
+  //
+  // Set default value of SSC
+  //
+  WBuf.LJ1PLL_CTRL_2.Fields.ssc_cyc_to_peak_m1 = SSC_Select_Table[SSC_DEFAULT_SETTING].Ssc_Cyc_To_Peak;
+  WBuf.LJ1PLL_CTRL_2.Fields.ssc_frac_step = SSC_Select_Table[SSC_DEFAULT_SETTING].Ffs_Frac_Step;
+  //
+  // Set default value of Clock bending
+  //
+  WBuf.LJ1PLL_CTRL_5.Fields.pll_ratio_frac = CLK_Bending_Table[CLK_BENDING_DEFAULT_SETTING].Pll_Ratio_Frac;
+  WBuf.LJ1PLL_CTRL_5.Fields.pll_ratio_int = CLK_Bending_Table[CLK_BENDING_DEFAULT_SETTING].Pll_Ratio_Int;
+
+  //
+  // send the IPC command for SSC
+  //
+  IpcSendCommandEx (IPC_CMD_ID_EMI_RFI_SUPPORT, IPC_SUBCMD_ID_SSC_APPLY_NOW, &WBuf, BufferSize);
+
+  //
+  // Delay for 1ms to avoid the SSC doesn't set correctly sometimes
+  //
+  MicroSecondDelay (1000);
+
+  //
+  // set the ssc_en to Disable!
+  //
+  WBuf.LJ1PLL_CTRL_1.Fields.ssc_en = SSC_DISABLE;
+  WBuf.LJ1PLL_CTRL_1.Fields.ssc_en_ovr = SSC_DISABLE;
+  Status = IpcSendCommandEx (IPC_CMD_ID_EMI_RFI_SUPPORT, IPC_SUBCMD_ID_SSC_APPLY_NOW, &WBuf, BufferSize);
+  if (EFI_ERROR (Status)) {
+      DEBUG ((DEBUG_ERROR, "\nFailed to disable LJ1PLL_CTRL SSC \n\r"));
+  }
+
+  //
+  // Setting LCPLL_CTRL
+  //
+  LCPLL_CTRL_1.Data = SideBandRead32 (0x99, 0x9910);
+  LCPLL_CTRL_2.Data = SideBandRead32 (0x99, 0x9914);
+  DEBUG ((DEBUG_INFO, "LCPLL_CTRL_1 register: 0x%02X\n", LCPLL_CTRL_1.Data));
+  DEBUG ((DEBUG_INFO, "LCPLL_CTRL_2 register: 0x%02X\n", LCPLL_CTRL_2.Data));
+
+  // disable SSC
+  LCPLL_CTRL_1.Fields.ssc_en = SSC_DISABLE;
+  LCPLL_CTRL_1.Fields.ssc_en_ovr = SSC_DISABLE;
+  DEBUG ((DEBUG_INFO, "LCPLL_CTRL_1 write data: 0x%02X\n", LCPLL_CTRL_1.Data));
+  SideBandWrite32 (0x99, 0x9910, LCPLL_CTRL_1.Data);
+}
+
+/**
+    Control SSC enable function
+**/
+VOID
+SetPlatformSsc (
+  IN  BOOLEAN  Enable )
+{
+  if (!Enable) {
+    SetSscDisable();
+  }
+}
 
 /**
   Board specific hook points.
@@ -2226,13 +1824,12 @@ PlatformFeaturesInit (
 
 **/
 VOID
+EFIAPI
 BoardInit (
   IN  BOARD_INIT_PHASE  InitPhase
   )
 {
   PLATFORM_DATA            *PlatformData;
-  HECI_INSTANCE            *HeciInstance;
-  EFI_STATUS                Status;
   PLT_DEVICE_TABLE         *PltDeviceTable;
 
   switch (InitPhase) {
@@ -2246,16 +1843,6 @@ BoardInit (
     SpiControllerInitialize ();
     break;
   case PostConfigInit:
-    HeciInstance  = AllocatePool (sizeof (HECI_INSTANCE));
-    ZeroMem (HeciInstance, sizeof (HECI_INSTANCE));
-    HeciInstance->Bus      = 0;
-    HeciInstance->Device   = 15;
-    HeciInstance->Function = 0;
-    Status = SetLibraryData (PcdGet8 (PcdHeciLibId), HeciInstance, sizeof (HECI_INSTANCE));
-    if (EFI_ERROR (Status)) {
-      DEBUG ((DEBUG_WARN, "HeciInstance not generated!\n"));
-    }
-
     if (GetPlatformId () == 0) {
       // Platform ID has not been initialzied yet
       PlatformIdInitialize ();
@@ -2268,6 +1855,8 @@ BoardInit (
     PcieRpPwrRstInit ();
     RtcInit ();
     PlatformFeaturesInit ();
+    SetPlatformSsc (TRUE);
+
     break;
   case PreMemoryInit:
     PlatformData = (PLATFORM_DATA *)GetPlatformDataPtr ();
@@ -2275,10 +1864,11 @@ BoardInit (
       FetchPostRBPData (& (PlatformData->BtGuardInfo));
       DEBUG ((DEBUG_INFO, "BootPolicy : 0x%08X\n", PlatformData->BtGuardInfo.Bpm));
     }
-    GpioPadConfigTable (sizeof (mGpioInitTbl) / sizeof (mGpioInitTbl[0]), (BXT_GPIO_PAD_INIT *)mGpioInitTbl);
+    GpioConfigurePads (sizeof (mGpioInitTbl) / sizeof (mGpioInitTbl[0]), (GPIO_INIT_CONFIG *) (UINTN) mGpioInitTbl);
     EarlyPcieLinkUp ();
     break;
   case PostMemoryInit:
+    UpdateMemoryInfo ();
     break;
   case PreTempRamExit:
     break;
@@ -2338,9 +1928,8 @@ FindNvsData (
   MrcNvDataOffset = 0;
   MrcParamsOffset = MrcNvDataOffset + RegionSize;
 
-  // Reuse Stage1B loading base as buffer for decompression
   // All MRC NVS data should be less than 64KB
-  MrcVarData   = (VOID *)PcdGet32 (PcdStage1BLoadBase);
+  MrcVarData   = (VOID *)(UINTN)APL_FSP_STACK_TOP;
   MrcParamData = (UINT8 *)MrcVarData + SIZE_1KB;
   MemPool      = (UINT8 *)MrcVarData + SIZE_64KB;
 
@@ -2352,7 +1941,7 @@ FindNvsData (
       break;
     }
 
-    CopyMem (&MrcParamHdr,  (UINT8 *)MrcDataBase + MrcParamsOffset, sizeof (MRC_PARAM_HDR));
+    CopyMem (&MrcParamHdr,  (UINT8 *)(UINTN)MrcDataBase + MrcParamsOffset, sizeof (MRC_PARAM_HDR));
     if (MrcParamHdr.Signature != MRC_PARAM_SIGNATURE) {
       Status = EFI_NOT_FOUND;
       break;
@@ -2362,14 +1951,14 @@ FindNvsData (
     DataSize       = MrcParamHdr.Length - sizeof (MRC_PARAM_HDR);
 
     DEBUG ((DEBUG_INFO, "Read MRC ParamData at 0x%X\n", MrcDataBase + MrcParamsOffset));
-    CopyMem (CompressedData, (UINT8 *)MrcDataBase + MrcParamsOffset + sizeof (MRC_PARAM_HDR), DataSize);
+    CopyMem (CompressedData, (UINT8 *)(UINTN)MrcDataBase + MrcParamsOffset + sizeof (MRC_PARAM_HDR), DataSize);
 
     DEBUG ((DEBUG_INFO, "Decompress ParamData\n"));
-    DataSize = RleDecompressData (CompressedData, DataSize, MrcParamData);
+    DataSize = (UINT32)RleDecompressData (CompressedData, DataSize, MrcParamData);
 
     DEBUG ((DEBUG_INFO, "Read MRC VarData at 0x%X\n", MrcDataBase + MrcNvDataOffset));
     MrcVarHdr = (MRC_VAR_HDR *)MemPool;
-    CopyMem ((UINT8 *)MrcVarHdr, (UINT8 *)MrcDataBase + MrcNvDataOffset,  sizeof (MRC_VAR_HDR));
+    CopyMem ((UINT8 *)MrcVarHdr, (UINT8 *)(UINTN)MrcDataBase + MrcNvDataOffset,  sizeof (MRC_VAR_HDR));
 
     ActIdx = 0xFF;
     if (MrcVarHdr->Signature == MRC_VAR_SIGNATURE) {
@@ -2400,7 +1989,7 @@ FindNvsData (
 
     // Read NV data from the slot
     Offset = MrcNvDataOffset + sizeof (MRC_VAR_HDR) + ActIdx * MRC_VAR_SLOT_LENGTH;
-    CopyMem ((UINT8 *)MrcVarData, (UINT8 *)MrcDataBase + Offset, MRC_VAR_LENGTH);
+    CopyMem ((UINT8 *)MrcVarData, (UINT8 *)(UINTN)MrcDataBase + Offset, MRC_VAR_LENGTH);
 
   } while (EFI_ERROR (Status));
 

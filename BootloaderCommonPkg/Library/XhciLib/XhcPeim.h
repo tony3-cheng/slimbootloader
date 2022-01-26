@@ -1,7 +1,7 @@
 /** @file
 Private Header file for Usb Host Controller PEIM
 
-Copyright (c) 2014 - 2017, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2014 - 2021, Intel Corporation. All rights reserved.<BR>
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -20,9 +20,8 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 #include <Library/TimerLib.h>
 #include <Library/IoLib.h>
 #include <Library/MemoryAllocationLib.h>
-
-#define  PeiServicesAllocatePages(a, b, c)   \
-         (((*(c) = (UINTN)AllocatePages (b)) != 0) ? EFI_SUCCESS : EFI_OUT_OF_RESOURCES)
+#include <Library/IoMmuLib.h>
+#include <Library/TimeStampLib.h>
 
 typedef struct _PEI_XHC_DEV PEI_XHC_DEV;
 typedef struct _USB_DEV_CONTEXT USB_DEV_CONTEXT;
@@ -30,6 +29,9 @@ typedef struct _USB_DEV_CONTEXT USB_DEV_CONTEXT;
 #include "UsbHcMem.h"
 #include "XhciReg.h"
 #include "XhciSched.h"
+
+#undef  DEBUG_INFO
+#define DEBUG_INFO   DEBUG_VERBOSE
 
 #define CMD_RING_TRB_NUMBER         0x100
 #define TR_RING_TRB_NUMBER          0x100
@@ -143,8 +145,14 @@ struct _PEI_XHC_DEV {
   UINTN                             Signature;
   PEI_USB2_HOST_CONTROLLER_PPI      Usb2HostControllerPpi;
   EFI_PEI_PPI_DESCRIPTOR            PpiDescriptor;
-  UINT32                            UsbHostControllerBaseAddress;
+  UINTN                             UsbHostControllerBaseAddress;
   USBHC_MEM_POOL                    *MemPool;
+
+  //
+  // EndOfPei callback is used to stop the XHC DMA operation
+  // after exit PEI phase.
+  //
+  EFI_PEI_NOTIFY_DESCRIPTOR         EndOfPeiNotifyList;
 
   //
   // XHCI configuration data
@@ -158,7 +166,9 @@ struct _PEI_XHC_DEV {
   UINT32                            PageSize;
   UINT32                            MaxScratchpadBufs;
   UINT64                            *ScratchBuf;
+  VOID                              *ScratchMap;
   UINT64                            *ScratchEntry;
+  UINTN                             *ScratchEntryMap;
   UINT64                            *DCBAA;
   UINT32                            MaxSlotsEn;
   //
@@ -178,6 +188,7 @@ struct _PEI_XHC_DEV {
 };
 
 #define PEI_RECOVERY_USB_XHC_DEV_FROM_THIS(a) CR (a, PEI_XHC_DEV, Usb2HostControllerPpi, USB_XHC_DEV_SIGNATURE)
+#define PEI_RECOVERY_USB_XHC_DEV_FROM_THIS_NOTIFY(a) CR (a, PEI_XHC_DEV, EndOfPeiNotifyList, USB_XHC_DEV_SIGNATURE)
 
 /**
   Initialize the memory management pool for the host controller.
@@ -235,5 +246,6 @@ UsbHcFreeMem (
   IN UINTN              Size
   )
 ;
+
 
 #endif

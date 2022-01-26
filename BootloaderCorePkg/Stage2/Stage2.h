@@ -1,6 +1,6 @@
 /** @file
 
-  Copyright (c) 2016 - 2019, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2016 - 2020, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -37,6 +37,9 @@
 #include <Library/DebugLogBufferLib.h>
 #include <Library/LiteFvLib.h>
 #include <Library/SortLib.h>
+#include <Library/StageLib.h>
+#include <Library/ThunkLib.h>
+#include <Library/LocalApicLib.h>
 #include <Library/ContainerLib.h>
 #include <Guid/BootLoaderServiceGuid.h>
 #include <Guid/BootLoaderVersionGuid.h>
@@ -46,6 +49,12 @@
 #include <Guid/LoaderLibraryDataGuid.h>
 #include <Guid/GraphicsInfoHob.h>
 #include <Guid/SmmInformationGuid.h>
+#include <Guid/MpCpuTaskInfoHob.h>
+#include <Guid/PciRootBridgeInfoGuid.h>
+#include <UniversalPayload/PciRootBridges.h>
+#include <UniversalPayload/AcpiTable.h>
+#include <UniversalPayload/SmbiosTable.h>
+#include <UniversalPayload/SerialPortInfo.h>
 #include <Service/PlatformService.h>
 #include <Pi/PiBootMode.h>
 #include <FspEas.h>
@@ -55,20 +64,16 @@
 #include <Library/DebugAgentLib.h>
 #include <Library/ElfLib.h>
 #include <Library/SmbiosInitLib.h>
+#include <Library/UniversalPayloadLib.h>
 #include <VerInfo.h>
+#include <Guid/SmramMemoryReserve.h>
+#include <Guid/SmmRegisterInfoGuid.h>
+#include <Guid/SpiFlashInfoGuid.h>
+#include <Guid/NvVariableInfoGuid.h>
+#include <Guid/SmmS3CommunicationInfoGuid.h>
+
 
 #define UIMAGE_FIT_MAGIC               (0x56190527)
-
-/**
-  Unmap the previous mapped stage images.
-
-  It will reload GDT and disable paging so that the memory goes back to 1:1 mapping.
-
-**/
-VOID
-UnmapStage (
-  VOID
-  );
 
 /**
   Build some basic HOBs
@@ -107,7 +112,7 @@ BuildExtraInfoHob (
   Display graphical splash screen
 
   @retval EFI_SUCCESS     Splash screen was successfully displayed
-  @retval EFI_UNSUPPORTED Frame buffer access not supported
+  @retval EFI_NOT_FOUND   Frame buffer hob not found
   @retval EFI_UNSUPPORTED BmpImage is not a valid *.BMP image
 
 **/
@@ -160,8 +165,18 @@ InitializeService (
 
 **/
 VOID
+EFIAPI
 BoardNotifyPhase (
   IN BOARD_INIT_PHASE   Phase
+  );
+
+/**
+  Update graphics hobs.
+
+**/
+VOID
+UpdateGraphicsHob (
+  VOID
   );
 
 #endif

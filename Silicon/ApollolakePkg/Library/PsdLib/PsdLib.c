@@ -17,10 +17,8 @@
 #include <IndustryStandard/Tpm20.h>
 #include <Library/BpdtLib.h>
 #include <Library/HeciLib.h>
-#include <Library/HeciLib/HeciRegs.h>
-#include <Library/HeciLib/CseMsg.h>
 #include <Library/PciLib.h>
-#include <Library/BootGuardLib.h>
+#include <Library/BootGuardLib20.h>
 #include <Library/SecureBootLib.h>
 #include <Guid/PcdDataBaseSignatureGuid.h>
 #include <Library/ConfigDataLib.h>
@@ -60,7 +58,7 @@ GetEomState (
     DEBUG ((DEBUG_ERROR, "EomState is not valid pointer\n"));
     return EFI_INVALID_PARAMETER;
   }
-  Status = ReadHeciFwStatus( &FwSts);
+  Status = HeciReadFwStatus (&FwSts);
   if (EFI_ERROR(Status)) {
     return Status;
   }
@@ -82,19 +80,23 @@ GetSecFwVersion (
 {
   EFI_STATUS            Status;
   GEN_GET_FW_VER_ACK    MsgGenGetFwVersionAckData;
-  if(SecVersion == NULL) {
+
+  if (SecVersion == NULL) {
     DEBUG ((DEBUG_ERROR, "GetSecFwVersion Failed Status=0x%x\n",EFI_INVALID_PARAMETER));
     return EFI_INVALID_PARAMETER;
   }
-  Status = HeciGetFwVersionMsg( (UINT8 *)&MsgGenGetFwVersionAckData);
-  if (EFI_ERROR(Status)) {
-    return Status;
+
+  Status = MeGetFwVersionFromMbp (&MsgGenGetFwVersionAckData.Data);
+  if (EFI_ERROR (Status)) {
+    Status = HeciGetFwVersionMsg( (UINT8 *)&MsgGenGetFwVersionAckData);
   }
-  SecVersion->CodeMajor = MsgGenGetFwVersionAckData.Data.CodeMajor;
-  SecVersion->CodeMinor = MsgGenGetFwVersionAckData.Data.CodeMinor;
-  SecVersion->CodeHotFix = MsgGenGetFwVersionAckData.Data.CodeHotFix;
-  SecVersion->CodeBuildNo = MsgGenGetFwVersionAckData.Data.CodeBuildNo;
-  return EFI_SUCCESS;
+  if (!EFI_ERROR (Status)) {
+    SecVersion->CodeMajor   = MsgGenGetFwVersionAckData.Data.CodeMajor;
+    SecVersion->CodeMinor   = MsgGenGetFwVersionAckData.Data.CodeMinor;
+    SecVersion->CodeHotFix  = MsgGenGetFwVersionAckData.Data.CodeHotFix;
+    SecVersion->CodeBuildNo = MsgGenGetFwVersionAckData.Data.CodeBuildNo;
+  }
+  return Status;
 }
 
 /**
@@ -110,7 +112,6 @@ GetSecCapability (
   )
 {
   EFI_STATUS               Status;
-  GEN_GET_FW_CAPSKU        MsgGenGetFwCapsSku;
   GEN_GET_FW_CAPS_SKU_ACK  MsgGenGetFwCapsSkuAck;
   if(SecCapability == NULL) {
     DEBUG ((DEBUG_ERROR, "GetSecCapability Failed Status=0x%x\n",EFI_INVALID_PARAMETER));
@@ -118,7 +119,7 @@ GetSecCapability (
   }
 
 
-  Status = HeciGetFwCapsSkuMsg ( (UINT8 *)&MsgGenGetFwCapsSku, (UINT8 *)&MsgGenGetFwCapsSkuAck);
+  Status = HeciGetFwCapsSkuMsg ((UINT8 *)&MsgGenGetFwCapsSkuAck);
   if (EFI_ERROR(Status)) {
     return Status;
   }
@@ -157,7 +158,7 @@ GetIbbHashDataFromBpm (
   }
   DEBUG ((DEBUG_INFO, "SubPartitoinPayload BpmBase=0x%p, size=0x%x\n", BpmBase, BpmSize));
 
-  BpmData = (BPMDATA*)(BpmBase);
+  BpmData = (BPMDATA*)(UINTN)BpmBase;
   //IBBL Hash
   if(BpmData->IbblHash == NULL) {
     return RETURN_BUFFER_TOO_SMALL;
@@ -218,8 +219,7 @@ UpdateAcpiPsdTable (
   mPsdt->Header.OemRevision             = EFI_ACPI_OEM_REVISION;
   mPsdt->Header.CreatorId               = EFI_ACPI_CREATOR_ID;
   mPsdt->Header.CreatorRevision         = EFI_ACPI_CREATOR_REVISION;
-  ZeroMem( mPsdt +  sizeof (EFI_ACPI_DESCRIPTION_HEADER) , \
-     sizeof(EFI_ACPI_PSD_TABLE) - sizeof(EFI_ACPI_DESCRIPTION_HEADER) );
+
   DEBUG( (DEBUG_INFO, "Address of PSD_TABLE=%x\n", mPsdt));
   DEBUG( (DEBUG_INFO, "PSD Values: Signature=%x\n", mPsdt->Header.Signature) );
   DEBUG( (DEBUG_INFO, "PSD Values: Length=%x\n", mPsdt->Header.Length ));

@@ -1,6 +1,6 @@
 ## @file
 #
-#  Copyright (c) 2016 - 2019, Intel Corporation. All rights reserved.<BR>
+#  Copyright (c) 2016 - 2021, Intel Corporation. All rights reserved.<BR>
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -23,13 +23,8 @@
 [Sources]
   Stage2.h
   Stage2.c
+  Stage2Hob.c
   Stage2Support.c
-
-[Sources.IA32]
-  Ia32/Stage2Arch.c
-
-[Sources.ARC]
-  Arc/Stage2Arch.c
 
 [Packages]
   MdePkg/MdePkg.dec
@@ -37,11 +32,9 @@
   BootloaderCommonPkg/BootloaderCommonPkg.dec
   IntelFsp2Pkg/IntelFsp2Pkg.dec
 
-[LibraryClasses.IA32]
+[LibraryClasses]
   FspSupportLib
   PagingLib
-
-[LibraryClasses]
   BaseLib
   ModuleEntryLib
   DecompressLib
@@ -59,6 +52,7 @@
   MpInitLib
   SecureBootLib
   FspApiLib
+  FspSupportLib
   LoaderLib
   GraphicsLib
   CpuExceptionLib
@@ -72,6 +66,10 @@
   SmbiosInitLib
   LinuxLib
   SortLib
+  StageLib
+  ThunkLib
+  LocalApicLib
+  UniversalPayloadLib
 
 [Guids]
   gFspReservedMemoryResourceHobGuid
@@ -94,6 +92,17 @@
   gLoaderPlatformDataGuid
   gDeviceTableHobGuid
   gSmmInformationGuid
+  gLoaderMpCpuTaskInfoGuid
+  gUniversalPayloadPciRootBridgeInfoGuid
+  gUniversalPayloadAcpiTableGuid
+  gUniversalPayloadSmbiosTableGuid
+  gUniversalPayloadSerialPortInfoGuid
+  gUniversalPayloadExtraDataGuid
+  gPldSmmRegisterInfoGuid
+  gEfiSmmSmramMemoryGuid
+  gSpiFlashInfoGuid
+  gNvVariableInfoGuid
+  gPldS3CommunicationGuid
 
 [Pcd]
   gPlatformCommonLibTokenSpaceGuid.PcdMaxLibraryDataEntry
@@ -133,6 +142,8 @@
   gPlatformModuleTokenSpaceGuid.PcdSmbiosEnabled
   gPlatformModuleTokenSpaceGuid.PcdLinuxPayloadEnabled
   gPlatformCommonLibTokenSpaceGuid.PcdMeasuredBootHashMask
-
+  gPlatformModuleTokenSpaceGuid.PcdSmmRebaseMode
+  gPlatformModuleTokenSpaceGuid.PcdAcpiTablesRsdp
+  gPlatformCommonLibTokenSpaceGuid.PcdBuildSmmHobs
 [Depex]
   TRUE

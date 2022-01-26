@@ -1,7 +1,7 @@
 /** @file
   Routines supporting partition discovery
 
-Copyright (c) 2006 - 2017, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2006 - 2021, Intel Corporation. All rights reserved.<BR>
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -485,7 +485,7 @@ GetLogicalPartitionInfo (
     return EFI_INVALID_PARAMETER;
   }
 
-  if (SwPart >= PartBlockDev->BlockDeviceCount) {
+  if ((SwPart >= PartBlockDev->BlockDeviceCount) || (SwPart >= PART_MAX_BLOCK_DEVICE)) {
     return EFI_INVALID_PARAMETER;
   }
 
@@ -522,6 +522,8 @@ FindPartitions (
   LOGICAL_BLOCK_DEVICE        *BlockDev;
   EFI_PARTITION_TABLE_HEADER  *Gpt;
   PART_BLOCK_DEVICE           *PartBlockDev;
+  OS_BOOT_MEDIUM_TYPE          CurrentMediaType;
+  BOOLEAN                      IsGptValid;
 
   if (PartHandle == NULL) {
     return EFI_INVALID_PARAMETER;
@@ -531,6 +533,7 @@ FindPartitions (
   if (EFI_ERROR (Status)) {
     return Status;
   }
+
 
   PartBlockDev = (PART_BLOCK_DEVICE *) AllocateZeroPool (sizeof (PART_BLOCK_DEVICE));
   if (PartBlockDev == NULL) {
@@ -542,7 +545,9 @@ FindPartitions (
 
   CopyMem (&PartBlockDev->BlockInfo, &DevBlockInfo, sizeof (DEVICE_BLOCK_INFO));
 
-  if (DevBlockInfo.BlockSize == 1) {
+  CurrentMediaType = MediaGetInterfaceType();
+
+  if (CurrentMediaType == OsBootDeviceMemory || CurrentMediaType == OsBootDeviceSpi) {
     // It is memory mapped SPI block device.
     Status = FindSpiPartitions (PartBlockDev);
     if (!EFI_ERROR (Status)) {
@@ -551,42 +556,37 @@ FindPartitions (
     return Status;
   }
 
-  // Read GPT Partition first
+  // Check primary GPT Partition first
   Buffer = (UINT8 *) PartBlockDev->BlockData;
-  Status = MediaReadBlocks (HwDevice, 1, DevBlockInfo.BlockSize, Buffer);
-  if (!EFI_ERROR (Status)) {
-    // Check GPT partition
-    Gpt = (EFI_PARTITION_TABLE_HEADER *)Buffer;
-    if ((UINT32)Gpt->Header.Signature == 0x20494645) {
-      Status = FindGptPartitions (PartBlockDev);
-    } else {
-      Status = FindMbrPartitions (PartBlockDev);
-    }
-
-    // Check result
-    if (EFI_ERROR (Status)) {
-      // Could not find any partition, so assume no partitions
-      BlockDev              = & (PartBlockDev->BlockDevice[0]);
-      BlockDev->StartBlock  = 0;
-      BlockDev->LastBlock   = DevBlockInfo.BlockNum - 1;
-      PartBlockDev->PartitionType    = EnumPartTypeUnknown;
-      PartBlockDev->PartitionChecked = TRUE;
-      PartBlockDev->BlockDeviceCount = 1;
-      Status = EFI_SUCCESS;
-    }
-
-    DEBUG ((DEBUG_INFO, "Partition type: %a  (%d logical partitions)\n", \
-            GetPartitionTypeName (PartBlockDev->PartitionType), \
-            PartBlockDev->BlockDeviceCount));
+  Gpt    = (EFI_PARTITION_TABLE_HEADER *)Buffer;
+  IsGptValid = PartitionValidGpt (Gpt, &DevBlockInfo, PartBlockDev->HarewareDevice, TRUE);
+  if (!IsGptValid) {
+    // Check backup GPT as well
+    IsGptValid = PartitionValidGpt (Gpt, &DevBlockInfo, PartBlockDev->HarewareDevice, FALSE);
+  }
+  if (IsGptValid && ((UINT32)Gpt->Header.Signature == 0x20494645)) {
+    Status = FindGptPartitions (PartBlockDev);
   } else {
-    Status = EFI_DEVICE_ERROR;
+    Status = FindMbrPartitions (PartBlockDev);
   }
 
+  // Check result
   if (EFI_ERROR (Status)) {
-    FreePool (PartBlockDev);
-  } else {
-    *PartHandle = (EFI_HANDLE)PartBlockDev;
+    // Could not find any partition, so assume no partitions
+    BlockDev              = & (PartBlockDev->BlockDevice[0]);
+    BlockDev->StartBlock  = 0;
+    BlockDev->LastBlock   = DevBlockInfo.BlockNum - 1;
+    PartBlockDev->PartitionType    = EnumPartTypeUnknown;
+    PartBlockDev->PartitionChecked = TRUE;
+    PartBlockDev->BlockDeviceCount = 1;
+    Status = EFI_SUCCESS;
   }
+
+  DEBUG ((DEBUG_INFO, "Partition type: %a  (%d logical partitions)\n", \
+          GetPartitionTypeName (PartBlockDev->PartitionType), \
+          PartBlockDev->BlockDeviceCount));
+
+  *PartHandle = (EFI_HANDLE)PartBlockDev;
 
   return Status;
 }

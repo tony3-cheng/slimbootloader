@@ -29,7 +29,11 @@
 #define SA_MC_FUN                                   0x00
 #define V_SA_MC_VID                                 0x8086
 #define R_SA_MC_DEVICE_ID                           0x02
+#define R_SA_MCHBAR                                 0x48
 #define R_SA_MC_CAPID0_B                            0xE8
+
+#define R_SA_MCHBAR_VTD1_OFFSET                     0x5400  // HW UNIT1 for IGD
+#define R_SA_MCHBAR_VTD3_OFFSET                     0x5410  // HW UNIT3 for all other - PEG, USB, SATA etc
 
 #define CPUID_VERSION_INFO                          0x01
 #define CPUID_FULL_FAMILY_MODEL                     0x0FFF0FF0
@@ -63,5 +67,18 @@ typedef struct {
 
 #define  TSEG                                       0xB8
 #define  BGSM                                       0xB4
+
+//  This Register contains the size of physical memory.
+#define R_SA_TOM         (0xa0)
+#define B_SA_TOM_MASK    (0x7ffff00000ULL)
+
+//  This 64 bit register defines the Top of Upper Usable DRAM.
+#define R_SA_TOUUD       (0xa8)
+#define B_SA_TOUUD_MASK  (0x7ffff00000ULL)
+
+
+//  This register contains the Top of low memory address.
+#define R_SA_TOLUD       (0xbc)
+#define B_SA_TOLUD_MASK  (0xfff00000)
 
 #endif
