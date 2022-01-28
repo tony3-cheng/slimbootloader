@@ -119,10 +119,10 @@ python BuildLoader.py build cmlv -r -p "OsLoader.efi:LLDR:Lz4;UEFIPAYLOADRel.fd:
 @goto StitchEnd
 
 :Stitchapl
-python Platform/ApollolakeBoardPkg/Script/StitchLoader.py -i Platform/ApollolakeBoardPkg/BiosBin/25690000I60V111.bin -s Outputs/apl/Stitch_Components.zip -o Build/2569000SI60X001.bin -p AA000210
-python Platform/ApollolakeBoardPkg/Script/StitchLoader.py -i Platform/ApollolakeBoardPkg/BiosBin/35690000I60V400.bin -s Outputs/apl/Stitch_Components.zip -o Build/3569000SI60X001.bin -p AA000211
-python Platform/ApollolakeBoardPkg/Script/StitchLoader.py -i Platform/ApollolakeBoardPkg/BiosBin/68690000I60V300.bin -s Outputs/apl/Stitch_Components.zip -o Build/6869000SI60X001.bin -p AA000212
-python Platform/ApollolakeBoardPkg/Script/StitchLoader.py -i Platform/ApollolakeBoardPkg/BiosBin/75690000I60V300.bin -s Outputs/apl/Stitch_Components.zip -o Build/7569000SI60V300.bin -p AA000213
+python Platform/ApollolakeBoardPkg/Script/StitchLoader.py -i Platform/ApollolakeBoardPkg/BiosBin/25690000I60V111.bin -s Outputs/apl/Stitch_Components.zip -o Build/2569000SI60V111.bin -p AA000210
+python Platform/ApollolakeBoardPkg/Script/StitchLoader.py -i Platform/ApollolakeBoardPkg/BiosBin/35690000I60V400.bin -s Outputs/apl/Stitch_Components.zip -o Build/3569000SI60V400.bin -p AA000211
+python Platform/ApollolakeBoardPkg/Script/StitchLoader.py -i Platform/ApollolakeBoardPkg/BiosBin/68690000I60V300.bin -s Outputs/apl/Stitch_Components.zip -o Build/6869000SI60V300.bin -p AA000212
+python Platform/ApollolakeBoardPkg/Script/StitchLoader.py -i Platform/ApollolakeBoardPkg/BiosBin/75690000I60V300.bin -s Outputs/apl/Stitch_Components.zip -o Build/7569000SI60V300.bin -p AA000313
 @goto StitchEnd
 
 :Stitchcfl

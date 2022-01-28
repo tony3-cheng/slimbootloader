@@ -168,6 +168,7 @@ class Board(BaseBoard):
         self.VARIABLE_SIZE        = 0x00002000
         self.S3_DEBUG             = 0
         self.SBLRSVD_SIZE         = 0x00001000
+        self.EXT_UART_PORT        = 1
 
         if len(self._PAYLOAD_NAME.split(';')) > 1:
             self.SPI_IAS1_SIZE    = 0x00001000
@@ -188,30 +189,55 @@ class Board(BaseBoard):
 
     def GetPlatformDsc (self):
         dsc = {}
-        common_libs = [
-            'LoaderLib|Platform/$(BOARD_PKG_NAME)/Library/LoaderLib/LoaderLib.inf',
-            'SerialPortLib|Silicon/$(SILICON_PKG_NAME)/Library/SerialPortLib/SerialPortLib.inf',
-            'SocInfoLib|Silicon/$(SILICON_PKG_NAME)/Library/SocInfoLib/SocInfoLib.inf',
-            'PlatformHookLib|Silicon/$(SILICON_PKG_NAME)/Library/PlatformHookLib/PlatformHookLib.inf',
-            'ScSbiAccessLib|Silicon/$(SILICON_PKG_NAME)/Library/ScSbiAccessLib/ScSbiAccessLib.inf',
-            'GpioLib|Silicon/$(SILICON_PKG_NAME)/Library/GpioLib/GpioLib.inf',
-            'PchSpiLib|Silicon/CommonSocPkg/Library/PchSpiLib/PchSpiLib.inf',
-            'SpiFlashLib|Silicon/CommonSocPkg/Library/SpiFlashLib/SpiFlashLib.inf',
-            'IgdOpRegionLib|Silicon/$(SILICON_PKG_NAME)/Library/IgdOpRegionLib/IgdOpRegionLib.inf',
-            'IocIpcLib|Platform/$(BOARD_PKG_NAME)/Library/IocIpcLib/IocIpcLib.inf',
-            'BootGuardLib|Silicon/$(SILICON_PKG_NAME)/Library/BootGuardLib20/BootGuardLib20.inf',
-            'HeciLib|Silicon/CommonSocPkg/Library/HeciLib/HeciLib.inf',
-            'MeChipsetLib|Silicon/ApollolakePkg/Library/MeChipsetLib/MeChipsetLib.inf',
-            'PsdLib|Silicon/ApollolakePkg/Library/PsdLib/PsdLib.inf',
-            'ShellExtensionLib|Platform/$(BOARD_PKG_NAME)/Library/ShellExtensionLib/ShellExtensionLib.inf',
-            'BootMediaLib|Silicon/ApollolakePkg/Library/BootMediaLib/BootMediaLib.inf',
-            'FlashDescriptorLib|Silicon/ApollolakePkg/Library/FlashDescriptorLib/FlashDescriptorLib.inf',
-            'VtdLib|Silicon/$(SILICON_PKG_NAME)/Library/VtdLib/VtdLib.inf',
-            'SmbusLib|Silicon/$(SILICON_PKG_NAME)/Library/SmbusLib/SmbusLib.inf',
-            'HdaLib|Platform/$(BOARD_PKG_NAME)/Library/HdaLib/HdaLib.inf',
-            'VtdPmrLib|Silicon/CommonSocPkg/Library/VtdPmrLib/VtdPmrLib.inf',
-            'BaseIpcLib|Silicon/$(SILICON_PKG_NAME)/Library/BaseIpcLib/BaseIpcLib.inf'
-        ]
+        if self.EXT_UART_PORT == 0:
+          common_libs = [
+              'LoaderLib|Platform/$(BOARD_PKG_NAME)/Library/LoaderLib/LoaderLib.inf',
+              'SerialPortLib|Silicon/$(SILICON_PKG_NAME)/Library/SerialPortLib/SerialPortLib.inf',
+              'SocInfoLib|Silicon/$(SILICON_PKG_NAME)/Library/SocInfoLib/SocInfoLib.inf',
+              'PlatformHookLib|Silicon/$(SILICON_PKG_NAME)/Library/PlatformHookLib/PlatformHookLib.inf',
+              'ScSbiAccessLib|Silicon/$(SILICON_PKG_NAME)/Library/ScSbiAccessLib/ScSbiAccessLib.inf',
+              'GpioLib|Silicon/$(SILICON_PKG_NAME)/Library/GpioLib/GpioLib.inf',
+              'PchSpiLib|Silicon/CommonSocPkg/Library/PchSpiLib/PchSpiLib.inf',
+              'SpiFlashLib|Silicon/CommonSocPkg/Library/SpiFlashLib/SpiFlashLib.inf',
+              'IgdOpRegionLib|Silicon/$(SILICON_PKG_NAME)/Library/IgdOpRegionLib/IgdOpRegionLib.inf',
+              'IocIpcLib|Platform/$(BOARD_PKG_NAME)/Library/IocIpcLib/IocIpcLib.inf',
+              'BootGuardLib|Silicon/$(SILICON_PKG_NAME)/Library/BootGuardLib20/BootGuardLib20.inf',
+              'HeciLib|Silicon/CommonSocPkg/Library/HeciLib/HeciLib.inf',
+              'MeChipsetLib|Silicon/ApollolakePkg/Library/MeChipsetLib/MeChipsetLib.inf',
+              'PsdLib|Silicon/ApollolakePkg/Library/PsdLib/PsdLib.inf',
+              'ShellExtensionLib|Platform/$(BOARD_PKG_NAME)/Library/ShellExtensionLib/ShellExtensionLib.inf',
+              'BootMediaLib|Silicon/ApollolakePkg/Library/BootMediaLib/BootMediaLib.inf',
+              'FlashDescriptorLib|Silicon/ApollolakePkg/Library/FlashDescriptorLib/FlashDescriptorLib.inf',
+              'VtdLib|Silicon/$(SILICON_PKG_NAME)/Library/VtdLib/VtdLib.inf',
+              'SmbusLib|Silicon/$(SILICON_PKG_NAME)/Library/SmbusLib/SmbusLib.inf',
+              'HdaLib|Platform/$(BOARD_PKG_NAME)/Library/HdaLib/HdaLib.inf',
+              'VtdPmrLib|Silicon/CommonSocPkg/Library/VtdPmrLib/VtdPmrLib.inf',
+              'BaseIpcLib|Silicon/$(SILICON_PKG_NAME)/Library/BaseIpcLib/BaseIpcLib.inf'
+          ]
+        else:
+          common_libs = [
+              'LoaderLib|Platform/$(BOARD_PKG_NAME)/Library/LoaderLib/LoaderLib.inf',
+              'SocInfoLib|Silicon/$(SILICON_PKG_NAME)/Library/SocInfoLib/SocInfoLib.inf',
+              'PlatformHookLib|Silicon/$(SILICON_PKG_NAME)/Library/PlatformHookLib/PlatformHookLib.inf',
+              'ScSbiAccessLib|Silicon/$(SILICON_PKG_NAME)/Library/ScSbiAccessLib/ScSbiAccessLib.inf',
+              'GpioLib|Silicon/$(SILICON_PKG_NAME)/Library/GpioLib/GpioLib.inf',
+              'PchSpiLib|Silicon/CommonSocPkg/Library/PchSpiLib/PchSpiLib.inf',
+              'SpiFlashLib|Silicon/CommonSocPkg/Library/SpiFlashLib/SpiFlashLib.inf',
+              'IgdOpRegionLib|Silicon/$(SILICON_PKG_NAME)/Library/IgdOpRegionLib/IgdOpRegionLib.inf',
+              'IocIpcLib|Platform/$(BOARD_PKG_NAME)/Library/IocIpcLib/IocIpcLib.inf',
+              'BootGuardLib|Silicon/$(SILICON_PKG_NAME)/Library/BootGuardLib20/BootGuardLib20.inf',
+              'HeciLib|Silicon/CommonSocPkg/Library/HeciLib/HeciLib.inf',
+              'MeChipsetLib|Silicon/ApollolakePkg/Library/MeChipsetLib/MeChipsetLib.inf',
+              'PsdLib|Silicon/ApollolakePkg/Library/PsdLib/PsdLib.inf',
+              'ShellExtensionLib|Platform/$(BOARD_PKG_NAME)/Library/ShellExtensionLib/ShellExtensionLib.inf',
+              'BootMediaLib|Silicon/ApollolakePkg/Library/BootMediaLib/BootMediaLib.inf',
+              'FlashDescriptorLib|Silicon/ApollolakePkg/Library/FlashDescriptorLib/FlashDescriptorLib.inf',
+              'VtdLib|Silicon/$(SILICON_PKG_NAME)/Library/VtdLib/VtdLib.inf',
+              'SmbusLib|Silicon/$(SILICON_PKG_NAME)/Library/SmbusLib/SmbusLib.inf',
+              'HdaLib|Platform/$(BOARD_PKG_NAME)/Library/HdaLib/HdaLib.inf',
+              'VtdPmrLib|Silicon/CommonSocPkg/Library/VtdPmrLib/VtdPmrLib.inf',
+              'BaseIpcLib|Silicon/$(SILICON_PKG_NAME)/Library/BaseIpcLib/BaseIpcLib.inf'
+          ]
         dsc['LibraryClasses.%s' % self.BUILD_ARCH] = common_libs
         return dsc
 

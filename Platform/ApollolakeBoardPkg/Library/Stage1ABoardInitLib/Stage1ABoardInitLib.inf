@@ -43,6 +43,7 @@
   LoaderLib
   GpioLib
   BootGuardLib
+  PciLib
 
 [Guids]
 
@@ -50,3 +51,4 @@
 [Pcd]
   gPlatformCommonLibTokenSpaceGuid.PcdMeasuredBootEnabled
   gPlatformCommonLibTokenSpaceGuid.PcdDebugPortNumber
+  gEfiMdePkgTokenSpaceGuid.PcdPciExpressBaseAddress

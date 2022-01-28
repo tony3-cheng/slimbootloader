@@ -28,6 +28,14 @@ GetSerialPortStrideSize (
   VOID
   )
 {
+
+//SOM3569X001 >>
+  if (GetDebugPort () > 2) 
+    // External UART, assume 0x3F8 I/O port
+    return 1;
+  else
+//SOM3569X001 >>
+
   return 4;
 }
 
@@ -46,6 +54,17 @@ GetSerialPortBase (
   UINTN   PciUartMmBase;
   UINT16  Cmd16;
   UINT64  MmioBase;
+//SOM3569X001 >>
+  UINT8   DebugPort;
+  DebugPort = GetDebugPort ();
+  if (DebugPort >  2) {
+    if (DebugPort == 0xFE) {
+      return 0x2F8;
+    } else {
+      return 0x3F8;
+    }
+  }
+//SOM3569X001 >>
 
   PciUartMmBase = MM_PCI_ADDRESS (
                     DEFAULT_PCI_BUS_NUMBER_SC,

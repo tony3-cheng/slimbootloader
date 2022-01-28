@@ -95,6 +95,10 @@ UartGpioInitialize (
   BXT_CONF_PAD1           PadConfig1;
   UINT16                  Offset;
 
+//SOM3569X001 >>
+  if (Port > 2)
+    return 1;
+//SOM3569X001 >>
   //
   // GPIO RX
   //
