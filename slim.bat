@@ -120,17 +120,17 @@ python BuildLoader.py build cmlv -r -p "OsLoader.efi:LLDR:Lz4;UEFIPAYLOADRel.fd:
 
 :Stitchapl
 python Platform/ApollolakeBoardPkg/Script/StitchLoader.py -i Platform/ApollolakeBoardPkg/BiosBin/25690000I60V111.bin -s Outputs/apl/Stitch_Components.zip -o Build/2569000SI60V111.bin -p AA000210
-python Platform/ApollolakeBoardPkg/Script/StitchLoader.py -i Platform/ApollolakeBoardPkg/BiosBin/35690000I60V400.bin -s Outputs/apl/Stitch_Components.zip -o Build/3569000SI60V400.bin -p AA000211
+python Platform/ApollolakeBoardPkg/Script/StitchLoader.py -i Platform/ApollolakeBoardPkg/BiosBin/35690000I60V400.bin -s Outputs/apl/Stitch_Components.zip -o Build/3569000SI60V400.bin -p AA000311
 python Platform/ApollolakeBoardPkg/Script/StitchLoader.py -i Platform/ApollolakeBoardPkg/BiosBin/68690000I60V300.bin -s Outputs/apl/Stitch_Components.zip -o Build/6869000SI60V300.bin -p AA000212
 python Platform/ApollolakeBoardPkg/Script/StitchLoader.py -i Platform/ApollolakeBoardPkg/BiosBin/75690000I60V300.bin -s Outputs/apl/Stitch_Components.zip -o Build/7569000SI60V300.bin -p AA000313
 @goto StitchEnd
 
 :Stitchcfl
-python Platform/CoffeelakeBoardPkg/Script/StitchLoader.py -i Platform/CoffeelakeBoardPkg/BiosBin/6882000U160V110.BIN -s Outputs/cfl/SlimBootloader.bin -o Build/6882000S160V110.BIN -p AA000201
+python Platform/CoffeelakeBoardPkg/Script/StitchLoader.py -i Platform/CoffeelakeBoardPkg/BiosBin/6882000U160V110.BIN -s Outputs/cfl/SlimBootloader.bin -o Build/6882000S160X001.BIN -p AA000201
 @goto StitchEnd
 
 :Stitchtgl
-python Platform/TigerlakeBoardPkg/Script/StitchLoader.py -i Platform/TigerlakeBoardPkg/BiosBin/7583000U060V110.BIN -s Outputs/tgl/SlimBootloader.bin -o Build/7583000S060V110.BIN -p AA000210
+python Platform/TigerlakeBoardPkg/Script/StitchLoader.py -i Platform/TigerlakeBoardPkg/BiosBin/7583000U060V110.BIN -s Outputs/tgl/SlimBootloader.bin -o Build/7583000S060V110.BIN -p AA000201
 ::python Platform/TigerlakeBoardPkg/Script/StitchIfwi.py -b vm -w %CD%\..\Download\TigerlakeStitch -c Platform/TigerlakeBoardPkg/Script/StitchIfwiConfig_tglu.py -s Outputs/tgl/Stitch_Components.zip -p tglu_b0
 
 @goto StitchEnd

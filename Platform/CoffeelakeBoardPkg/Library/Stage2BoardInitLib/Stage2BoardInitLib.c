@@ -601,6 +601,10 @@ InitializeSmbiosInfo (
     AsciiSPrint (TempStrBuf, sizeof (TempStrBuf), "%a\0", "CoffeeLake Client Platform");
   } else if (PlatformId == PLATFORM_ID_WHL) {
     AsciiSPrint (TempStrBuf, sizeof (TempStrBuf), "%a\0", "WhiskeyLake Client Platform");
+// 6882X001 >>
+  } else if (PlatformId == PLATFORM_ID_SOM6882) {
+    AsciiSPrint (TempStrBuf, sizeof (TempStrBuf), "%a\0", "SOM-6882");
+// 6882X001 >>
   } else {
     AsciiSPrint (TempStrBuf, sizeof (TempStrBuf), "%a\0", "Unknown");
   }
@@ -626,6 +630,10 @@ InitializeSmbiosInfo (
     AsciiSPrint (TempStrBuf, sizeof (TempStrBuf), "%a\0", "CoffeeLake H DDR4 RVP");
   } else if (PlatformId == PLATFORM_ID_WHL) {
     AsciiSPrint (TempStrBuf, sizeof (TempStrBuf), "%a\0", "WhiskeyLake U DDR4 ERB");
+// 6882X001 >>
+  } else if (PlatformId == PLATFORM_ID_SOM6882) {
+    AsciiSPrint (TempStrBuf, sizeof (TempStrBuf), "%a\0", "SOM-6882");
+// 6882X001 >>
   } else {
     AsciiSPrint (TempStrBuf, sizeof (TempStrBuf), "%a\0", "Unknown");
   }
@@ -1622,7 +1630,8 @@ UpdateFspConfig (
   if (PowerCfgData == NULL) {
     DEBUG ((DEBUG_ERROR, "Missing power Cfg Data!\n"));
   } else {
-    if ((PlatformId == PLATFORM_ID_WHL) || (PlatformId == PLATFORM_ID_CFL_H)){
+// 6882X001    if ((PlatformId == PLATFORM_ID_WHL) || (PlatformId == PLATFORM_ID_CFL_H)){
+    if ((PlatformId == PLATFORM_ID_SOM6882) || (PlatformId == PLATFORM_ID_WHL) || (PlatformId == PLATFORM_ID_CFL_H)){
       FspsUpd->FspsConfig.PchPwrOptEnable = 0x1;
     }
     FspsUpd->FspsTestConfig.OneCoreRatioLimit = PowerCfgData->OneCoreRatioLimit;
@@ -1646,6 +1655,12 @@ UpdateFspConfig (
       FspsUpd->FspsConfig.PchPmSlpS0Vm075VSupport = 0x1;
       FspsUpd->FspsConfig.PchHotEnable = 0x1;
     }
+// 6882X001 >>
+    if (PlatformId == PLATFORM_ID_SOM6882) {
+      FspsUpd->FspsConfig.PchPmSlpS0Vm075VSupport = 0x1;
+      FspsUpd->FspsConfig.PchHotEnable = 0x1;
+    }
+// 6882X001 >>
   }
 
   SiliconCfgData = (SILICON_CFG_DATA *)FindConfigDataByTag (CDATA_SILICON_TAG);
@@ -2184,6 +2199,9 @@ PlatformUpdateAcpiGnvs (
       if (PlatformId == PLATFORM_ID_WHL) {
         PlatformNvs->EcSmiGpioPin             = GPIO_CNL_LP_GPP_E3;
         PlatformNvs->EcLowPowerModeGpioPin    = GPIO_CNL_LP_GPP_B23;
+      } else if (PlatformId == PLATFORM_ID_SOM6882) {
+        PlatformNvs->EcSmiGpioPin             = GPIO_CNL_LP_GPP_E3;
+        PlatformNvs->EcLowPowerModeGpioPin    = GPIO_CNL_LP_GPP_B23;
       } else if (PlatformId == PLATFORM_ID_CFL_H) {
         PlatformNvs->EcSmiGpioPin             = GPIO_CNL_H_GPP_E3;
         PlatformNvs->EcLowPowerModeGpioPin    = GPIO_CNL_H_GPP_B23;
@@ -2197,6 +2215,11 @@ PlatformUpdateAcpiGnvs (
     if (PlatformId == PLATFORM_ID_WHL) {
       PlatformNvs->PlatformFlavor           = SiliconCfgData->EnableLegacySerial;
     }
+// 6882X001 >>
+    if (PlatformId == PLATFORM_ID_SOM6882) {
+      PlatformNvs->PlatformFlavor           = SiliconCfgData->EnableLegacySerial;
+    }
+// 6882X001 >>
   }
 
   PlatformNvs->PowerState                   = 1;

@@ -123,6 +123,7 @@ UpdateFspConfig (
   DEBUG ((DEBUG_INFO, "Load memory parameters from CfgData.\n"));
   if (PlatformId == PLATFORM_ID_CFL_H ||
       PlatformId == PLATFORM_ID_WHL ||
+      PlatformId == PLATFORM_ID_SOM6882 ||
       PlatformId == PLATFORM_ID_CFL_S) {
     CopyMem (&Fspmcfg->SpdAddressTable, MemCfgData->SpdAddressTable, sizeof(MemCfgData->SpdAddressTable));
   } else {
@@ -382,6 +383,10 @@ GpioInit (
   if (PlatformId == PLATFORM_ID_WHL) {
     Status = GpioConfigurePads (sizeof (mGpioTableCnlUDdr4PreMem) / sizeof (GPIO_INIT_CONFIG), mGpioTableCnlUDdr4PreMem );
     Status |= GpioConfigurePads (sizeof (mGpioTableWhlUDdr4WwanPreMem) / sizeof (GPIO_INIT_CONFIG), mGpioTableWhlUDdr4WwanPreMem );
+// 6882X001 >>
+  } else if (PlatformId == PLATFORM_ID_SOM6882) {
+    Status = GpioConfigurePads (sizeof (mGpioTableSOM6882) / sizeof (GPIO_INIT_CONFIG), mGpioTableSOM6882 );
+// 6882X001 >>
   } else if (PlatformId == PLATFORM_ID_CFL_H) {
     Status = GpioConfigurePads (sizeof (mGpioTableCoffeelakeHDdr4PreMem) / sizeof (GPIO_INIT_CONFIG), mGpioTableCoffeelakeHDdr4PreMem );
   } else if (PlatformId == PLATFORM_ID_CFL_S) {

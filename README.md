@@ -14,7 +14,7 @@ Status
 
   |Coffeelake|PlatformID|Bring up|GPIO|HSIO|EC(IO)|GOP(VBT)|Payload|
   |----|----|----|----|----|----|----|----|
-  |SOM-6882|0x14|Yes|NotReady|NotReady|NotReady|Yes|OsLoader|
+  |SOM-6882|0x01|Yes|Yes|NotReady|NotReady|Yes|UEFI|
 
   |Cometlake|PlatformID|Bring up|GPIO|HSIO|EC(IO)|GOP(VBT)|Payload|
   |----|----|----|----|----|----|----|----|
@@ -27,6 +27,10 @@ Status
   |Elkhartlake|PlatformID|BringUp|GPIO|HSIO|EC(IO)|GOP(VBT)|Payload|
   |----|----|----|----|----|----|----|----|
   |SOM-2532|NotReady|NotReady|NotReady|NotReady|NotReady|NotReady|NotReady|
+
+History
+-------
+  6882X001_1  Update GPIO setting and removed CRB EC support.
 
 
 Build Environment
