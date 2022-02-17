@@ -1,0 +1,1038 @@
+//---------------------------------------------------------------------------
+//
+//   Copyright (c) 2010-2013 Advantech Co., Ltd.
+//   This program contains proprietary and confidential information.
+//   All rights reserved except as may be permitted by prior written consent.
+//
+//----------------------------------------------------------------------------
+//  Project Name : SOM-2532 
+//----------------------------------------------------------------------------
+//  Hardware Configuration
+//----------------------------------------------------------------------------
+    CPU         : ElkhartLake
+    Chipset     : ElkhartLake
+    ClockGEN    : ElkhartLake
+    SuperI/O    : ITE-5121
+    Flash ROM   : W25R256JW
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060V110.BIN
+  BIOS Checksum : 902C
+  BIOS String   : **** SOM-2532 BIOS V1.10 (11/23/2021) ****
+  Release Date  : 2021/11/23
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532V110    Release BIOS V1.10
+
+  Release BIOS Information:
+    25320000060V110.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.3.0_013.1
+                            2. Microcode m_01_90661_00000014
+                            3. RC Version 1.3.0
+                            4. GOP 18.0.1034
+                            5. CSE 15.40.15.2416
+                            6. PCIE 4X1
+
+
+    ROM Storage File GUID (a0327fe0-1fda-4e5b-905d-b510c45a61d0) included option rom.
+        IGD UEFI    : 380b6b4f-1454-41f2-a6d3-61d1333e8cb4
+        IGD VBT     : ebb8a2d4-d271-4dfc-bca8-3181d5aec7d6
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X032.BIN;25320000160X032.BIN;25320000260X032.BIN
+  BIOS Checksum : 7970;5765;72EC
+  BIOS String   : (25320000060X032) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2021/11/17
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X032_1  hide item "Power Saving Mode"
+
+  Release BIOS Information:
+    25320000060X032.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.3.0_013.1
+                            2. Microcode m_01_90661_00000014
+                            3. RC Version 1.3.0
+                            4. GOP 18.0.1034
+                            5. CSE 15.40.15.2416
+                            6. PCIE 4X1
+    25320000160X032.BIN --- 1. Set GOP DDI2 DP
+                            2. Set GOP LFP MIPI PANEL #1 1920x1200
+                            3. PCIE 1X4
+    25320000260X032.BIN --- 1. USB2 Port1 Type AB in CSE
+
+
+    ROM Storage File GUID (a0327fe0-1fda-4e5b-905d-b510c45a61d0) included option rom.
+        IGD UEFI    : 380b6b4f-1454-41f2-a6d3-61d1333e8cb4
+        IGD VBT     : ebb8a2d4-d271-4dfc-bca8-3181d5aec7d6
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X031.BIN;25320000160X031.BIN;25320000260X031.BIN
+  BIOS Checksum : C994;86B7;FD11
+  BIOS String   : (25320000060X031) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2021/10/6
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X031_1  Disable PCH GBE controller in CSE
+
+  Release BIOS Information:
+    25320000060X031.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.3.0_013.1
+                            2. Microcode m_01_90661_00000014
+                            3. RC Version 1.3.0
+                            4. GOP 18.0.1034
+                            5. CSE 15.40.15.2416
+                            6. PCIE 4X1
+    25320000160X031.BIN --- 1. Set GOP DDI2 DP
+                            2. Set GOP LFP MIPI PANEL #1 1920x1200
+                            3. PCIE 1X4
+    25320000260X031.BIN --- 1. USB2 Port1 Type AB in CSE
+
+
+    ROM Storage File GUID (a0327fe0-1fda-4e5b-905d-b510c45a61d0) included option rom.
+        IGD UEFI    : 380b6b4f-1454-41f2-a6d3-61d1333e8cb4
+        IGD VBT     : ebb8a2d4-d271-4dfc-bca8-3181d5aec7d6
+
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X030.BIN;25320000160X030.BIN;25320000260X030.BIN
+  BIOS Checksum : 7EB9;00CA;56B8
+  BIOS String   : (25320000060X030) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2021/9/22
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X030_1  items setting: CPU Configuration page error
+
+  Release BIOS Information:
+    25320000060X030.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.3.0_013.1
+                            2. Microcode m_01_90661_00000014
+                            3. RC Version 1.3.0
+                            4. GOP 18.0.1034
+                            5. CSE 15.40.15.2416
+                            6. PCIE 4X1
+    25320000160X030.BIN --- 1. Set GOP DDI2 DP
+                            2. Set GOP LFP MIPI PANEL #1 1920x1200
+                            3. PCIE 1X4
+    25320000260X030.BIN --- 1. USB2 Port1 Type AB in CSE
+
+
+    ROM Storage File GUID (a0327fe0-1fda-4e5b-905d-b510c45a61d0) included option rom.
+        IGD UEFI    : 380b6b4f-1454-41f2-a6d3-61d1333e8cb4
+        IGD VBT     : ebb8a2d4-d271-4dfc-bca8-3181d5aec7d6
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X029.BIN;25320000160X029.BIN;25320000260X029.BIN
+  BIOS Checksum : 9A56;9AD3;B96A
+  BIOS String   : (25320000060X029) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2021/9/7
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X029_1  set CSE USB2 Port1 Type AB in option 2 BIOS
+
+  Release BIOS Information:
+    25320000060X029.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.3.0_013.1
+                            2. Microcode m_01_90661_00000014
+                            3. RC Version 1.3.0
+                            4. GOP 18.0.1034
+                            5. CSE 15.40.15.2416
+                            6. PCIE 4X1
+    25320000160X029.BIN --- 1. Set GOP DDI2 DP
+                            2. Set GOP LFP MIPI PANEL #1 1920x1200
+                            3. PCIE 1X4
+    25320000260X029.BIN --- 1. USB2 Port1 Type AB in CSE
+
+
+    ROM Storage File GUID (a0327fe0-1fda-4e5b-905d-b510c45a61d0) included option rom.
+        IGD UEFI    : 380b6b4f-1454-41f2-a6d3-61d1333e8cb4
+        IGD VBT     : ebb8a2d4-d271-4dfc-bca8-3181d5aec7d6
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X028.BIN;25320000160X028.BIN
+  BIOS Checksum : 9D3C;B45C
+  BIOS String   : (25320000060X028) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2021/9/3
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X028_1  update AMI codebase X013
+    2532X028_2  set CSE USB2 Port1 Type AB in option BIOS
+
+  Release BIOS Information:
+    25320000060X028.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.3.0_013.1
+                            2. Microcode m_01_90661_00000014
+                            3. RC Version 1.3.0
+                            4. GOP 18.0.1034
+                            5. CSE 15.40.15.2416
+                            6. PCIE 4X1
+    25320000160X028.BIN --- 1. Set GOP DDI2 DP
+                            2. Set GOP LFP MIPI PANEL #1 1920x1200
+                            3. PCIE 1X4
+                            4. USB2 Port1 Type AB in CSE
+
+
+    ROM Storage File GUID (a0327fe0-1fda-4e5b-905d-b510c45a61d0) included option rom.
+        IGD UEFI    : 380b6b4f-1454-41f2-a6d3-61d1333e8cb4
+        IGD VBT     : ebb8a2d4-d271-4dfc-bca8-3181d5aec7d6
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X027.BIN;25320000160X027.BIN
+  BIOS Checksum : 38C9;2EA4
+  BIOS String   : (25320000060X027) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2021/8/31
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X027_1  workaround screen shift during loading Windows with graphic driver is installed
+
+  Release BIOS Information:
+    25320000060X027.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.1.4_010
+                            2. Microcode m_01_90661_0000000f
+                            3. RC Version 1.1.4
+                            4. GOP 18.0.1031
+                            5. CSE 15.40.10.2204
+                            6. PCIE 4X1
+    25320000160X027.BIN --- 1. Set GOP DDI2 DP
+                            2. Set GOP LFP MIPI PANEL #1 1920x1200
+                            3. PCIE 1X4
+
+
+    ROM Storage File GUID (a0327fe0-1fda-4e5b-905d-b510c45a61d0) included option rom.
+        IGD UEFI    : 380b6b4f-1454-41f2-a6d3-61d1333e8cb4
+        IGD VBT     : ebb8a2d4-d271-4dfc-bca8-3181d5aec7d6
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X026.BIN;25320000160X026.BIN
+  BIOS Checksum : 534B;B3A5
+  BIOS String   : (25320000060X026) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2021/8/13
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X026_1  set BIOS version in SMBIOS type 0
+    2532X026_2  item I2C3 Controller enable
+    2532X026_3  Set GOP VBT LFP to MIPI PANEL #1 1920x1200 in option BIOS
+
+  Release BIOS Information:
+    25320000060X026.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.1.4_010
+                            2. Microcode m_01_90661_0000000f
+                            3. RC Version 1.1.4
+                            4. GOP 18.0.1031
+                            5. CSE 15.40.10.2204
+                            6. PCIE 4X1
+    25320000160X026.BIN --- 1. Set GOP DDI2 DP
+                            2. Set GOP LFP MIPI PANEL #1 1920x1200
+                            3. PCIE 1X4
+
+
+    ROM Storage File GUID (a0327fe0-1fda-4e5b-905d-b510c45a61d0) included option rom.
+        IGD UEFI    : 380b6b4f-1454-41f2-a6d3-61d1333e8cb4
+        IGD VBT     : ebb8a2d4-d271-4dfc-bca8-3181d5aec7d6
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X025.BIN;25320000160X025.BIN
+  BIOS Checksum : 799F;17E4
+  BIOS String   : (25320000060X025) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2021/6/1
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X025_1  items setting
+                PCIe function swap -> Enabled
+                PCI Express Root Port 1 > Connection Type -> Built-in
+
+  Release BIOS Information:
+    25320000060X025.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.1.4_010
+                            2. Microcode m_01_90661_0000000f
+                            3. RC Version 1.1.4
+                            4. GOP 18.0.1031
+                            5. CSE 15.40.10.2204
+                            6. PCIE 4X1
+    25320000160X025.BIN --- 1. GOP DDI2 DP setting
+                            2. PCIE 1X4
+
+
+    ROM Storage File GUID (a0327fe0-1fda-4e5b-905d-b510c45a61d0) included option rom.
+        IGD UEFI    : 380b6b4f-1454-41f2-a6d3-61d1333e8cb4
+        IGD VBT     : ebb8a2d4-d271-4dfc-bca8-3181d5aec7d6
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X024.BIN;25320000160X024.BIN
+  BIOS Checksum : D0E2;5E81
+  BIOS String   : (25320000060X024) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2021/5/10
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X024_1  item setting and hide
+                PCIe function swap -> Disabled
+    2532X024_2  Set EC boot count command
+    2532X024_3  remove MRC read LPDDR4
+    2532X024_4  keep TSN MAC Addr after afu update
+
+  Release BIOS Information:
+    25320000060X024.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.1.4_010
+                            2. Microcode m_01_90661_0000000f
+                            3. RC Version 1.1.4
+                            4. GOP 18.0.1031
+                            5. CSE 15.40.10.2204
+                            6. PCIE 4X1
+    25320000160X024.BIN --- 1. GOP DDI2 DP setting
+                            2. PCIE 1X4
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X023.BIN;25320000160X023.BIN
+  BIOS Checksum : AF8B;5105
+  BIOS String   : (25320000060X023) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2021/4/21
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X023_1  set OEM VERB TABLE
+    2532X023_2  Support USB KB/MS wake from S4
+
+  Release BIOS Information:
+    25320000060X023.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.1.4_010
+                            2. Microcode m_01_90661_0000000f
+                            3. RC Version 1.1.4
+                            4. GOP 18.0.1031
+                            5. CSE 15.40.10.2204
+                            6. PCIE 4X1
+    25320000160X023.BIN --- 1. GOP DDI2 DP setting
+                            2. PCIE 1X4
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X022.BIN;25320000160X022.BIN
+  BIOS Checksum : 0ED6;F651
+  BIOS String   : (25320000060X022) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2021/4/8
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X022_1  Gray out items with User access level
+    2532X022_2  items hide
+
+  Release BIOS Information:
+    25320000060X022.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.1.4_010
+                            2. Microcode m_01_90661_0000000f
+                            3. RC Version 1.1.4
+                            4. GOP 18.0.1031
+                            5. CSE 15.40.10.2204
+                            6. PCIE 4X1
+    25320000160X022.BIN --- 1. GOP DDI2 DP setting
+                            2. PCIE 1X4
+
+
+    ROM Storage File GUID (a0327fe0-1fda-4e5b-905d-b510c45a61d0) included option rom.
+        IGD UEFI    : 380b6b4f-1454-41f2-a6d3-61d1333e8cb4
+        IGD VBT     : ebb8a2d4-d271-4dfc-bca8-3181d5aec7d6
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X021.BIN;25320000160X021.BIN
+  BIOS Checksum : F4C0;D849
+  BIOS String   : (25320000060X021) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2021/4/6
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X021_1  Set SCI and EC Q event
+
+  Release BIOS Information:
+    25320000060X021.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.1.4_010
+                            2. Microcode m_01_90661_0000000f
+                            3. RC Version 1.1.4
+                            4. GOP 18.0.1031
+                            5. CSE 15.40.10.2204
+                            6. PCIE 4X1
+    25320000160X021.BIN --- 1. GOP DDI2 DP setting
+                            2. PCIE 1X4
+
+
+    ROM Storage File GUID (a0327fe0-1fda-4e5b-905d-b510c45a61d0) included option rom.
+        IGD UEFI    : 380b6b4f-1454-41f2-a6d3-61d1333e8cb4
+        IGD VBT     : ebb8a2d4-d271-4dfc-bca8-3181d5aec7d6
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X020.BIN;25320000160X020.BIN
+  BIOS Checksum : 96E0;B0B7
+  BIOS String   : (25320000060X020) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2021/3/16
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X020_1  SCN1 PIN1 GP_D03 decide to load default after clear CMOS
+    2532X020_2  add RxAuthenticationLib for AMI USB3 debug
+    2532X020_3  add and disable top swap function
+
+  Release BIOS Information:
+    25320000060X020.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.1.4_010
+                            2. Microcode m_01_90661_0000000f
+                            3. RC Version 1.1.4
+                            4. GOP 18.0.1031
+                            5. CSE 15.40.10.2204
+                            6. PCIE 4X1
+    25320000160X020.BIN --- 1. GOP DDI2 DP setting
+                            2. PCIE 1X4
+
+
+    ROM Storage File GUID (a0327fe0-1fda-4e5b-905d-b510c45a61d0) included option rom.
+        IGD UEFI    : 380b6b4f-1454-41f2-a6d3-61d1333e8cb4
+        IGD VBT     : ebb8a2d4-d271-4dfc-bca8-3181d5aec7d6
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X019.BIN;25320000160X019.BIN
+  BIOS Checksum : 32B2;A733
+  BIOS String   : (25320000060X019) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2021/3/5
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X019_1  set Sata Led
+    2532X019_2  add SER1, SER2 in UA00, UA02 intel RC
+    2532X019_3  items setting
+
+  Release BIOS Information:
+    25320000060X019.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.1.4_010
+                            2. Microcode m_01_90661_0000000f
+                            3. RC Version 1.1.4
+                            4. GOP 18.0.1031
+                            5. CSE 15.40.10.2204
+                            6. PCIE 4X1
+    25320000160X019.BIN --- 1. GOP DDI2 DP setting
+                            2. PCIE 1X4
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X018.BIN;25320000160X018.BIN
+  BIOS Checksum : D6B9;D9F6
+  BIOS String   : (25320000060X018) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2021/3/3
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X018_1  add Audio Codec: ALC897
+    2532X018_2  set GOP in option rom
+    2532X018_3  items and XML setting
+
+  Release BIOS Information:
+    25320000060X018.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.1.4_010
+                            2. Microcode m_01_90661_0000000f
+                            3. RC Version 1.1.4
+                            4. GOP 18.0.1031
+                            5. CSE 15.40.10.2204
+                            6. PCIE 4X1
+    25320000160X018.BIN --- 1. GOP DDI2 DP setting
+                            2. PCIE 1X4
+
+
+    ROM Storage File GUID (a0327fe0-1fda-4e5b-905d-b510c45a61d0) included option rom.
+        IGD UEFI    : 380b6b4f-1454-41f2-a6d3-61d1333e8cb4
+        IGD VBT     : ebb8a2d4-d271-4dfc-bca8-3181d5aec7d6
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X017.BIN;25320000160X017.BIN
+  BIOS Checksum : 4C1C;D5F1
+  BIOS String   : (25320000060X017) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2021/2/19
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X017_1  update AMI codebase X010
+
+  Release BIOS Information:
+    25320000060X017.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.1.4_010
+                            2. Microcode m_01_90661_0000000f
+                            3. RC Version 1.1.4
+                            4. GOP 18.0.1031
+                            5. CSE 15.40.10.2204
+                            6. PCIE 4X1
+    25320000160X017.BIN --- 1. GOP DDI2 DP setting
+                            2. PCIE 1X4
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X016.BIN;25320000160X016.BIN
+  BIOS Checksum : DE37;19DB
+  BIOS String   : (25320000060X016) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2021/1/22
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X016_1  items setting
+
+  Release BIOS Information:
+    25320000060X016.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.1.1_006
+                            2. Microcode m_01_90661_00000005
+                            3. RC Version 1.1.1
+                            4. GOP 18.0.1030
+                            5. CSE 15.40.0.2066
+                            6. PCIE 4X1
+    25320000160X016.BIN --- 1. GOP DDI2 DP setting
+                            2. PCIE 1X4
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X015.BIN;25320000160X015.BIN
+  BIOS Checksum : B391;CE63
+  BIOS String   : (25320000060X015) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2021/1/6
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X015_1  item setting: Network stack Enabled
+    2532X015_2  support BIOS VERSION in SMBIOS for customer
+
+  Release BIOS Information:
+    25320000060X015.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.1.1_006
+                            2. Microcode m_01_90661_00000005
+                            3. RC Version 1.1.1
+                            4. GOP 18.0.1030
+                            5. CSE 15.40.0.2066
+                            6. PCIE 4X1
+    25320000160X015.BIN --- 1. GOP DDI2 DP setting
+                            2. PCIE 1X4
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X014.BIN;25320000160X014.BIN
+  BIOS Checksum : 93D7;5004
+  BIOS String   : (25320000060X014) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2020/12/15
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X014_1  Set GPIO Volts in ME
+                1.8Volts: E2, E11, E13, H16, H19
+                3.3Volts: D11
+
+  Release BIOS Information:
+    25320000060X014.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.1.1_006
+                            2. Microcode m_01_90661_00000005
+                            3. RC Version 1.1.1
+                            4. GOP 18.0.1030
+                            5. CSE 15.40.0.2066
+                            6. PCIE 4X1
+    25320000160X014.BIN --- 1. GOP DDI2 DP setting
+                            2. PCIE 1X4
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X013.BIN;25320000160X013.BIN
+  BIOS Checksum : 03B3;B2D7
+  BIOS String   : (25320000060X013) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2020/12/9
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X013_1  add SMARC GPIO items
+    2532X013_2  set SOC UART2 GPIO default
+    2532X013_3  add backlight control method
+    2532X013_4  Followed JEP106AZ of JEDEC Spec to report Manufacturer ID
+    2532X013_5  item PCIe Speed to GEN3
+
+  Release BIOS Information:
+    25320000060X013.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.1.1_006
+                            2. Microcode m_01_90661_00000005
+                            3. RC Version 1.1.1
+                            4. GOP 18.0.1030
+                            5. CSE 15.40.0.2066
+                            6. PCIE 4X1
+    25320000160X013.BIN --- 1. GOP DDI2 DP setting
+                            2. PCIE 1X4
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X012.BIN;25320000160X012.BIN
+  BIOS Checksum : 7EF5;BA5C
+  BIOS String   : (25320000060X012) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2020/11/16
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X012_1  SOC uart ConsoleRedirection support
+    2532X012_2  set SOC pin CAN0 1.8V in ME
+
+  Release BIOS Information:
+    25320000060X012.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.1.1_006
+                            2. Microcode m_01_90661_00000005
+                            3. RC Version 1.1.1
+                            4. GOP 18.0.1030
+                            5. CSE 15.40.0.2066
+                            6. PCIE 4X1
+    25320000160X012.BIN --- 1. GOP DDI2 DP setting
+                            2. PCIE 1X4
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X011.BIN;25320000160X011.BIN
+  BIOS Checksum : 9085;8D8D
+  BIOS String   : (25320000060X011) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2020/10/27
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X011_1  items setting and hidden
+                Disable PSE SPI0, HID Event Filter Driver
+    2532X011_2  set System_OK_LED# when ReadyToBoot
+
+  Release BIOS Information:
+    25320000060X011.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.1.1_006
+                            2. Microcode m_01_90661_00000005
+                            3. RC Version 1.1.1
+                            4. GOP 18.0.1030
+                            5. CSE 15.40.0.2066
+                            6. PCIE 4X1
+    25320000160X011.BIN --- 1. GOP DDI2 DP setting
+                            2. PCIE 1X4
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X010.BIN;25320000160X010.BIN
+  BIOS Checksum : 35D8;EC88
+  BIOS String   : (25320000060X010) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2020/10/21
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X010_1  items setting and hidden
+                enable eMMC Controller, disable PSE UART0
+    2532X010_2  show GPIO controller in OS
+    2532X010_3  update UNDI V5.10.c
+    2532X010_4  remove battery info.
+
+  Release BIOS Information:
+    25320000060X010.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.1.1_006
+                            2. Microcode m_01_90661_00000005
+                            3. RC Version 1.1.1
+                            4. GOP 18.0.1030
+                            5. CSE 15.40.0.2066
+                            6. PCIE 4X1
+    25320000160X010.BIN --- 1. GOP DDI2 DP setting
+                            2. PCIE 1X4
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X009.BIN;25320000160X009.BIN
+  BIOS Checksum : 2B1F;47C0
+  BIOS String   : (25320000060X009) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2020/10/8
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X009_1  update AMI codebase X006
+
+  Release BIOS Information:
+    25320000060X009.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.1.1_006
+                            2. Microcode m_01_90661_00000005
+                            3. RC Version 1.1.1
+                            4. GOP 18.0.1030
+                            5. CSE 15.40.0.2066
+                            6. PCIE 4X1
+    25320000160X009.BIN --- 1. GOP DDI2 DP setting
+                            2. PCIE 1X4
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X008.BIN;25320000160X008.BIN
+  BIOS Checksum : 89D0;0C45
+  BIOS String   : (25320000060X008) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2020/10/7
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X008_1  items setting and hidden
+                "Low Power S0 Idle Capability" to Disabled
+    2532X008_2  ME setting
+                "PCIe Controller 0 Lane Reversal Enabled" to No
+    2532X008_3  remove Virtual Serial COM port
+
+  Release BIOS Information:
+    25320000060X008.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.1.0_005
+                            2. Microcode m_01_90661_00000005
+                            3. RC Version 1.1.0
+                            4. GOP 18.0.1030
+                            5. CSE 15.40.0.2066
+                            6. PCIE 4X1
+    25320000160X008.BIN --- 1. GOP DDI2 DP setting
+                            2. PCIE 1X4
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X007.BIN;25320000160X007.BIN
+  BIOS Checksum : 4F6E;3CB4
+  BIOS String   : (25320000060X007) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2020/9/28
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X007_1  hide items ( Left Ctrl + TAB to unhide/hide)
+    2532X007_2  USB3 Setting in ME
+                USB3 Port 2 Connector Type Select: Type A or Type C
+    2532X007_3  itmes setting
+                Audio DSP: Disabled, ACPI D3Cold Support: Disabled
+
+  Release BIOS Information:
+    25320000060X007.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.1.0_005
+                            2. Microcode m_01_90661_00000005
+                            3. RC Version 1.1.0
+                            4. GOP 18.0.1030
+                            5. CSE 15.40.0.2066
+                            6. PCIE 4X1
+    25320000160X007.BIN --- 1. GOP DDI2 DP setting
+                            2. PCIE 1X4
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X006.BIN;25320000160X006.BIN
+  BIOS Checksum : 6BA1;42B5
+  BIOS String   : (25320000060X006) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2020/9/16
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X006_1  update AMI codebase X005
+    2532X006_2  USB3 Setting in ME
+                USB3 Port 1 Connector Type Select: Type A or Type C
+                USB3 Port 2 Connector Type Select: Type C
+    2532X006_3  itmes setting
+                Audio Link Mode: Advanced Link Config; DMIC #0/1: Disabled; SNDW #1: Disabled
+
+  Release BIOS Information:
+    25320000060X006.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.1.0_005
+                            2. Microcode m_01_90661_00000005
+                            3. RC Version 1.1.0
+                            4. GOP 18.0.1030
+                            5. CSE 15.40.0.2066
+                            6. PCIE 4X1
+    25320000160X006.BIN --- 1. GOP DDI2 DP setting
+                            2. PCIE 1X4
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X005.BIN;25320000160X005.BIN
+  BIOS Checksum : 0EF2;4AB7
+  BIOS String   : (25320000060X005) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2020/9/10
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X005_1  Add item SATA Controller Speed
+    2532X005_2  Set "USB2 Port 1 Connector Type Select" to "Type A / Type C" in ME
+    2532X005_3  Add VerbTable ALC888 and items setting
+                Audio Link Mode: HD Audio Link, HDA-Link codec select: External Kit
+    2532X005_4  option for Pcie 1x4 and GOP DDI2 DP setting
+
+  Release BIOS Information:
+    25320000060X005.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.0.3_004
+                            2. Microcode m_01_90660_00000009
+                            3. RC Version 1.0.3
+                            4. GOP 18.0.1029
+                            5. ME 15.40.0.2010
+                            6. PCIE 4X1
+    25320000160X005.BIN --- 1. GOP DDI2 DP setting
+                            2. PCIE 1X4
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X004.BIN;25320000160X004.BIN
+  BIOS Checksum : 513C;99A2
+  BIOS String   : (25320000060X004) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2020/9/8
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X004_1  add NXP items, and enable non-EDID
+    2532X004_2  USB OC mapping
+    2532X004_3  items setting
+                Disable ASPM, PCIE clock geting, clkreq
+                Enable PCIE clock0/1/2
+                PSE>GBE0/1 Host owned
+    2532X004_4  option for DDI2 DP setting
+
+  Release BIOS Information:
+    25320000060X004.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.0.3_004
+                            2. Microcode m_01_90660_00000009
+                            3. RC Version 1.0.3
+                            4. GOP 18.0.1029
+                            5. ME 15.40.0.2010
+    25320000160X004.BIN --- GOP DDI2 DP setting
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X003.BIN
+  BIOS Checksum : 7804
+  BIOS String   : (25320000060X003) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2020/8/28
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X003_1  add IO ITE5121 (Embedded Controller in BIOS setup)
+    2532X003_2  GPIO setting
+                set GP_C02_PSE_PWM00_SMB_ALERT_N_PSE_TGPIO29 to GPIO
+    2532X003_3  items setting
+                State After G3 to S5
+                disable I2C1,3,5,6,7, UART1, eMMC 5.1 Controller
+
+  Release BIOS Information:
+    25320000060X003.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.0.3_004
+                            2. Microcode m_01_90660_00000009
+                            3. RC Version 1.0.3
+                            4. GOP 18.0.1029
+                            5. ME 15.40.0.2010
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X002.BIN
+  BIOS Checksum : E388
+  BIOS String   : (25320000060X002) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2020/8/21
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X002_1  update AMI codebase X004
+    2532X002_2  set flash clock 20MHz and add flash W25R256JW in ME
+    2532X002_3  set to get external SPD data
+
+  Release BIOS Information:
+    25320000060X002.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.0.3_004
+                            2. Microcode m_01_90660_00000009
+                            3. RC Version 1.0.3
+                            4. GOP 18.0.1029
+                            5. ME 15.40.0.2010
+
+
+//----------------------------------------------------------------------------
+//  Revision History
+//----------------------------------------------------------------------------
+  BIOS Name     : 25320000060X001.BIN
+  BIOS Checksum : AD82
+  BIOS String   : (25320000060X001) EVALUATION FOR V1.10 - NOT FOR SALE
+  Release Date  : 2020/7/10
+
+  Owner         : kelvin.chen
+  Requester     : Lala.Chou eFlow#27009
+  Customer      : Advantech-SOM
+
+  Release Description:
+    2532X001_1  bring up and disable QuadIo in ME
+
+  Release BIOS Information:
+    25320000060X001.BIN --- 1. AMI Codebase 5.19_1AWHS_RC1.0.2_003
+                            2. Microcode M0190660_00000006
+                            3. RC Version 1.0.2
+                            4. GOP 18.0.1026
+                            5. ME 15.40.0.1017
+
+
+//---------------------------------------------------------------------------
+//---------------------------------------------------------------------------
+//---------------------------------------------------------------------------
+//Previous History
+//---------------------------------------------------------------------------
+//---------------------------------------------------------------------------
+//
+//   Copyright (c) 2020-2023 Advantech Co., Ltd.
+//   This program contains proprietary and confidential information.
+//   All rights reserved except as may be permitted by prior written consent.
+//
+//----------------------------------------------------------------------------
+//  Project Name : SOM-2532 
+//----------------------------------------------------------------------------
+//  Hardware Configuration
+//----------------------------------------------------------------------------
+    CPU         : ElkhartLake
+    Chipset     : ElkhartLake
+    ClockGEN    : ElkhartLake
+    SuperI/O    : ITE-5121
+    Flash ROM   : W25R256JW
+//----------------------------------------------------------------------------
+
+    BIOS Name Definition Example:
+    25320000060X001
+    |   | ||||^^^^^----------- BIOS Version
+    |   | |||^---------------- BIOS Build mode: 6 = 64 bit
+    |   | ||^----------------- ME sku type:
+    |   | |^------------------ Chipset sku type:
+    |   | ^------------------- Reservd --> for option BIOS: 0,1,2,...
+    |   ^^-------------------- Project name extension define by PD
+    ^^^^---------------------- Project name define by PD
+
+
+    ROM Storage File GUID (a0327fe0-1fda-4e5b-905d-b510c45a61d0) included option rom.
+        IGD UEFI    : 380b6b4f-1454-41f2-a6d3-61d1333e8cb4
+        IGD VBT     : ebb8a2d4-d271-4dfc-bca8-3181d5aec7d6
+

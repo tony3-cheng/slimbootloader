@@ -39,6 +39,7 @@ Defines Platform BoardIds
 // ElkhartLake Board Id 0x06
 #define BoardIdEhlUp6000                 0x06
 
+#define BoardId_SOM2532                   0x10
 #define BoardIdUnknown1                   0xFFFF
 
 

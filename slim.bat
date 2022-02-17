@@ -6,6 +6,7 @@
 @IF "%1"=="-k" goto BuildKey
 @IF "%1"=="-?" goto HelpMsg
 @IF "%1"=="-h" goto HelpMsg
+@goto Exit
 
 :EnvSet
 @title Slim Boot Loader Setting environment
@@ -80,11 +81,11 @@ python BuildLoader.py build cfl -r -p "OsLoader.efi:LLDR:Lz4;UEFIPAYLOADRel.fd:U
 :Buildehl
 @title Slim Boot Loader - Buildehl
 @IF "%3"=="-r" goto Buildehlr
-python BuildLoader.py build ehl -p "OsLoader.efi:LLDR:Lz4;UEFIPAYLOADDbg.fd:UEFI:Lzma"
-@goto BuildEnd
+python BuildLoader.py build ehl -p "OsLoader.efi:LLDR:Lz4;UEFIPAYLOADDbg.fd:UEFI:Lzma" -fp Platform/ElkhartlakeBoardPkg/BiosBin 
+@goto Stitchehl
 :Buildehlr
-python BuildLoader.py build ehl -r -p "OsLoader.efi:LLDR:Lz4;UEFIPAYLOADRel.fd:UEFI:Lzma"
-@goto BuildEnd
+python BuildLoader.py build ehl -r -p "OsLoader.efi:LLDR:Lz4;UEFIPAYLOADRel.fd:UEFI:Lzma" -fp Platform/ElkhartlakeBoardPkg/BiosBin
+@goto Stitchehl
 
 :Buildcml
 @title Slim Boot Loader - Buildcml
@@ -130,7 +131,7 @@ python Platform/CoffeelakeBoardPkg/Script/StitchLoader.py -i Platform/Coffeelake
 @goto StitchEnd
 
 :Stitchtgl
-python Platform/TigerlakeBoardPkg/Script/StitchLoader.py -i Platform/TigerlakeBoardPkg/BiosBin/7583000U060V110.BIN -s Outputs/tgl/SlimBootloader.bin -o Build/7583000S060V110.BIN -p AA000201
+python Platform/TigerlakeBoardPkg/Script/StitchLoader.py -i Platform/TigerlakeBoardPkg/BiosBin/7583000U060V110.BIN -s Outputs/tgl/SlimBootloader.bin -o Build/7583000S060X001.BIN -p AA000201
 ::python Platform/TigerlakeBoardPkg/Script/StitchIfwi.py -b vm -w %CD%\..\Download\TigerlakeStitch -c Platform/TigerlakeBoardPkg/Script/StitchIfwiConfig_tglu.py -s Outputs/tgl/Stitch_Components.zip -p tglu_b0
 
 @goto StitchEnd
@@ -141,6 +142,7 @@ python Platform/TigerlakeBoardPkg/Script/StitchLoader.py -i Platform/TigerlakeBo
 @goto StitchEnd
 
 :Stitchehl
+python Platform/ElkhartlakeBoardPkg/Script/StitchLoader.py -i Platform/ElkhartlakeBoardPkg/BiosBin/25320000060V110.BIN -s Outputs/ehl/SlimBootloader.bin -o Build/25320000060X001.BIN -p AA000210
 ::python Platform/TigerlakeBoardPkg/Script/StitchLoader.py -i Platform/TigerlakeBoardPkg/BiosBin/AmiTglHCfg1.bin -s Outputs/tgl/SlimBootloader.bin -o Build/AmiTglHCfg1S.bin
 
 @goto StitchEnd

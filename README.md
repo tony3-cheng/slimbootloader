@@ -1,5 +1,6 @@
   Advantech Slim Bootloader support 
 =====================================
+![Alt text](https://www.advantech.tw/css/css-img/advantech-logo-notagl.svg "Advantech sbl")
 
 Status
 ------
@@ -26,10 +27,11 @@ Status
 
   |Elkhartlake|PlatformID|BringUp|GPIO|HSIO|EC(IO)|GOP(VBT)|Payload|
   |----|----|----|----|----|----|----|----|
-  |SOM-2532|NotReady|NotReady|NotReady|NotReady|NotReady|NotReady|NotReady|
+  |SOM-2532|0x10|Yes|NotReady|NotReady|NotReady|Yes|UEFI|
 
 History
 -------
+  2532X001    Add SOM-2532 support with external fsp binary.
   6882X001_1  Update GPIO setting and removed CRB EC support.
 
 
