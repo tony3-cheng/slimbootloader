@@ -1,11 +1,12 @@
-  Advantech Slim Bootloader support 
-=====================================
 ![Alt text](https://www.advantech.tw/css/css-img/advantech-logo-notagl.svg "Advantech sbl")
+
+Slim Bootloader support 
+=======================
 
 Status
 ------
 
-  |Apollolake|PlatformID|Bring up|GPIO|HSIO|EC(IO)|GOP(VBT)|Payload|
+  |Apollolake|Platform ID|Bring up|GPIO|HSIO|EC(IO)|GOP(VBT)|Payload|
   |----|----|----|----|----|----|----|----|
   |SOM-2569|0x10|Yes|NotReady|NotReady|NotReady|Yes|UEFI|
   |SOM-3569|0x11|Yes|NotReady|NotReady|NotReady|Yes|UEFI|
@@ -13,25 +14,26 @@ Status
   |SOM-7569|0x13|Yes|NotReady|NotReady|NotReady|Yes|UEFI|
 
 
-  |Coffeelake|PlatformID|Bring up|GPIO|HSIO|EC(IO)|GOP(VBT)|Payload|
+  |Coffeelake|Platform ID|Bring up|GPIO|HSIO|EC(IO)|GOP(VBT)|Payload|
   |----|----|----|----|----|----|----|----|
   |SOM-6882|0x01|Yes|Yes|NotReady|NotReady|Yes|UEFI|
 
-  |Cometlake|PlatformID|Bring up|GPIO|HSIO|EC(IO)|GOP(VBT)|Payload|
+  |Cometlake|Platform ID|Bring up|GPIO|HSIO|EC(IO)|GOP(VBT)|Payload|
   |----|----|----|----|----|----|----|----|
   |NotReady|NotReady|NotReady|NotReady|NotReady|NotReady|NotReady|NotReady|
 
-  |Tigerlake|PlatformID|Bring up|GPIO|HSIO|EC(IO)|GOP(VBT)|Payload|
+  |Tigerlake|Platform ID|Bring up|GPIO|HSIO|EC(IO)|GOP(VBT)|Payload|
   |----|----|----|----|----|----|----|----|
   |SOM-7583|0x10|Yes|Yes|Yes|NotReady|Yes|UEFI|
 
-  |Elkhartlake|PlatformID|BringUp|GPIO|HSIO|EC(IO)|GOP(VBT)|Payload|
+  |Elkhartlake|Platform ID|BringUp|GPIO|HSIO|EC(IO)|GOP(VBT)|Payload|
   |----|----|----|----|----|----|----|----|
   |SOM-2532|0x10|Yes|NotReady|NotReady|NotReady|Yes|UEFI|
 
 History
 -------
   2532X001    Add SOM-2532 support with external fsp binary.
+  
   6882X001_1  Update GPIO setting and removed CRB EC support.
 
 
