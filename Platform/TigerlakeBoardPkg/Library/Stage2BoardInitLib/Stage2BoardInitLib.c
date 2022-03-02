@@ -1346,7 +1346,7 @@ UpdateFspConfig (
 // SOM7583 >>
     FspsConfig->SerialIoUartMode[0] = 0;  // Force UART to PCI mode to enable OS to have full control
     FspsConfig->SerialIoUartMode[1] = 0;  // Force UART to PCI mode to enable OS to have full control
-    FspsConfig->SerialIoUartMode[2] = 0;  // Force UART to PCI mode to enable OS to have full control
+    FspsConfig->SerialIoUartMode[2] = 1;  //7583X002 Force UART to PCI mode to enable OS to have full control
 // SOM7583 >>
   //
   // Update device interrupt table

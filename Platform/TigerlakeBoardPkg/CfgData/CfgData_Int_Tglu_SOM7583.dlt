@@ -47,6 +47,10 @@ MEMORY_CFG_DATA.PcieClkSrcUsage   | { 0x40, 0x80, 0xFF, 0xFF, 0x08, 0xFF, 0xFF, 
 PLDSEL_CFG_DATA.PldSelGpio.Enable                           | 1
 PLDSEL_CFG_DATA.PldSelGpio.PadGroup                         | 1
 PLDSEL_CFG_DATA.PldSelGpio.PinNumber                        | 15
+PLDSEL_CFG_DATA.PldSelGpio.PinPolarity                      | 0
+
+# PLDSEL_CFG_DATA.PldSelGpio.PinPolarity value will read 0 for UEFI Payload.
+# PLDSEL_CFG_DATA.PldSelGpio.PinPolarity value will read 1 for OS Loader.
 
 #
 # By default use Osloader Payload, set to "UEFI" to select UEFI payload.
@@ -58,7 +62,7 @@ PLDSEL_CFG_DATA.PldSelGpio.PinNumber                        | 15
 # When 3/4 is stuffed the value will read 0 for UEFI Payload.
 # When 3/4 is un-stuffed the value will read 1 for OS Loader.
 #
-GEN_CFG_DATA.PayloadId                                      | 'UEFI'
+GEN_CFG_DATA.PayloadId                                      | 'AUTO'
  
 GPIO_CFG_DATA.GpioPinConfig0_GPP_B15.GPIODirection_GPP_B15  | 0xB
 SILICON_CFG_DATA.PchHdaEnable                               | 0x00

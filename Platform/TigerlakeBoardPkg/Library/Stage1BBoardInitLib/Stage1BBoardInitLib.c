@@ -447,6 +447,7 @@ UpdateFspConfig (
     break;
   case BoardIdTglUSOM7583:
     CopyMem(SaDisplayConfigTable, (VOID *)(UINTN)mSOM7583DisplayDdiConfig, sizeof(mSOM7583DisplayDdiConfig));
+    break;
   default:
     DEBUG((DEBUG_INFO, "Unsupported board Id %x .....\n", BoardId));
     break;

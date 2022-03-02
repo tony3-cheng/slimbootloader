@@ -22,9 +22,9 @@ Status
   |----|----|----|----|----|----|----|----|
   |NotReady|NotReady|NotReady|NotReady|NotReady|NotReady|NotReady|NotReady|
 
-  |Tigerlake|Platform ID|Bring up|GPIO|HSIO|EC(IO)|GOP(VBT)|Payload|
-  |----|----|----|----|----|----|----|----|
-  |SOM-7583|0x10|Yes|Yes|Yes|NotReady|Yes|UEFI|
+  |Tigerlake|Platform ID|Bring up|GPIO|HSIO|EC(IO)|GOP(VBT)|PYLD|EPLD|
+  |----|----|----|----|----|----|----|----|----|
+  |SOM-7583|0x10|Yes|Yes|Yes|NotReady|Yes|OSLR|UEFI|
 
   |Elkhartlake|Platform ID|BringUp|GPIO|HSIO|EC(IO)|GOP(VBT)|Payload|
   |----|----|----|----|----|----|----|----|
@@ -32,8 +32,9 @@ Status
 
 History
 -------
+
+  7583X002    Update Platform ID to 0x10 and enable SOC UART2 debug port.
   2532X001    Add SOM-2532 support with external fsp binary.
-  
   6882X001_1  Update GPIO setting and removed CRB EC support.
 
 
