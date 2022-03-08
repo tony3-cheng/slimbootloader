@@ -192,8 +192,9 @@ class Board(BaseBoard):
         self._generated_cfg_file_prefix = 'Autogen_'
         self._CFGDATA_INT_FILE = []
 # 2532X001        self._CFGDATA_EXT_FILE = [self._generated_cfg_file_prefix + 'CfgData_Int_IotgRvp1.dlt', self._generated_cfg_file_prefix + 'CfgData_Ext_IotgCrb.dlt', self._generated_cfg_file_prefix + 'CfgData_Ext_Up6000.dlt']
-        self._CFGDATA_EXT_FILE = [self._generated_cfg_file_prefix + 'CfgData_Int_IotgRvp1.dlt', self._generated_cfg_file_prefix + 'CfgData_Ext_IotgCrb.dlt', self._generated_cfg_file_prefix + 'CfgData_Ext_Up6000.dlt', self._generated_cfg_file_prefix + 'CfgData_SOM2532.dlt']
-
+#//DS202_SBL_X001_01// >>        self._CFGDATA_EXT_FILE = [self._generated_cfg_file_prefix + 'CfgData_Int_IotgRvp1.dlt', self._generated_cfg_file_prefix + 'CfgData_Ext_IotgCrb.dlt', self._generated_cfg_file_prefix + 'CfgData_Ext_Up6000.dlt', self._generated_cfg_file_prefix + 'CfgData_SOM2532.dlt']
+        self._CFGDATA_EXT_FILE = [self._generated_cfg_file_prefix + 'CfgData_DS202.dlt']
+#//DS202_SBL_X001_01// <<
     def PlatformBuildHook (self, build, phase):
         if phase == 'pre-build:before':
             # create build folder if not exist

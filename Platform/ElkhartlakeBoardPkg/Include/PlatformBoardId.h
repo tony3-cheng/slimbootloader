@@ -40,6 +40,7 @@ Defines Platform BoardIds
 #define BoardIdEhlUp6000                 0x06
 
 #define BoardId_SOM2532                   0x10
+#define BoardId_DS202                     0x11 //DS202_SBL_X001_01//
 #define BoardIdUnknown1                   0xFFFF
 
 

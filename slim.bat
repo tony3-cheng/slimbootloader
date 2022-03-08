@@ -85,7 +85,7 @@ python BuildLoader.py build ehl -p "OsLoader.efi:LLDR:Lz4;UEFIPAYLOADDbg.fd:UEFI
 @goto Stitchehl
 :Buildehlr
 python BuildLoader.py build ehl -r -p "OsLoader.efi:LLDR:Lz4;UEFIPAYLOADRel.fd:UEFI:Lzma" -fp Platform/ElkhartlakeBoardPkg/BiosBin
-@goto Stitchehl
+@goto Stitchehlr
 
 :Buildcml
 @title Slim Boot Loader - Buildcml
@@ -145,11 +145,18 @@ python Platform/TigerlakeBoardPkg/Script/StitchLoader.py -i Platform/TigerlakeBo
 
 @goto StitchEnd
 
+:://DS202_SBL_X001_01// >>
 :Stitchehl
-python Platform/ElkhartlakeBoardPkg/Script/StitchLoader.py -i Platform/ElkhartlakeBoardPkg/BiosBin/25320000060V110.BIN -s Outputs/ehl/SlimBootloader.bin -o Build/25320000060X001.BIN -p AA000210
+python Platform/ElkhartlakeBoardPkg/Script/StitchLoader.py -i Platform/ElkhartlakeBoardPkg/BiosBin/D2020000060X013.BIN -s Outputs/ehl/SlimBootloader.bin -o D20200S0D60X001.BIN -p AA00FF11
 ::python Platform/TigerlakeBoardPkg/Script/StitchLoader.py -i Platform/TigerlakeBoardPkg/BiosBin/AmiTglHCfg1.bin -s Outputs/tgl/SlimBootloader.bin -o Build/AmiTglHCfg1S.bin
 
 @goto StitchEnd
+
+:Stitchehlr
+python Platform/ElkhartlakeBoardPkg/Script/StitchLoader.py -i Platform/ElkhartlakeBoardPkg/BiosBin/D2020000060X013.BIN -s Outputs/ehl/SlimBootloader.bin -o D20200S0060X001.BIN -p AA00FF11
+@goto StitchEnd
+:://DS202_SBL_X001_01// <<
+
 
 :Stitchcml
 ::python Platform/TigerlakeBoardPkg/Script/StitchLoader.py -i Platform/TigerlakeBoardPkg/BiosBin/AmiTglHCfg1.bin -s Outputs/tgl/SlimBootloader.bin -o Build/AmiTglHCfg1S.bin
