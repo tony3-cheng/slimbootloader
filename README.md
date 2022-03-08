@@ -29,16 +29,18 @@ Status
   |Elkhartlake|Platform ID|BringUp|GPIO|HSIO|EC(IO)|GOP(VBT)|Payload|
   |----|----|----|----|----|----|----|----|
   |SOM-2532|0x10|Yes|NotReady|NotReady|NotReady|Yes|UEFI|
+  |DS-202|0x11|Yes|Ready|NotReady|NotReady|Yes|UEFI|
 
 History
 -------
 
-  7583X002    Update Platform ID to 0x10 and enable SOC UART2 debug port.
+  7583X002        Update Platform ID to 0x10 and enable SOC UART2 debug port.
   
-  2532X001    Add SOM-2532 support with external fsp binary.
+  2532X001        Add SOM-2532 support with external fsp binary.
   
-  6882X001_1  Update GPIO setting and removed CRB EC support.
-
+  6882X001_1      Update GPIO setting and removed CRB EC support.
+ 
+  DS202_SBL_X001  Add DS-202 ElkhartLake project support
 
 Build Environment
 -----------------
