@@ -1808,7 +1808,10 @@ UpdateFspConfig (
     // configure s0ix related FSP-S config
     Fspscfg->XdciEnable = 0;
   }
-<<<<<<< HEAD
+
+  // PCH_GPIO_PADS
+  Fspscfg->PchUnlockGpioPads = (UINT8)SiCfgData->PchUnlockGpioPads;
+
 
 //DS202_SBL_X001_04// >>
 {  
@@ -1860,10 +1863,6 @@ UpdateFspConfig (
    Fspscfg->ScsSdCardEnabled    = 0;
 //DS202_SBL_X001_08// <<
 
-=======
-  // PCH_GPIO_PADS
-  Fspscfg->PchUnlockGpioPads = (UINT8)SiCfgData->PchUnlockGpioPads;
->>>>>>> t-upstream/master
 }
 
 
