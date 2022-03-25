@@ -83,6 +83,8 @@
 #include <Library/WatchDogTimerLib.h>
 #include "Dts.h"
 #include "SerialIo.h"
+#include <Library/PciePm.h>
+#include <Library/PlatformInfo.h>
 #include <Library/PlatformHookLib.h>
 
 
@@ -740,7 +742,7 @@ UpdatePayloadId (
 
   PldSelCfgData = (PLDSEL_CFG_DATA *)FindConfigDataByTag (CDATA_PLDSEL_TAG);
   if ((PldSelCfgData != NULL) && (PldSelCfgData->PldSelGpio.Enable != 0)) {
-    PayloadSelGpioPad = GpioGroupPinToPad (PldSelCfgData->PldSelGpio.PadGroup,  PldSelCfgData->PldSelGpio.PinNumber);
+    PayloadSelGpioPad = GpioGroupPinToPad (PldSelCfgData->PldSelGpio.PadGroup, PldSelCfgData->PldSelGpio.PinNumber);
     if (PayloadSelGpioPad == 0) {
       Status = EFI_ABORTED;
     } else {
@@ -981,6 +983,9 @@ BoardInit (
     }
     break;
   case PostPciEnumeration:
+    if (FeaturePcdGet (PcdEnablePciePm)) {
+      PciePmConfig ();
+    }
     Status = SetFrameBufferWriteCombining (0, MAX_UINT32);
     if (EFI_ERROR(Status)) {
       DEBUG ((DEBUG_INFO, "Failed to set GFX framebuffer as WC\n"));
@@ -1642,6 +1647,7 @@ UpdateFspConfig (
   FspsConfig->UsbTcPortEn = 0xf;
 
   if (SiCfgData != NULL) {
+    FspsConfig->EnableTcoTimer   = SiCfgData->EnableTcoTimer;
     FspsConfig->EnableTimedGpio0 = SiCfgData->EnableTimedGpio0;
     FspsConfig->EnableTimedGpio1 = SiCfgData->EnableTimedGpio1;
     FspsConfig->XdciEnable       = SiCfgData->XdciEnable;
@@ -1698,6 +1704,10 @@ UpdateFspConfig (
       FspsConfig->SerialIoUartDmaEnable[Index]       = 1;
       FspsConfig->SerialIoUartDbg2[Index]            = 0;
     }
+  }
+
+  if (FeaturePcdGet (PcdEnablePciePm)) {
+    StoreRpConfig (FspsConfig);
   }
 }
 
@@ -1954,7 +1964,8 @@ UpdateSerialPortInfo (
   IN  SERIAL_PORT_INFO  *SerialPortInfo
 )
 {
-  SerialPortInfo->BaseAddr = (UINT32) GetSerialPortBase();
+  SerialPortInfo->BaseAddr64 = GetSerialPortBase ();
+  SerialPortInfo->BaseAddr   = (UINT32) SerialPortInfo->BaseAddr64;
   SerialPortInfo->RegWidth = GetSerialPortStrideSize();
   if (GetDebugPort () >= PCH_MAX_SERIALIO_UART_CONTROLLERS) {
     // IO Type

@@ -1445,6 +1445,7 @@ UpdateSerialPortInfo (
   IN  SERIAL_PORT_INFO  *SerialPortInfo
   )
 {
+<<<<<<< HEAD
 //SOM3569X001 >>
   UINT16  PlatformId = GetPlatformId ();
   switch (PlatformId) {
@@ -1465,6 +1466,11 @@ UpdateSerialPortInfo (
 
 //SOM3569X001  SerialPortInfo->Type     = 2;
   SerialPortInfo->BaseAddr = (UINT32) GetSerialPortBase();
+=======
+  SerialPortInfo->Type     = 2;
+  SerialPortInfo->BaseAddr64 = GetSerialPortBase ();
+  SerialPortInfo->BaseAddr   = (UINT32) SerialPortInfo->BaseAddr64;
+>>>>>>> t-upstream/master
   SerialPortInfo->RegWidth = GetSerialPortStrideSize();
 
   DEBUG ((DEBUG_INFO, "SerialPortInfo Type=%d BaseAddr=0x%08X RegWidth=%d\n",
