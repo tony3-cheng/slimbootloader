@@ -26,29 +26,37 @@ Please visit [Supported Hardware](https://slimbootloader.github.io/supported-har
 Supported Platforms & Board
 ---------------------------
 
-  |Apollolake|Platform ID|Status|
-  |----|----|----|
-  |SOM-2569|0x10|UEFI|
-  |SOM-3569|0x11|UEFI|
-  |SOM-6869|0x12|UEFI|
-  |SOM-7569|0x13|UEFI|
+Apollolake
+----------
+
+SOM-2569  0x10  UEFI Payload
+
+SOM-3569  0x11  UEFI Payload
+
+SOM-6869  0x12  UEFI Payload
+
+SOM-7569  0x13  UEFI Payload
 
 
-  |Coffeelake|Platform ID|Status|
-  |----|----|----|
-  |SOM-6882|0x01|UEFI|
+Coffeelake
+----------
 
-  |Cometlake|Platform ID|Status|
-  |----|----|----|
-  |AIMB-277|NotReady|Bring up|
+SOM-6882  0x01  UEFI Payload
 
-  |Tigerlake|Platform ID|Status|
-  |----|----|----|
-  |SOM-7583|0x10|UEFI|
+Cometlake
+----------
 
-  |Elkhartlake|Platform ID|Status|
-  |----|----|----|
-  |SOM-2532|0x10|UEFI|
+AIMB-277  NotReady  Bring up
+
+Tigerlake
+----------
+
+SOM-7583  0x10  UEFI Payload
+
+Elkhartlake
+----------
+
+SOM-2532  0x10  UEFI Payload
 
 Platform CI Build Status
 ------------------------
