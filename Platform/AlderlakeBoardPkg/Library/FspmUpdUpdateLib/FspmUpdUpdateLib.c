@@ -101,9 +101,7 @@ TccModePreMemConfig (
   //FspmUpd->FspmConfig.WrcFeatureEnable         = 1;
   FspmUpd->FspmConfig.GtClosEnable               = 1;    // ***This causes hang in FSP and may end up frying up the board if this line is enabled in non-IOTG SKU ***
   FspmUpd->FspmConfig.PowerDownMode              = 0;    // controls command bus tristating during idle periods
-  if (GetCpuStepping () >= EnumAdlB0) {
-      FspmUpd->FspmConfig.HyperThreading         = 0;
-  }
+  FspmUpd->FspmConfig.HyperThreading         = 0;
   FspmUpd->FspmConfig.DisableStarv2medPrioOnNewReq = 1;
 
   FspmUpd->FspmConfig.SoftwareSramEnPreMem   = TccCfgData->TccSoftSram;
@@ -436,6 +434,7 @@ UpdateFspConfig (
   Fspmcfg->HyperThreading             = MemCfgData->HyperThreading;
   Fspmcfg->GtClosEnable               = MemCfgData->GtClosEnable;
   Fspmcfg->VmxEnable                  = MemCfgData->VmxEnable;
+  Fspmcfg->Lp5BankMode                = MemCfgData->Lp5BankMode;
 
   // CSI port
   CopyMem (Fspmcfg->IpuLaneUsed, MemCfgData->IpuLaneUsed, sizeof(MemCfgData->IpuLaneUsed));
@@ -523,6 +522,10 @@ UpdateFspConfig (
     // DP + DP
     CopyMem(SaDisplayConfigTable, (VOID *)(UINTN)mTestSDdr5RowDisplayDdiConfig3, sizeof(mTestSDdr5RowDisplayDdiConfig3));
     break;
+  case PLATFORM_ID_ADL_N_DDR5_CRB:
+    // DP + DP
+    CopyMem(SaDisplayConfigTable, (VOID *)(UINTN)mAdlNddr5CrbRowDisplayDdiConfig, sizeof(mAdlNddr5CrbRowDisplayDdiConfig));
+    break;
   case PLATFORM_ID_ADL_N_LPDDR5_RVP:
     // DP + DP
     CopyMem(SaDisplayConfigTable, (VOID *)(UINTN)mAdlNLpddr5RowDisplayDdiConfig, sizeof(mAdlNLpddr5RowDisplayDdiConfig));
@@ -558,7 +561,9 @@ UpdateFspConfig (
     Fspmcfg->SiSkipOverrideBootModeWhenFwUpdate = TRUE;
 #endif
   }
-  Fspmcfg->WRDS = 0x1;
+#ifndef PLATFORM_ADLN
+    Fspmcfg->WRDS = 0x1;
+#endif
   if (IsPchLp ()) {
     Fspmcfg->DdiPortAConfig = 0x1;
     Fspmcfg->WdtDisableAndLock = 0x1;
@@ -590,16 +595,11 @@ UpdateFspConfig (
         break;
       case PLATFORM_ID_ADL_N_DDR5_CRB:
         Fspmcfg->CpuPcieRpEnableMask = 0x0;
-        Fspmcfg->DdiPortAConfig = 0x1;
-        Fspmcfg->DdiPortBHpd = 0x1;
-        Fspmcfg->DdiPort1Hpd = 0x1;
-        Fspmcfg->DdiPort2Hpd = 0x1;
-        Fspmcfg->DdiPortBDdc = 0x1;
-        Fspmcfg->DdiPort1Ddc = 0x1;
-        Fspmcfg->DdiPort2Ddc = 0x1;
         Fspmcfg->DmiHweq = 0x2;
         Fspmcfg->Lp5CccConfig = 0xff;
         Fspmcfg->SkipCpuReplacementCheck = 0x0;
+        Fspmcfg->FirstDimmBitMaskEcc = 0x0;
+        Fspmcfg->Lp5BankMode = 0x0;
         break;
       case PLATFORM_ID_ADL_N_LPDDR5_RVP:
         Fspmcfg->DmiHweq = 0x2;

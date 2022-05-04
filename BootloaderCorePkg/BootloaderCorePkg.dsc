@@ -219,6 +219,8 @@
   gPlatformModuleTokenSpaceGuid.PcdFSPSUpdSize            | $(FSP_S_UPD_SIZE)
   gPlatformModuleTokenSpaceGuid.PcdFSPMStackTop           | $(FSP_M_STACK_TOP)
 
+  gPlatformModuleTokenSpaceGuid.PcdMemoryMapEntryNumber   | $(MAX_MEMORY_MAP_ENTRY_NUM)
+
   gPlatformModuleTokenSpaceGuid.PcdTopSwapRegionSize      | $(TOP_SWAP_SIZE)
   gPlatformModuleTokenSpaceGuid.PcdRedundantRegionSize    | $(REDUNDANT_SIZE)
   gPlatformModuleTokenSpaceGuid.PcdCfgDataLoadSource      | $(CFGDATA_REGION_TYPE)
@@ -228,6 +230,7 @@
 
   gPlatformModuleTokenSpaceGuid.PcdAcpiProcessorIdBase    | $(ACPI_PROCESSOR_ID_BASE)
   gPlatformModuleTokenSpaceGuid.PcdCpuMaxLogicalProcessorNumber | $(CPU_MAX_LOGICAL_PROCESSOR_NUMBER)
+  gPlatformModuleTokenSpaceGuid.PcdCpuSortMethod          | $(CPU_SORT_METHOD)
 
   gPlatformCommonLibTokenSpaceGuid.PcdConsoleInDeviceMask  | $(CONSOLE_IN_DEVICE_MASK)
   gPlatformCommonLibTokenSpaceGuid.PcdConsoleOutDeviceMask | $(CONSOLE_OUT_DEVICE_MASK)
@@ -246,6 +249,7 @@
 
   gPlatformCommonLibTokenSpaceGuid.PcdSeedListEnabled     | $(HAVE_SEED_LIST)
   gPlatformCommonLibTokenSpaceGuid.PcdUsbKeyboardPollingTimeout | $(USB_KB_POLLING_TIMEOUT)
+  gPlatformCommonLibTokenSpaceGuid.PcdUsbCmdTimeout             | $(USB_CMD_TIMEOUT)
   gPlatformCommonLibTokenSpaceGuid.PcdLowestSupportedFwVer      | $(LOWEST_SUPPORTED_FW_VER)
 
   gPlatformCommonLibTokenSpaceGuid.PcdIppHashLibSupportedMask    | $(IPP_HASH_LIB_SUPPORTED_MASK)

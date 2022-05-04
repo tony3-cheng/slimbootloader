@@ -237,9 +237,6 @@ BoardInit (
       case BoardIdAdlPSDdr5Rvp:
         ConfigureGpio (CDATA_NO_TAG, sizeof (mGpioTablePostMemAdlPsDdr5Rvp) / sizeof (mGpioTablePostMemAdlPsDdr5Rvp[0]), (UINT8*)mGpioTablePostMemAdlPsDdr5Rvp);
         break;
-      case BoardIdAdlNDdr5Crb:
-        ConfigureGpio (CDATA_NO_TAG, sizeof (mGpioTablePostMemAdlNDdr5Crb) / sizeof (mGpioTablePostMemAdlNDdr5Crb[0]), (UINT8*)mGpioTablePostMemAdlNDdr5Crb);
-        break;
       case BoardIdAdlNLp5Rvp:
         ConfigureGpio (CDATA_NO_TAG, sizeof (mGpioTablePostMemAdlNLpddr5Rvp) / sizeof (mGpioTablePostMemAdlNLpddr5Rvp[0]), (UINT8*)mGpioTablePostMemAdlNLpddr5Rvp);
         break;
@@ -268,6 +265,8 @@ BoardInit (
           case PLATFORM_ID_ADL_S_ADP_S_DDR5_UDIMM_1DC_CRB:
           case PLATFORM_ID_ADL_S_ADP_S_DDR4_SODIMM_CRB:
           case PLATFORM_ID_ADL_S_ADP_S_DDR5_SODIMM_CRB:
+          case PLATFORM_ID_TEST_S_DDR5_UDIMM_RVP:
+          case PLATFORM_ID_TEST_S_DDR5_SODIMM_RVP:
             ConfigureGpio (CDATA_NO_TAG, sizeof (mAdlSTsnDeviceGpioTable) / sizeof (mAdlSTsnDeviceGpioTable[0]), (UINT8*)mAdlSTsnDeviceGpioTable);
             break;
           case PLATFORM_ID_ADL_N_DDR5_CRB:
@@ -349,7 +348,7 @@ BoardInit (
   case PrePayloadLoading:
     Status = IgdOpRegionInit ();
     if (EFI_ERROR (Status)) {
-      DEBUG ((DEBUG_WARN, "VBT not found %r\n", Status));
+      DEBUG ((DEBUG_INFO, "VBT not found %r\n", Status));
     }
 
     ///
@@ -677,7 +676,7 @@ UpdateSmmInfo (
   LdrSmmInfo->SmmBase = PcdGet32 (PcdSmramTsegBase);
   LdrSmmInfo->SmmSize = PcdGet32 (PcdSmramTsegSize);
   LdrSmmInfo->Flags = SMM_FLAGS_4KB_COMMUNICATION;
-  DEBUG ((DEBUG_ERROR, "Stage2: SmmRamBase = 0x%x, SmmRamSize = 0x%x\n", LdrSmmInfo->SmmBase, LdrSmmInfo->SmmSize));
+  DEBUG ((DEBUG_INFO, "Stage2: SmmRamBase = 0x%x, SmmRamSize = 0x%x\n", LdrSmmInfo->SmmBase, LdrSmmInfo->SmmSize));
 
   //
   // Update smi ctrl register data

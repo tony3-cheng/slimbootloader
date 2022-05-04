@@ -953,6 +953,9 @@ FspUpdatePsePolicy (
     if (MEASURED_BOOT_ENABLED() && (GetBootMode() != BOOT_ON_S3_RESUME)) {
       TpmHashAndExtendPcrEventLog (0, (UINT8 *)SiipRegionBase, SiipRegionSize, EV_EFI_PLATFORM_FIRMWARE_BLOB, sizeof("PSEF Firmware"), (UINT8 *)"PSEF Firmware");
     }
+  } else {
+    DEBUG ((DEBUG_ERROR, "PSE is enabled but missing PSE FW !! %r\n", Status));
+    return;
   }
 
   DEBUG ((DEBUG_INFO, "Load PSE firmware @ %p:0x%X - %r\n", SiipRegionBase, SiipRegionSize, Status));
@@ -965,7 +968,7 @@ FspUpdatePsePolicy (
   Fspscfg->PchPseOobEnabled       = 0;
   Fspscfg->PchPseWoLEnabled       = 1;
   Fspscfg->PchPseAicEnabled       = (UINT8)SiCfgData->PchPseAicEnabled;
-
+  Fspscfg->CpuTempSensorReadEnable= 1;
   //Fspscfg->PseJtagEnabled       = 0;
   //Fspscfg->PseJtagPinMux        = 0;
 
@@ -1093,11 +1096,14 @@ UpdateFspConfig (
   FSP_S_CONFIG       *Fspscfg;
   SILICON_CFG_DATA   *SiCfgData;
   POWER_CFG_DATA     *PowerCfgData;
+  MEMORY_CFG_DATA    *MemCfgData;
   UINT8              SaDisplayConfigTable[17] = { 0 };
 
   FspsUpd    = (FSPS_UPD *)FspsUpdPtr;
   Fspscfg     = &FspsUpd->FspsConfig;
   SiCfgData = (SILICON_CFG_DATA *)FindConfigDataByTag (CDATA_SILICON_TAG);
+  MemCfgData = (MEMORY_CFG_DATA *)FindConfigDataByTag (CDATA_MEMORY_TAG);
+
   if (SiCfgData == NULL) {
     DEBUG ((DEBUG_INFO, "Failed to find Silicon CFG!\n"));
   }
@@ -1558,9 +1564,9 @@ UpdateFspConfig (
     // PCH_8254_CONFIG
     Fspscfg->Enable8254ClockGating      = SiCfgData->Enable8254ClockGating;
     Fspscfg->Enable8254ClockGatingOnS3  = SiCfgData->Enable8254ClockGatingOnS3;
-
-    FspUpdatePsePolicy(FspsUpd, SiCfgData);
-
+    if (MemCfgData != NULL && MemCfgData->PchPseEnable) {
+      FspUpdatePsePolicy(FspsUpd, SiCfgData);
+    }
     // SA Post CONFIG
     Fspscfg->RenderStandby        = SiCfgData->RenderStandby;
     Fspscfg->PmSupport            = SiCfgData->PmSupport;
@@ -1601,7 +1607,13 @@ UpdateFspConfig (
 
   if (mPchSciSupported) {
     Fspscfg->IsFusaSupported = 0x1;
-    Fspscfg->IehMode = 0x1;
+    if (MemCfgData != NULL) {
+        if (MemCfgData->IbeccErrorInj != 0x1){
+            Fspscfg->IehMode = 0x1;
+        } else {
+            Fspscfg->IehMode = 0x0;
+        }
+    }
     //
     // PchPse*Enable UPDs should be set to to 0x2 for
     // host ownership; set to 1 for PSE ownership.
