@@ -1,7 +1,7 @@
 ## @file
 # This file is used to provide board specific image information.
 #
-#  Copyright (c) 2017-2019, Intel Corporation. All rights reserved.<BR>
+#  Copyright (c) 2017 - 2023, Intel Corporation. All rights reserved.<BR>
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -56,6 +56,7 @@ class Board(BaseBoard):
         self.ENABLE_SPLASH        = 1
         self.ENABLE_FRAMEBUFFER_INIT  = 1
         self.HAVE_PSD_TABLE       = 1
+        self.ENABLE_VTD           = 1
         self.ENABLE_GRUB_CONFIG   = 1
         self.ENABLE_CSME_UPDATE   = 0
         self.ENABLE_DMA_PROTECTION    = 0
@@ -120,7 +121,7 @@ class Board(BaseBoard):
         self.STAGE1_DATA_SIZE     = 0x00014000
 
         self.PAYLOAD_EXE_BASE     = 0x00B00000
-        self.PAYLOAD_SIZE         = 0x00029000
+        self.PAYLOAD_SIZE         = 0x00030000
         if len(self._PAYLOAD_NAME.split(';')) > 1:
             self.UEFI_VARIABLE_SIZE = 0x00040000
         else:
@@ -200,7 +201,11 @@ class Board(BaseBoard):
             'HeciLib|Silicon/CommonSocPkg/Library/HeciLib/HeciLib.inf',
             'MeChipsetLib|Silicon/CommonSocPkg/Library/MeChipsetLib/MeChipsetLib.inf',
             'ShellExtensionLib|Platform/$(BOARD_PKG_NAME)/Library/ShellExtensionLib/ShellExtensionLib.inf',
-            'VtdPmrLib|Silicon/CommonSocPkg/Library/VtdPmrLib/VtdPmrLib.inf'
+            'VtdLib|Silicon/$(SILICON_PKG_NAME)/Library/VTdLib/VTdLib.inf',
+            'VtdPmrLib|Silicon/CommonSocPkg/Library/VtdPmrLib/VtdPmrLib.inf',
+            'TcoTimerLib|Silicon/CommonSocPkg/Library/TcoTimerLib/TcoTimerLib.inf',
+            'TopSwapLib|Silicon/CommonSocPkg/Library/TopSwapLib/TopSwapLib.inf',
+            'WatchDogTimerLib|Silicon/CommonSocPkg/Library/WatchDogTimerLib/WatchDogTimerLib.inf'
         ]
         if self.BUILD_CSME_UPDATE_DRIVER:
             common_libs.append ('MeFwUpdateLib|Silicon/$(SILICON_PKG_NAME)/Library/MeFwUpdateLib/MeFwUpdateLib.inf')

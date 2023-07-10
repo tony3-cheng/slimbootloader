@@ -1,6 +1,6 @@
 /** @file
 
-  Copyright (c) 2017 - 2021, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2017 - 2022, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -29,12 +29,14 @@
 #include <Register/GpioPinsVer3.h>
 #include <Register/PseRegs.h>
 #include <Register/SaRegsHostBridge.h>
+#include <FspsUpd.h>
 #include <Library/PchSciLib.h>
 #include <Library/ConfigDataLib.h>
 #include <ConfigDataDefs.h>
 #include <TccConfigSubRegions.h>
 #include <Library/GpioLib.h>
 #include <Library/GpioSiLib.h>
+#include <PseConfig.h>
 
 #define XTAL_FREQ_24MHZ      0
 #define XTAL_FREQ_38P4MHZ    1
@@ -206,6 +208,66 @@ GetCpuStepping (
   ///
   AsmCpuid (CPUID_VERSION_INFO, &Cpuid.RegEax, &Cpuid.RegEbx, &Cpuid.RegEcx, &Cpuid.RegEdx);
   return ((CPU_STEPPING) (Cpuid.RegEax & CPUID_FULL_STEPPING));
+}
+
+/**
+  Return SIO Uart Pci Cfg base
+
+  @param[in] UartNumber          Uart index
+
+  @retval UINT64             Pci Cfg base
+**/
+UINT64
+EFIAPI
+GetSerialIoUartPciCfgBase (
+  IN UINT8       UartNumber
+  )
+{
+  if (GetPchMaxSerialIoUartControllersNum () <= UartNumber) {
+    ASSERT (FALSE);
+    return 0;
+  }
+  switch (UartNumber) {
+    case 0:
+      return 0xF0000; // B0:D30:F0
+    case 1:
+      return 0xF1000; // B0:D30:F1
+    case 2:
+      return 0xCA000; // B0:D25:F2
+    default:
+      ASSERT (FALSE);
+      return 0;
+  }
+}
+
+/**
+  Return SIO Uart Irq
+
+  @param[in] UartNumber          Uart index
+
+  @retval UINT8              irq
+**/
+UINT8
+EFIAPI
+GetSerialIoUartIrq (
+  IN UINT8       UartNumber
+  )
+{
+  if (GetPchMaxSerialIoUartControllersNum () <= UartNumber) {
+    ASSERT (FALSE);
+    return 0xFF;
+  }
+  switch (UartNumber) {
+    case 0:
+      return 16;
+    case 1:
+      return 17;
+    case 2:
+      return 33;
+    default:
+      ASSERT (FALSE);
+      return 0xFF;
+  }
 }
 
 /**
@@ -523,13 +585,14 @@ PlatformUpdateAcpiGnvs (
   UINT32                  GroupDw[3];
   EFI_CPUID_REGISTER      CpuidRegs;
   UINTN                   UfsPciBase;
-  UINTN                   PseDmaPciMmBase;
   UINTN                   PseCanPciMmBase;
   UINTN_STRUCT            MchBarBase;
   EFI_STATUS              Status;
   FEATURES_CFG_DATA       *FeaturesCfgData;
   BOOLEAN                 PchSciSupported;
   SILICON_CFG_DATA        *SiCfgData;
+  FSPS_UPD                *FspsUpd;
+  FSP_S_CONFIG            *FspsConfig;
 
   PchSciSupported         = PchIsSciSupported ();
   GlobalNvs               = (GLOBAL_NVS_AREA *) GnvsIn;
@@ -606,13 +669,13 @@ PlatformUpdateAcpiGnvs (
   PchNvs->SdCardEnabled                         = 1;
 
   UfsPciBase = PciRead32 (PCI_LIB_ADDRESS(0, 18, 5, 0));
-  DEBUG((DEBUG_INFO, "UfsPciBase0 = 0x%x\n ", UfsPciBase));
+  DEBUG((DEBUG_INFO, "UfsPciBase0 = 0x%x\n", UfsPciBase));
   if (UfsPciBase != 0xFFFFFFFF) {
     PchNvs->Ufs0Enabled                         = 1;
   }
 
   UfsPciBase = PciRead32 (PCI_LIB_ADDRESS(0, 18, 7, 0));
-  DEBUG((DEBUG_INFO, "UfsPciBase1 = 0x%x\n ", UfsPciBase));
+  DEBUG((DEBUG_INFO, "UfsPciBase1 = 0x%x\n", UfsPciBase));
   if (UfsPciBase != 0xFFFFFFFF) {
     PchNvs->Ufs1Enabled                         = 1;
   }
@@ -649,20 +712,34 @@ PlatformUpdateAcpiGnvs (
   PchNvs->DOD2                                  = 1;
   PchNvs->DOD3                                  = 1;
 
-  PseDmaPciMmBase = PciRead16 (PCI_LIB_ADDRESS(0, 29, 4, 0));
-  DEBUG((DEBUG_INFO, "PseDmaPciMmBase0 = 0x%x\n ", PseDmaPciMmBase));
-  if (PseDmaPciMmBase != 0xFFFF) {
-    PchNvs->PseDma1Address                        = PCH_PSE_DMA1_BASE_ADDRESS;
-    PchNvs->PseDma1Length                         = V_PCH_PSE_DMAC_BAR_SIZE;
-    PchNvs->PseDma1En                             = 1;
+  SiCfgData = (SILICON_CFG_DATA *)FindConfigDataByTag (CDATA_SILICON_TAG);
+
+  if ((SiCfgData != NULL) && (SiCfgData->PchPseDmaEnable[1] == HOST_OWNED)) {
+    //
+    // Saving PSE DMA1 address to DSDT
+    //
+    PchNvs->PseDma1Address                      = PCH_PSE_DMA1_BASE_ADDRESS;
+    DEBUG ((DEBUG_INFO, "Patching DSDT with PSE DMA1: 0x%x\n", PchNvs->PseDma1Address));
+    PchNvs->PseDma1Length                       = V_PCH_PSE_DMAC_BAR_SIZE;
+    PchNvs->PseDma1En                           = 1;
+  } else {
+    PchNvs->PseDma1Address                      = 0;
+    PchNvs->PseDma1Length                       = 0;
+    PchNvs->PseDma1En                           = 0;
   }
 
-  PseDmaPciMmBase = PciRead16 (PCI_LIB_ADDRESS(0, 29, 5, 0));
-  DEBUG((DEBUG_INFO, "PseDmaPciMmBase1 = 0x%x\n ", PseDmaPciMmBase));
-  if (PseDmaPciMmBase != 0xFFFF) {
-    PchNvs->PseDma2Address                        = PCH_PSE_DMA2_BASE_ADDRESS;
-    PchNvs->PseDma2Length                         = V_PCH_PSE_DMAC_BAR_SIZE;
-    PchNvs->PseDma2En                             = 1;
+  if ((SiCfgData != NULL) && (SiCfgData->PchPseDmaEnable[2] == HOST_OWNED)) {
+    //
+    // Saving PSE DMA2 address to DSDT
+    //
+    PchNvs->PseDma2Address                      = PCH_PSE_DMA2_BASE_ADDRESS;
+    DEBUG ((DEBUG_INFO, "Patching DSDT with PSE DMA2: 0x%x\n", PchNvs->PseDma2Address));
+    PchNvs->PseDma2Length                       = V_PCH_PSE_DMAC_BAR_SIZE;
+    PchNvs->PseDma2En                           = 1;
+  } else {
+    PchNvs->PseDma2Address                      = 0;
+    PchNvs->PseDma2Length                       = 0;
+    PchNvs->PseDma2En                           = 0;
   }
 
   PseCanPciMmBase = PciRead16 (PCI_LIB_ADDRESS(0, 24, 1, 0));
@@ -676,10 +753,10 @@ PlatformUpdateAcpiGnvs (
   if (PseCanPciMmBase != 0xFFFF) {
     PchNvs->PseCan1Enabled                        = 1;
   }
-  SiCfgData = (SILICON_CFG_DATA *)FindConfigDataByTag (CDATA_SILICON_TAG);
+
   if (SiCfgData != NULL) {
-      PchNvs->EnableTimedGpio0 = (UINT8)SiCfgData->EnableTimedGpio0;
-      PchNvs->EnableTimedGpio1 = (UINT8)SiCfgData->EnableTimedGpio1;
+    PchNvs->EnableTimedGpio0 = (UINT8)SiCfgData->EnableTimedGpio0;
+    PchNvs->EnableTimedGpio1 = (UINT8)SiCfgData->EnableTimedGpio1;
   }
 
   // Update Platform
@@ -838,6 +915,21 @@ PlatformUpdateAcpiGnvs (
   PlatformNvs->IC5S                             = 400000;
   PlatformNvs->IC6S                             = 400000;
   PlatformNvs->IC7S                             = 400000;
+
+  FspsUpd     = (FSPS_UPD *)(UINTN)PcdGet32 (PcdFspsUpdPtr);
+  FspsConfig  = &FspsUpd->FspsConfig;
+  Length = GetPchMaxSerialIoUartControllersNum ();
+  for (Index = 0; Index < Length ; Index++) {
+    PchNvs->UM0[Index] = FspsConfig->SerialIoUartMode[Index];
+    if (FspsConfig->SerialIoUartMode[Index] == 1) {
+      PchNvs->UC0[Index] = GetSerialIoUartPciCfgBase(Index);
+    } else if (FspsConfig->SerialIoUartMode[Index] == 3) {
+      PchNvs->UC0[Index] = PCH_SERIAL_IO_BASE_ADDRESS + 0x1F000 + 0x2000 * Index; /* COM */
+    }
+    PchNvs->UD0[Index] = FspsConfig->SerialIoUartDmaEnable[Index];
+    PchNvs->UP0[Index] = FspsConfig->SerialIoUartPowerGating[Index];
+    PchNvs->UI0[Index] = GetSerialIoUartIrq(Index);
+  }
 
   PlatformNvs->USTP                             = 1;
 

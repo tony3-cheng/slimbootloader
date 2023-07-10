@@ -59,8 +59,6 @@ GLOBAL_REMOVE_IF_UNREFERENCED GPIO_INIT_CONFIG mGpioTablePostMemAdlNDdr5Crb[] =
   //HDMIB ALS
   {GPIO_VER2_LP_GPP_A17,   {GpioPadModeGpio, GpioHostOwnAcpi, GpioDirOut,   GpioOutHigh,      GpioIntDis,                GpioPlatformReset,  GpioTermNone,}},  // HDMIB_ALS_PWR_EN
 
-  // SIO Controller
-  //{GPIO_VER2_LP_GPP_E4,  {GpioPadModeGpio, GpioHostOwnGpio, GpioDirIn,    GpioOutHigh,      GpioIntDis,                GpioPlatformReset,  GpioTermNone}},  // SIO_PCH_GPIO SCI or IOAPIC no clear
 
   // TI PDC
   {GPIO_VER2_LP_GPP_F13,   {GpioPadModeGpio, GpioHostOwnGpio, GpioDirInInv, GpioOutDefault,   GpioIntEdge|GpioIntApic,   GpioPlatformReset,  GpioTermNone,  GpioPadConfigUnlock  }},  // PD_CNTL_I2C_IRQ_N
@@ -71,7 +69,8 @@ GLOBAL_REMOVE_IF_UNREFERENCED GPIO_INIT_CONFIG mGpioTablePostMemAdlNDdr5Crb[] =
   {GPIO_VER2_LP_GPD2,      {GpioPadModeGpio, GpioHostOwnAcpi, GpioDirInInv, GpioOutDefault,   GpioIntEdge,               GpioHostDeepReset,  GpioTermNone, GpioPadConfigUnlock}},  // this is needed to be in NF mode1 FOX_WAKE_N. Set to SCI based on the setup option
 
   // PWR BTN GPIO
-  {GPIO_VER2_LP_GPP_H19,   {GpioPadModeGpio, GpioHostOwnGpio, GpioDirInInv, GpioOutDefault,   GpioIntEdge|GpioIntSci,    GpioPlatformReset,  GpioTermNone,  GpioPadConfigUnlock  }},  // PWRBTN_GPIO_N
+//  {GPIO_VER2_LP_GPP_H19,   {GpioPadModeGpio, GpioHostOwnGpio, GpioDirInInv, GpioOutDefault,   GpioIntEdge|GpioIntSci,    GpioPlatformReset,  GpioTermNone,  GpioPadConfigUnlock  }},  // PWRBTN_GPIO_N
+  {GPIO_VER2_LP_GPP_H19,   {GpioPadModeGpio, GpioHostOwnAcpi, GpioDirInInv, GpioOutDefault,   GpioIntBothEdge|GpioIntSci,    GpioHostDeepReset,  GpioTermNone,  GpioPadConfigUnlock  }},  // PWRBTN_GPIO_N
 
   // Unused pins set to high impedance
   {GPIO_VER2_LP_GPP_F11,   {GpioPadModeGpio, GpioHostOwnGpio, GpioDirNone,  GpioOutDefault,   GpioIntDefault,            GpioResetDefault,   GpioTermNone}},  // HiZ

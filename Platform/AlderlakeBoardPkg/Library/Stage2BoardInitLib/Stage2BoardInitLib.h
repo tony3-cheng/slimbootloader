@@ -1,6 +1,6 @@
 /** @file
 
-  Copyright (c) 2020, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2020 - 2022, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -39,6 +39,7 @@
 #include <Guid/SystemTableInfoGuid.h>
 #include <Guid/SerialPortInfoGuid.h>
 #include <Guid/OsConfigDataHobGuid.h>
+#include <Guid/CsmePerformanceInfoGuid.h>
 #include <Guid/SmmInformationGuid.h>
 #include <IndustryStandard/Acpi.h>
 #include <IndustryStandard/MemoryMappedConfigurationSpaceAccessTable.h>
@@ -80,11 +81,13 @@
 #include <CpuPowerMgmt.h>
 #include <Library/MpInitLib.h>
 #include <Library/HeciLib.h>
+#include <Library/HeciMeExtLib.h>
 #include <Library/PchInfoLib.h>
 #include <Library/DmaRemappingTable.h>
 #include <Library/VTdLib.h>
 #include <Library/CpuPcieHsPhyInitLib.h>
 #include <Include/TccConfigSubRegions.h>
+#include <Include/BupMsgs.h>
 #include <Library/PchPciBdfLib.h>
 #include <Library/PchPcrLib.h>
 #include <Library/PchPcieRpLib.h>
@@ -96,6 +99,8 @@
 #include "GpioPinsVer2Lp.h"
 #include <Library/TimerLib.h>
 #include <Library/PrintLib.h>
+#include <Register/RtcRegs.h>
+#include <Library/CrashLogLib.h>
 
 #define NHLT_ACPI_TABLE_SIGNATURE  SIGNATURE_32 ('N', 'H', 'L', 'T')
 #define V_EPOC_XTAL_38_4_MHZ  0x249F000
@@ -238,6 +243,16 @@ GetCpuStepping(
 CPU_FAMILY
 EFIAPI
 GetCpuFamily (
+  VOID
+  );
+
+/**
+  Return CPU name
+
+  @retval               CPU name string
+**/
+CHAR8 *
+GetCpuName (
   VOID
   );
 

@@ -1,7 +1,7 @@
 /** @file
 The header file for firmware update library.
 
-Copyright (c) 2017 - 2021, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2017 - 2022, Intel Corporation. All rights reserved.<BR>
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -15,47 +15,27 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 #include <Guid/SystemResourceTable.h>
 #include <Guid/BootLoaderVersionGuid.h>
 #include <Service/SpiFlashService.h>
+#include <Library/BootloaderCommonLib.h>
+#include <FirmwareUpdateStatus.h>
 
 #define CMOS_ADDREG             0x70
 #define CMOS_DATAREG            0x71
 
 #define MAX_UPDATE_REGIONS      4
 
-#define FW_UPDATE_SM_INIT             0xFF
-#define FW_UPDATE_SM_CAP_PROCESSING   0x7F
-#define FW_UPDATE_SM_PART_A           0x7E
-#define FW_UPDATE_SM_PART_B           0x7D
-#define FW_UPDATE_SM_PART_AB          0x7C
-#define FW_UPDATE_SM_DONE             0x77 // Lower 3 bits are ignored
-
-#define FW_UPDATE_IMAGE_UPDATE_NONE         0xFF
-#define FW_UPDATE_IMAGE_UPDATE_PENDING      0xFE
-#define FW_UPDATE_IMAGE_UPDATE_PROCESSING   0xFC
-#define FW_UPDATE_IMAGE_UPDATE_DONE         0xF8
-
 #define FW_UPDATE_PARTITION_A   0
 #define FW_UPDATE_PARTITION_B   1
 
-#define FW_UPDATE_SIG_LENGTH    256
-
 #define MAX_FILE_LEN            16
-#define MAX_FW_COMPONENTS       3
+#define MAX_FW_COMPONENTS       6
+#define MAX_FW_FAILED_RETRY     3
 
 #define CAPSULE_FLAGS_CFG_DATA  BIT0
-
-#define FW_UPDATE_COMP_BIOS_REGION SIGNATURE_32('B', 'I', 'O', 'S')
-#define FW_UPDATE_COMP_CSME_REGION SIGNATURE_32('C', 'S', 'M', 'E')
-#define FW_UPDATE_COMP_CSME_DRIVER SIGNATURE_32('C', 'S', 'M', 'D')
-#define FW_UPDATE_COMP_CMD_REQUEST SIGNATURE_32('C', 'M', 'D', 'I')
 
 #define FW_UPDATE_COMP_CSME_REGION_ORDER      1
 #define FW_UPDATE_COMP_CSME_DRIVER_ORDER      2
 #define FW_UPDATE_COMP_BIOS_REGION_ORDER      3
 #define FW_UPDATE_COMP_DEFAULT_ORDER          4
-
-
-#define FW_UPDATE_STATUS_SIGNATURE SIGNATURE_32 ('F', 'W', 'U', 'S')
-#define FW_UPDATE_STATUS_VERSION   0x1
 
 ///
 /// "FWST"  Firmware Update status data Table
@@ -78,11 +58,6 @@ typedef enum {
   TopSwapClear
 } TOP_SWAP_OPERATION;
 
-typedef enum {
-  PrimaryPartition,
-  BackupPartition
-} BOOT_PARTITION;
-
 #pragma pack(push, 1)
 //
 // Firmware Update Status ACPI structure
@@ -94,30 +69,6 @@ typedef struct {
   EFI_SYSTEM_RESOURCE_TABLE     EsrtTablePtr;
   EFI_SYSTEM_RESOURCE_ENTRY     EsrtTableEntry[MAX_FW_COMPONENTS];
 } EFI_FWST_ACPI_DESCRIPTION_TABLE;
-
-//
-// Firmware Update status structure
-// This structure maintains the firmware update status
-// in the non volatile reserved region of Slim Bootloader
-// ESRT ACPI table will be populated based on this structure
-//
-typedef struct {
-  UINT32                Signature;
-  UINT16                Version;
-  UINT16                Length;
-  UINT8                 CapsuleSig[FW_UPDATE_SIG_LENGTH];
-  UINT8                 StateMachine;
-  UINT8                 Reserved[7];
-} FW_UPDATE_STATUS;
-
-typedef struct {
-  EFI_GUID              FirmwareId;
-  UINT64                HardwareInstance;
-  UINT32                LastAttemptVersion;
-  UINT32                LastAttemptStatus;
-  UINT8                 UpdatePending;
-  UINT8                 Reserved[3];
-} FW_UPDATE_COMP_STATUS;
 
 typedef union _FIRMWARE_UPDATE_POLICY {
   UINT32 Data;

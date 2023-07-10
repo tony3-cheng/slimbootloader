@@ -1,7 +1,7 @@
 ## @file
 # This file is used to provide board specific image information.
 #
-#  Copyright (c) 2017 - 2021, Intel Corporation. All rights reserved.<BR>
+#  Copyright (c) 2017 - 2022, Intel Corporation. All rights reserved.<BR>
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -105,7 +105,7 @@ class Board(BaseBoard):
         if self.NO_OPT_MODE:
             self.STAGE1A_SIZE    += 0x1000
         self.STAGE1B_SIZE         = 0x00030000
-        self.STAGE2_SIZE          = 0x00018000
+        self.STAGE2_SIZE          = 0x0001A000
 
         self.TEST_SIZE            = 0x00001000
         self.SIIPFW_SIZE          = 0x00010000
@@ -209,6 +209,10 @@ class Board(BaseBoard):
             'GpioLib|Silicon/$(SILICON_PKG_NAME)/Library/GpioLib/GpioLib.inf',
             'SpiFlashLib|Silicon/$(SILICON_PKG_NAME)/Library/SpiFlashLib/SpiFlashLib.inf',
             'GraphicsInitLib|Silicon/CommonSocPkg/Library/EmuGfxInitLib/EmuGfxInitLib.inf',
+            'BootGuardLib|Silicon/CommonSocPkg/Library/BootGuardLibCBnT/BootGuardLibCBnT.inf',
+            'TcoTimerLib|Silicon/CommonSocPkg/Library/TcoTimerLib/TcoTimerLib.inf',
+            'TopSwapLib|Silicon/CommonSocPkg/Library/TopSwapLib/TopSwapLib.inf',
+            'WatchDogTimerLib|Silicon/CommonSocPkg/Library/WatchDogTimerLib/WatchDogTimerLib.inf'
         ]
         dsc['PcdsFeatureFlag.%s' % self.BUILD_ARCH] = [
             'gPlatformCommonLibTokenSpaceGuid.PcdMultiUsbBootDeviceEnabled | TRUE'

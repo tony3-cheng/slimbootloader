@@ -23,6 +23,11 @@
 //
 #define GPIO_PADCFG_DW_REG_NUMBER  4
 
+//
+// Max supported platform ID for GPIO base table
+//
+#define GPIO_MAX_BASE_TABLE_PLATFORM_ID  32
+
 /**
   This procedure will initialize multiple GPIO pins. Use GPIO_INIT_CONFIG structure.
   Structure contains fields that can be used to configure each pad.
@@ -163,6 +168,24 @@ EFIAPI
 GpioGetInputValue (
   IN GPIO_PAD                  GpioPad,
   OUT UINT32                   *InputVal
+  );
+
+
+/**
+  This procedure will get GPIO strap value
+
+  @param[in]  GpioPad             GPIO pad
+  @param[out] StrapVal            GPIO Strap value
+                                  0: Low, 1: High
+
+  @retval EFI_SUCCESS             The function completed successfully
+  @retval EFI_INVALID_PARAMETER   Invalid GpioPad
+**/
+EFI_STATUS
+EFIAPI
+GpioGetStrapValue (
+  IN GPIO_PAD                  GpioPad,
+  OUT UINT32                   *StrapVal
   );
 
 

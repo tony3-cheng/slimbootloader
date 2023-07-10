@@ -1,6 +1,6 @@
 /** @file
 
-  Copyright (c) 2016 - 2021, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2016 - 2023, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -158,6 +158,10 @@ NormalBootPath (
   // Load payload
   Dst = (UINT32 *)(UINTN)PreparePayload (Stage2Param);
   if (Dst == NULL) {
+    // Unable to recover non-FWU payload, so avoid triggering of recovery flow
+    if (PcdGetBool (PcdSblResiliencyEnabled) && GetBootMode () != BOOT_ON_FLASH_UPDATE) {
+      StopTcoTimer ();
+    }
     CpuHalt ("Failed to load payload !");
   }
 
@@ -289,6 +293,14 @@ NormalBootPath (
   PrintStackHeapInfo ();
   DEBUG_CODE_END ();
 
+  UpdateFpdtSblTable ();
+  // FWU payload is the only payload in SBL scope, so stop TCO
+  // timer if another payload is set to be launched
+  if (PcdGetBool (PcdSblResiliencyEnabled) && GetBootMode () != BOOT_ON_FLASH_UPDATE) {
+    StopTcoTimer ();
+    ClearFailedBootCount ();
+  }
+
   DEBUG ((DEBUG_INFO, "Payload entry: 0x%08X\n", PldEntry));
   if (PldEntry != NULL) {
     if (IS_X64) {
@@ -354,8 +366,15 @@ S3ResumePath (
   // Update FPDT table
   UpdateFpdtS3Table (S3Data->AcpiBase);
 
-  // Find Wake Vector and Jump to OS
   AddMeasurePoint (0x31F0);
+
+  // No payload is executed in S3 resume, so stop TCO timer in all cases
+  if (PcdGetBool (PcdSblResiliencyEnabled)) {
+    StopTcoTimer ();
+    ClearFailedBootCount ();
+  }
+
+  // Find Wake Vector and Jump to OS
   FindAcpiWakeVectorAndJump (S3Data->AcpiBase);
 }
 
@@ -447,9 +466,23 @@ SecStartup (
   DEBUG ((DEBUG_INIT, "Silicon Init\n"));
   AddMeasurePoint (0x3020);
   Status = CallFspSiliconInit ();
+
+  FspResetHandler(Status);
+  ASSERT_EFI_ERROR (Status);
+
+  Status = FspVariableHandler(Status, CallFspMultiPhaseSiliconInit);
+  ASSERT_EFI_ERROR(Status);
+
+  Status = FspMultiPhaseSiliconInitHandler();
+  if (Status == EFI_UNSUPPORTED) {
+    DEBUG((DEBUG_INFO, "FspMultiPhaseSiliconInitHandler() returned EFI_UNSUPPORTED.\n"));
+  } else {
+    ASSERT_EFI_ERROR(Status);
+  }
+
   AddMeasurePoint (0x3030);
   FspResetHandler (Status);
-  ASSERT_EFI_ERROR (Status);
+
 
   if (FixedPcdGetBool (PcdSmbiosEnabled)) {
     InitSmbiosStringPtr ();

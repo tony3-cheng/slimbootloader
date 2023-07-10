@@ -1,6 +1,6 @@
 /** @file
 
-  Copyright (c) 2017 - 2021, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2017 - 2022, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -41,12 +41,15 @@
 #include <Register/PmcRegs.h>
 #include <GpioConfig.h>
 #include <Library/GpioLib.h>
+#include <Library/WatchDogTimerLib.h>
+#include <Library/TccLib.h>
 
 CONST PLT_DEVICE  mPlatformDevices[]= {
   {{0x00001700}, OsBootDeviceSata  , 0 },
   {{0x00001205}, OsBootDeviceUfs   , 0 },
   {{0x00001207}, OsBootDeviceUfs   , 1 },
   {{0x00001A00}, OsBootDeviceEmmc  , 0 },
+  {{0x00001A01}, OsBootDeviceSd    , 0 },
   {{0x00010000}, OsBootDeviceNvme  , 0 },
   {{0x00001F05}, OsBootDeviceSpi   , 0 },
   {{0x00001400}, OsBootDeviceUsb   , 0 },
@@ -177,6 +180,11 @@ TccModePreMemConfig (
     return EFI_NOT_FOUND;
   }
 
+  if (GetBootMode() == BOOT_ON_FLASH_UPDATE) {
+    DEBUG ((DEBUG_INIT, "In FW update flow. Donot apply DSO settings\n"));
+    TccCfgData->TccTuning = 0;
+  }
+
   // TCC related memory settings
   DEBUG ((DEBUG_INFO, "Tcc is enabled, Setting memory config.\n"));
   FspmUpd->FspmConfig.TccModeEnablePreMem    = 1;
@@ -193,19 +201,30 @@ TccModePreMemConfig (
   FspmUpd->FspmConfig.DsoTuningEnPreMem      = TccCfgData->TccTuning;
   FspmUpd->FspmConfig.TccErrorLogEnPreMem    = TccCfgData->TccErrorLog;
 
-  // Load TCC stream config from container
-  TccStreamBase = NULL;
-  TccStreamSize = 0;
-  Status = LoadComponent (SIGNATURE_32 ('I', 'P', 'F', 'W'), SIGNATURE_32 ('T', 'C', 'C', 'T'),
-                          (VOID **)&TccStreamBase, &TccStreamSize);
-  if (EFI_ERROR (Status) || (TccStreamSize < sizeof(TCC_STREAM_CONFIGURATION))) {
-    DEBUG ((DEBUG_INFO, "Load TCC Stream %r, size = 0x%x\n", Status, TccStreamSize));
-  } else {
-    FspmUpd->FspmConfig.TccStreamCfgBasePreMem = (UINT32)(UINTN)TccStreamBase;
-    FspmUpd->FspmConfig.TccStreamCfgSizePreMem = TccStreamSize;
-    DEBUG ((DEBUG_INFO, "Load TCC stream @0x%p, size = 0x%x\n", TccStreamBase, TccStreamSize));
+  if (IsMarkedBadDso ()) {
+    DEBUG ((DEBUG_INFO, "Incorrect TCC tuning parameters. Platform rebooted with default values.\n"));
+    FspmUpd->FspmConfig.TccStreamCfgStatusPreMem = 1;
+  } else if (IsWdtFlagsSet(WDT_FLAG_TCC_DSO_IN_PROGRESS) && IsWdtTimeout()) {
+    DEBUG ((DEBUG_ERROR, "Incorrect TCC tuning parameters. Platform rebooted with default values.\n"));
+    WdtClearScratchpad (WDT_FLAG_TCC_DSO_IN_PROGRESS);
+    FspmUpd->FspmConfig.TccStreamCfgStatusPreMem = 1;
+    InvalidateBadDso ();
+  } else if (TccCfgData->TccTuning != 0) {
+    // Setup Watch dog timer
+    WdtReloadAndStart (WDT_TIMEOUT_TCC_DSO, WDT_FLAG_TCC_DSO_IN_PROGRESS);
 
-    if (TccCfgData->TccTuning != 0) {
+    // Load TCC stream config from container
+    TccStreamBase = NULL;
+    TccStreamSize = 0;
+    Status = LoadComponent (SIGNATURE_32 ('I', 'P', 'F', 'W'), SIGNATURE_32 ('T', 'C', 'C', 'T'),
+                            (VOID **)&TccStreamBase, &TccStreamSize);
+    if (EFI_ERROR (Status) || (TccStreamSize < sizeof(TCC_STREAM_CONFIGURATION))) {
+      DEBUG ((DEBUG_INFO, "Load TCC Stream %r, size = 0x%x\n", Status, TccStreamSize));
+    } else {
+      FspmUpd->FspmConfig.TccStreamCfgBasePreMem = (UINT32)(UINTN)TccStreamBase;
+      FspmUpd->FspmConfig.TccStreamCfgSizePreMem = TccStreamSize;
+      DEBUG ((DEBUG_INFO, "Load TCC stream @0x%p, size = 0x%x\n", TccStreamBase, TccStreamSize));
+
       StreamConfig = (TCC_STREAM_CONFIGURATION *) TccStreamBase;
       PolicyConfig = (BIOS_SETTINGS *) &StreamConfig->BiosSettings;
 
@@ -472,6 +491,7 @@ UpdateFspConfig (
     Fspmcfg->BdatTestType               = MemCfgData->BdatTestType;
     Fspmcfg->RMC                        = MemCfgData->RMC;
     Fspmcfg->MEMTST                     = MemCfgData->MEMTST;
+    Fspmcfg->MemTestOnWarmBoot          = MemCfgData->MemTestOnWarmBoot;
     //FspmUpd->FspmRestrictedConfig.PerBankRefresh = 0x1;
 
     Fspmcfg->ECT                        = MemCfgData->ECT;
@@ -580,7 +600,8 @@ UpdateFspConfig (
       Fspmcfg->IbeccProtectedRegionBase[Index]   = MemCfgData->IbeccProtectedRegionBase[Index];
       Fspmcfg->IbeccProtectedRegionMask[Index]   = MemCfgData->IbeccProtectedRegionMask[Index];
     }
-
+    // FIA Lane Reversal setting
+    Fspmcfg->FiaLaneReversalEnable              = MemCfgData->FiaLaneReversalEnable;
     // Debug Config
     Fspmcfg->DciEn                        = 1;
     Fspmcfg->DciModphyPg                  = 0;
@@ -645,6 +666,9 @@ UpdateFspConfig (
       DEBUG ((DEBUG_INFO, "PchTraceHubMode = %x\n",        Fspmcfg->PchTraceHubMode));
       DEBUG ((DEBUG_INFO, "PchTraceHubMemReg0Size = %x\n", Fspmcfg->PchTraceHubMemReg0Size));
       DEBUG ((DEBUG_INFO, "PchTraceHubMemReg1Size = %x\n", Fspmcfg->PchTraceHubMemReg1Size));
+      DEBUG ((DEBUG_INFO, "FiaLaneReversalEnable = %x\n", Fspmcfg->FiaLaneReversalEnable));
+      DEBUG ((DEBUG_INFO, "Memory Test = 0x%x\n", Fspmcfg->MEMTST));
+      DEBUG ((DEBUG_INFO, "MemTestOnWarmBoot = 0x%x\n", Fspmcfg->MemTestOnWarmBoot));
   }
 
   // IGD config data

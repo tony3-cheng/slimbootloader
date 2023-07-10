@@ -58,6 +58,12 @@ GetBoardId (
   OUT UINT8 *BoardId
 );
 
+VOID
+InitEcCpuFanControl (
+  VOID
+);
+
+
 /**
   Update FSP-M UPD config data for TCC mode and tuning
 
@@ -86,6 +92,10 @@ TccModePreMemConfig (
     return EFI_NOT_FOUND;
   }
 
+  if (GetBootMode() == BOOT_ON_FLASH_UPDATE) {
+    DEBUG ((DEBUG_INIT, "In FW update flow. Donot apply DSO settings\n"));
+    TccCfgData->TccTuning = 0;
+  }
   // TCC related memory settings
   DEBUG ((DEBUG_INFO, "Tcc is enabled, Setting memory config.\n"));
   FspmUpd->FspmConfig.SaGv                   = 0;    // System Agent Geyserville - SAGV dynamically adjusts the system agent
@@ -841,6 +851,7 @@ DEBUG_CODE_END();
     PlatformNameInit ();
     SetBootMode (IsFirmwareUpdate() ? BOOT_ON_FLASH_UPDATE : GetPlatformPowerState());
     PlatformFeaturesInit ();
+    InitEcCpuFanControl ();
     break;
   case PreMemoryInit:
     //

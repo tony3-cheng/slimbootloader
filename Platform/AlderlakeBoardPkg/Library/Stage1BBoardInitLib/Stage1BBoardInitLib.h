@@ -1,6 +1,6 @@
 /** @file
 
-  Copyright (c) 2020 - 2022, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2020 - 2023, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -45,7 +45,6 @@
 #include <Include/TccConfigSubRegions.h>
 #include <Library/PchInfoLib.h>
 #include <Library/VariableLib.h>
-#include <Library/FirmwareUpdateLib.h>
 #include <Library/GpioLib.h>
 #include "GpioTableAdlSPreMem.h"
 #include "GpioTableAdlPPreMem.h"
@@ -56,6 +55,8 @@
 #include <Include/CpuRegs.h>
 #include <Register/Cpuid.h>
 #include <Library/SocInitLib.h>
+#include <Library/SmbusLib.h>
+#include <Library/CrashLogLib.h>
 
 /**
   Initialize Variable.

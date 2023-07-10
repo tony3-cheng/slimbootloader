@@ -2,7 +2,7 @@
 ## @ BuildLoader.py
 # Build bootloader main script
 #
-# Copyright (c) 2016 - 2022, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2016 - 2023, Intel Corporation. All rights reserved.<BR>
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 
 ##
@@ -10,6 +10,7 @@
 #
 import os
 import sys
+import re
 
 tool_dir = os.path.join(os.path.dirname (os.path.realpath(__file__)), 'BootloaderCorePkg', 'Tools')
 sys.dont_write_bytecode = True
@@ -72,7 +73,6 @@ def prep_env ():
     os.environ['EDK_TOOLS_PATH'] = os.path.join(sblsource, 'BaseTools')
     os.environ['BASE_TOOLS_PATH'] = os.path.join(sblsource, 'BaseTools')
     os.environ['CONF_PATH'] = os.path.join(os.environ['WORKSPACE'], 'Conf')
-
     if 'SBL_KEY_DIR' not in os.environ:
         os.environ['SBL_KEY_DIR'] = os.path.join(sblsource, '..', 'SblKeys')
 
@@ -143,6 +143,7 @@ class BaseBoard(object):
         self.DEBUG_PORT_NUMBER        = 0x00000002
         self.CONSOLE_IN_DEVICE_MASK   = 0x00000001
         self.CONSOLE_OUT_DEVICE_MASK  = 0x00000001
+        self.BOOT_PERFORMANCE_MASK    = 0x00000001
 
         self.HAVE_VBT_BIN          = 0
         self.HAVE_FIT_TABLE        = 0
@@ -167,7 +168,6 @@ class BaseBoard(object):
         self.ENABLE_GRUB_CONFIG    = 0
         self.ENABLE_SMBIOS         = 0
         self.ENABLE_LINUX_PAYLOAD  = 0
-        self.ENABLE_CONTAINER_BOOT = 1
         self.ENABLE_CSME_UPDATE    = 0
         self.ENABLE_EMMC_HS400     = 1
         self.ENABLE_DMA_PROTECTION = 0
@@ -219,7 +219,7 @@ class BaseBoard(object):
         self.FWUPDATE_LOAD_BASE    = 0
 
         # OS Loader FD/FV sizes
-        self.OS_LOADER_FD_SIZE     = 0x00050000
+        self.OS_LOADER_FD_SIZE     = 0x00057000
 
         self.OS_LOADER_FD_NUMBLK   = self.OS_LOADER_FD_SIZE // self.FLASH_BLOCK_SIZE
 
@@ -263,6 +263,8 @@ class BaseBoard(object):
         self.BUILD_ARCH            = ''
         self.KEYH_SVN              = 0
         self.CFGDATA_SVN           = 0
+        self.BUILD_IDENTICAL_TS    = 0
+        self.ENABLE_SBL_RESILIENCY = 0
 
         self.RTCM_RSVD_SIZE        = 0xFF000
 
@@ -288,7 +290,8 @@ class Build(object):
         # enforce feature configs rules
         if self._board.ENABLE_SBL_SETUP:
             self._board.ENABLE_PAYLOD_MODULE = 1
-
+        if not hasattr(self._board, 'FSP_INF_FILE'):
+            self._board.FSP_INF_FILE  = 'Silicon/%s/FspBin/FspBin.inf' % self._board.SILICON_PKG_NAME
         if not hasattr(self._board, 'MICROCODE_INF_FILE'):
             self._board.MICROCODE_INF_FILE  = 'Silicon/%s/Microcode/Microcode.inf' % self._board.SILICON_PKG_NAME
         if not hasattr(self._board, 'ACPI_TABLE_INF_FILE'):
@@ -347,41 +350,40 @@ class Build(object):
         num_fit_entries = 0
         if self._board.UCODE_SIZE > 0:
             ucode_base = self._board.UCODE_BASE
-            ucode_offset = ucode_base - base;
-            if (ucode_offset < 0):
-                raise Exception ('  UCODE %x\n  UCODE address (0x%08X) out of range' % (base, ucode_base))
+            ucode_offset = ucode_base - base
+            if ucode_offset < 0:
+                raise Exception ('UCODE %x\n  UCODE address (0x%08X) out of range' % (base, ucode_base))
 
             # Collect all CPU uCode images
             u_code_images = []
-            while ucode_offset < len(rom):
-                ucode_hdr = UCODE_HEADER.from_buffer(rom, ucode_offset)
-                if ucode_hdr.header_version == 1:
-                    if ucode_hdr.total_size:
-                        ucode_size = ucode_hdr.total_size
+
+            if hasattr(self._board, 'UCODE_SLOT_SIZE'):
+                # Fill up with however many slots fit into the region
+                num_ucode = self._board.UCODE_SIZE // self._board.UCODE_SLOT_SIZE
+                ucode_end_offset = ucode_offset + num_ucode * self._board.UCODE_SLOT_SIZE
+                u_code_images = list(range(ucode_offset, ucode_end_offset, self._board.UCODE_SLOT_SIZE))
+            else:
+                while ucode_offset < len(rom):
+                    # Extract info from CPU uCode images
+                    ucode_hdr = UCODE_HEADER.from_buffer(rom, ucode_offset)
+                    if ucode_hdr.header_version == 1:
+                        u_code_images.append(ucode_offset)
+                        if ucode_hdr.total_size:
+                            ucode_offset += ucode_hdr.total_size
+                        else:
+                            ucode_offset += 0x0800
                     else:
-                        ucode_size = 0x0800
-                    u_code_images.append((ucode_offset, ucode_size))
-                    ucode_offset += ucode_size
-                    num_fit_entries += 1
-                else:
-                    break
+                        break
 
             # Patch FIT with addresses of uCode images
-            for i in range(0, num_fit_entries):
+            for i in range(0, len(u_code_images)):
                 fit_entry = FIT_ENTRY.from_buffer(rom, fit_offset + (i+1)*16)
-                # uCode Update
-                if len(u_code_images) > 0:
-                    offset, size = u_code_images.pop(0)
-                    fit_entry.set_values(base + offset, 0, 0x100, 0x1, 0)
-                    print ('  Patching entry %d with 0x%08X - uCode' % (i, fit_entry.address))
-                else:
-                    print ('  Nullifying unused uCode patch entry %d' % i)
-                    fit_entry.type      = 0x7f
+                offset = u_code_images.pop(0)
+                fit_entry.set_values(base + offset, 0, 0x100, 0x1, 0)
+                print ('  Patching entry %d with 0x%08X - uCode' % (i, fit_entry.address))
+                num_fit_entries     += 1
 
-            if len(u_code_images) > 0:
-                raise Exception('  Insufficient uCode entries in FIT. Need %d more.' % len(u_code_images))
-
-            # ACM
+        # ACM
         if self._board.ACM_SIZE > 0:
             fit_entry = FIT_ENTRY.from_buffer(rom, fit_offset + (num_fit_entries+1)*16)
             fit_entry.set_values(self._board.ACM_BASE, 0, 0x100, 0x2, 0)
@@ -511,7 +513,7 @@ class Build(object):
 
         hs_offset = stage1_bins.find (HashStoreTable.HASH_STORE_SIGNATURE)
         if hs_offset < 0:
-            raise Exceptoin ("HashStoreTable not found in '%s'!" % os.path.basename(img_file))
+            raise Exception ("HashStoreTable not found in '%s'!" % os.path.basename(img_file))
 
         comp_name, part_name = get_redundant_info (img_file)
         if part_name:
@@ -906,16 +908,18 @@ class Build(object):
             os.path.join(self._fv_dir, 'STAGE1A.fd'),
             os.path.join(self._fv_dir, 'STAGE1A_B.fd'))
 
-        # Patch flashmap to indicate boot parititon
         fo = open(os.path.join(self._fv_dir, 'STAGE1A_B.fd'), 'r+b')
         bins = bytearray(fo.read())
-        fmapoff = bytes_to_value(bins[-8:-4]) - bytes_to_value(bins[-4:]) + self._board.STAGE1A_FV_OFFSET
-        fmaphdr = FLASH_MAP.from_buffer (bins, fmapoff)
-        if fmaphdr.sig != FLASH_MAP.FLASH_MAP_SIGNATURE:
-            raise Exception ('Failed to locate flash map in STAGE1A_B.fd !')
-        fmaphdr.attributes |=  fmaphdr.FLASH_MAP_ATTRIBUTES['BACKUP_REGION']
-        fo.seek(fmapoff)
-        fo.write(fmaphdr)
+
+        # Patch flashmap to indicate boot partiton
+        if not self._board.BUILD_IDENTICAL_TS:
+            fmapoff = bytes_to_value(bins[-8:-4]) - bytes_to_value(bins[-4:]) + self._board.STAGE1A_FV_OFFSET
+            fmaphdr = FLASH_MAP.from_buffer (bins, fmapoff)
+            if fmaphdr.sig != FLASH_MAP.FLASH_MAP_SIGNATURE:
+                raise Exception ('Failed to locate flash map in STAGE1A_B.fd !')
+            fmaphdr.attributes |=  fmaphdr.FLASH_MAP_ATTRIBUTES['BACKUP_REGION']
+            fo.seek(fmapoff)
+            fo.write(fmaphdr)
 
         # Patch microcode base in FSP-T UPD
         if self._board.HAVE_FSP_BIN and self._board.TOP_SWAP_SIZE > 0:
@@ -926,16 +930,22 @@ class Build(object):
                 raise Exception ('Could not find FSP-T UPD signatures in STAGE1A_B.fd !')
             if bins.find (upd_sig, upd_off + 1) > 0:
                 raise Exception ('Found multiple FSP-T UPD signatures in STAGE1A_B.fd !')
-            ucode_upd_off = upd_off + 0x20
+            upd_rev = bytes_to_value (bins[upd_off + 8 : upd_off + 9])
+            if upd_rev == 1:
+                # Platforms using FSP spec 2.0/2.1 (e.g. TGL) have revision 1 format
+                ucode_upd_off = upd_off + 0x20
+            elif upd_rev == 2:
+                # Platforms using FSP spec 2.2 (e.g. ADL) have revision 2 format
+                ucode_upd_off = upd_off + 0x40
+            else:
+                raise Exception ('Unrecognized FSP-T UPD rev !')
             ucode_base = bytes_to_value (bins[ucode_upd_off + 0 : ucode_upd_off + 4])
-            if ucode_base == 1:
-                # APL/QEMU FSP-T UPD has revision 1 format
-                ucode_upd_off = upd_off + 0x24
-                ucode_base = bytes_to_value (bins[ucode_upd_off + 0 : ucode_upd_off + 4])
             ucode_size = bytes_to_value (bins[ucode_upd_off + 4 : ucode_upd_off + 8])
             if ucode_size > 0 and ucode_base > 0:
                 if ucode_base != self._board.UCODE_BASE:
                     raise Exception ('Incorrect microcode region base in FSP-T UPD parameter !')
+                if ucode_size != self._board.UCODE_SIZE:
+                    raise Exception ('Incorrect microcode region size in FSP-T UPD parameter !')
                 if ucode_base < 0x100000000 - self._board.TOP_SWAP_SIZE * 2:
                     # Microcode is located outside of top swap region, patch it
                     ucode_base -= self._board.REDUNDANT_SIZE
@@ -953,7 +963,7 @@ class Build(object):
         stage1b_path   = os.path.join(self._fv_dir, 'STAGE1B.fd')
         stage1b_b_path = os.path.join(self._fv_dir, 'STAGE1B_B.fd')
 
-        if self._board.STAGE1B_XIP:
+        if self._board.STAGE1B_XIP and not self._board.BUILD_IDENTICAL_TS:
             # Rebase stage1b.fd
             print("Rebasing STAGE1B_B")
             rebase_stage (stage1b_path, stage1b_b_path, -self._board.REDUNDANT_SIZE)
@@ -1069,7 +1079,6 @@ class Build(object):
         out_file = os.path.join("Outputs", self._board.BOARD_NAME, 'Stitch_Components.zip')
         copy_images_to_output (self._fv_dir, out_file, self._img_list, rgn_name_list, extra_list)
 
-
     def pre_build(self):
         # Update search path
         sbl_dir = os.environ['SBL_SOURCE']
@@ -1122,7 +1131,22 @@ class Build(object):
         if self._board.HAVE_FSP_BIN:
             check_build_component_bin = os.path.join(tool_dir, 'PrepareBuildComponentBin.py')
             if os.path.exists(check_build_component_bin):
-                ret = subprocess.call([sys.executable, check_build_component_bin, work_dir, self._board.SILICON_PKG_NAME, '/d' if self._board.FSPDEBUG_MODE else '/r'])
+
+                # Create basic command
+                cmd = [ sys.executable,
+                        check_build_component_bin,
+                        work_dir,
+                        self._board.SILICON_PKG_NAME,
+                        self._board.FSP_INF_FILE,
+                        self._board.MICROCODE_INF_FILE]
+
+                # Add target
+                if (self._board.FSPDEBUG_MODE):
+                    cmd.append('/d')
+                else:
+                    cmd.append('/r')
+
+                ret = subprocess.call(cmd)
                 if ret:
                     raise Exception  ('Failed to prepare build component binaries !')
 
@@ -1379,19 +1403,21 @@ class Build(object):
         # create redundant components
         self.create_redundant_components ()
 
+        # create FlashMap.txt
+        flash_map_text = ''
+        if len(self._comp_list) > 0:
+            print_addr = False if getattr(self._board, "GetFlashMapList", None) else True
+            flash_map_text = decode_flash_map (os.path.join(self._fv_dir, 'FlashMap.bin'), print_addr)
+            fd = open (os.path.join(self._fv_dir, 'FlashMap.txt'), 'w')
+            fd.write (flash_map_text)
+            fd.close ()
 
         # stitch all components
         layout_name = 'ImgStitch.txt'
         self.create_bootloader_image (layout_name)
 
         # print flash map
-        if len(self._comp_list) > 0:
-            print_addr = False if getattr(self._board, "GetFlashMapList", None) else True
-            flash_map_text = decode_flash_map (os.path.join(self._fv_dir, 'FlashMap.bin'), print_addr)
-            print('%s' % flash_map_text)
-            fd = open (os.path.join(self._fv_dir, 'FlashMap.txt'), 'w')
-            fd.write (flash_map_text)
-            fd.close ()
+        print('%s' % flash_map_text)
 
 
 def main():
@@ -1417,8 +1443,9 @@ def main():
     for cfgfile in board_cfgs:
         module_name = os.path.basename(os.path.dirname(cfgfile))[:-8] + os.path.basename(cfgfile)[:-3]
         brdcfg = load_source(module_name, cfgfile)
-        board_names.append(brdcfg.Board().BOARD_NAME)
-        module_names.append(brdcfg)
+        if brdcfg.Board().BOARD_NAME:
+            board_names.append(brdcfg.Board().BOARD_NAME)
+            module_names.append(brdcfg)
 
     ap = argparse.ArgumentParser()
     sp = ap.add_subparsers(help='command')
@@ -1475,6 +1502,74 @@ def main():
             files.extend ([
             ])
 
+        def GetCopyList (driver_inf):
+            fd = open (driver_inf, 'r')
+            lines = fd.readlines()
+            fd.close ()
+
+            have_copylist_section = False
+            copy_list      = []
+            for line in lines:
+                line = line.strip ()
+                if line.startswith('['):
+                    if line.startswith('[UserExtensions.SBL."CopyList"]'):
+                        have_copylist_section = True
+                    else:
+                        have_copylist_section = False
+
+                if have_copylist_section:
+                    match = re.match("^(.+)\s*:\s*(.+)", line)
+                    if match:
+                        copy_list.append((match.group(1).strip(), match.group(2).strip()))
+
+            return copy_list
+
+        if args.board:
+            for index, name in enumerate(board_names):
+                if args.board == name:
+
+                    board  = module_names[index].Board()
+                    if hasattr(board, 'FSP_INF_FILE'):
+                        fsp_inf = board.FSP_INF_FILE
+                    else:
+                        fsp_inf = 'Silicon/%s/FspBin/FspBin.inf' % board.SILICON_PKG_NAME
+
+                    fsp_inf_full_path = os.path.join(sbl_dir, fsp_inf)
+                    dest_dir = sbl_dir
+
+                    plt_dir = os.environ['PLT_SOURCE'] if 'PLT_SOURCE' in os.environ else None
+
+                    if not os.path.exists(fsp_inf_full_path) and plt_dir:
+                        fsp_inf_full_path = os.path.join(plt_dir, fsp_inf)
+                        dest_dir = plt_dir
+
+                    if os.path.exists(fsp_inf_full_path):
+                        for _, file in GetCopyList (fsp_inf_full_path):
+                            file_full_path = os.path.join(dest_dir, file)
+                            if os.path.exists(file_full_path):
+                                print('Removing %s' % file_full_path)
+                                os.remove(file_full_path)
+
+                    if hasattr(board, 'MICROCODE_INF_FILE'):
+                        microcode_inf = board.MICROCODE_INF_FILE
+                    else:
+                        microcode_inf = 'Silicon/%s/Microcode/Microcode.inf' % board.SILICON_PKG_NAME
+
+                    micorcode_inf_full_path = os.path.join(sbl_dir, microcode_inf)
+                    dest_dir = sbl_dir
+                    if not os.path.exists(micorcode_inf_full_path) and plt_dir:
+                        micorcode_inf_full_path = os.path.join(plt_dir, microcode_inf)
+                        dest_dir = plt_dir
+
+                    if os.path.exists(micorcode_inf_full_path):
+                        for _, file in GetCopyList (micorcode_inf_full_path):
+                            file_full_path = os.path.join(dest_dir, file)
+                            if os.path.exists(file_full_path):
+                                print('Removing %s' % file_full_path)
+                                os.remove(file_full_path)
+
+                    break
+
         for dir in dirs:
             dirpath = os.path.join (workspace, dir)
             print('Removing %s' % dirpath)
@@ -1494,6 +1589,7 @@ def main():
 
     cleanp = sp.add_parser('clean', help='clean build dir')
     cleanp.add_argument('-d',  '--distclean', action='store_true', help='Distribution clean')
+    cleanp.add_argument('board', nargs='?', metavar='board', choices=board_names, help='Board Name (%s)' % ', '.join(board_names))
     cleanp.set_defaults(func=cmd_clean)
 
     def cmd_build_dsc(args):

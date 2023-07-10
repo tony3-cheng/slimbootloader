@@ -112,11 +112,11 @@ class Board(BaseBoard):
         self.FSP_IMAGE_ID         = '$APLFSP$'
 
         self.STAGE1A_SIZE         = 0x00008000
-        self.STAGE1B_SIZE         = 0x00036000
+        self.STAGE1B_SIZE         = 0x00038000
         if self.ENABLE_SOURCE_DEBUG:
             self.STAGE1B_SIZE += 0x2000
-        self.STAGE2_SIZE          = 0x00032000
-        self.PAYLOAD_SIZE         = 0x0001F000
+        self.STAGE2_SIZE          = 0x00033000
+        self.PAYLOAD_SIZE         = 0x00021000
 
         if len(self._PAYLOAD_NAME.split(';')) > 1:
             # EPAYLOAD is specified
@@ -136,7 +136,7 @@ class Board(BaseBoard):
         self.STAGE1B_XIP          = 0
         self.STAGE1B_LOAD_BASE    = 0xFEF10000
         self.STAGE1B_FD_BASE      = 0xFEF80000
-        self.STAGE1B_FD_SIZE      = 0x0006B000
+        self.STAGE1B_FD_SIZE      = 0x0006D000
         if self.ENABLE_SOURCE_DEBUG:
             self.STAGE1B_FD_SIZE += 0x00001000
         if self.RELEASE_MODE == 0:
@@ -209,7 +209,10 @@ class Board(BaseBoard):
             'SmbusLib|Silicon/$(SILICON_PKG_NAME)/Library/SmbusLib/SmbusLib.inf',
             'HdaLib|Platform/$(BOARD_PKG_NAME)/Library/HdaLib/HdaLib.inf',
             'VtdPmrLib|Silicon/CommonSocPkg/Library/VtdPmrLib/VtdPmrLib.inf',
-            'BaseIpcLib|Silicon/$(SILICON_PKG_NAME)/Library/BaseIpcLib/BaseIpcLib.inf'
+            'BaseIpcLib|Silicon/$(SILICON_PKG_NAME)/Library/BaseIpcLib/BaseIpcLib.inf',
+            'TcoTimerLib|Silicon/CommonSocPkg/Library/TcoTimerLib/TcoTimerLib.inf',
+            'TopSwapLib|Silicon/CommonSocPkg/Library/TopSwapLib/TopSwapLib.inf',
+            'WatchDogTimerLib|Silicon/CommonSocPkg/Library/WatchDogTimerLib/WatchDogTimerLib.inf'
         ]
         dsc['LibraryClasses.%s' % self.BUILD_ARCH] = common_libs
         return dsc

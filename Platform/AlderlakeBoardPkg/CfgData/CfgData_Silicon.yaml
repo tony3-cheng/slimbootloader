@@ -2,7 +2,7 @@
 #
 #  Slim Bootloader CFGDATA Option File.
 #
-#  Copyright (c) 2020 - 2022, Intel Corporation. All rights reserved.<BR>
+#  Copyright (c) 2020 - 2023, Intel Corporation. All rights reserved.<BR>
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 ##
@@ -107,6 +107,14 @@
       option       : $EN_DIS
       help         : >
                      Describes whether the PCI Express Clock Gating for each root port is enabled by platform modules. 0- Disable; 1- Enable.
+      length       : 0x01
+      value        : 0x1
+  - CpuPciePowerGating :
+      name         : CPU PCIe RootPort Power Gating
+      type         : Combo
+      option       : $EN_DIS
+      help         : >
+                     Describes whether the PCI Express Power Gating for each root port is enabled by platform modules. 0- Disable; 1- Enable.
       length       : 0x01
       value        : 0x1
   - CpuPcieRpAspm :
@@ -352,6 +360,13 @@
                      Describe the specific over current pin number of USBC Port N.
       length       : 0x0008
       value        : {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+  - PchUfsEnable :
+      name         : Enable PCH UFS
+      type         : EditNum, HEX, (0x0, 0x1)
+      help         : >
+                     Enable/Disable UFS controllers 1 and 2. 0- Disable; 1- Enable.
+      length       : 0x02
+      value        : {0x00, 0x00}
   - PchIshI2cEnable :
       condition    : $(COND_S0IX_DIS)
       name         : Enable PCH ISH I2C pins assigned
@@ -452,6 +467,76 @@
                      Describes whether Embedded Controller is availabile or not
       length       : 0x01
       value        : 0x1
-  - SiliconRsvd  :
-      length       : 0x00
-      value        : 0x00
+  - CpuCrashLogEnable :
+      name         : CPU CrashLog support
+      type         : Combo
+      option       : $EN_DIS
+      help         : >
+                     Enable CrashLog feature in CPU.
+      length       : 0x01
+      value        : 0x0
+  - CrashLogReporting :
+      name         : CrashLog BERT Reporting
+      type         : Combo
+      option       : $EN_DIS
+      help         : >
+                     Enable reporting CrashLog data in ACPI BERT. Requires FSP support for CrashLog Data Collection.
+      length       : 0x01
+      value        : 0x0
+      condition    : $SILICON_CFG_DATA.CpuCrashLogEnable != 0
+  - OpioRecenter :
+      name         : Opio Recentering Ctrl
+      type         : Combo
+      option       : $EN_DIS
+      help         : >
+                     Opio Recentering Disabling for Pcie Latency Improvement
+      length       : 0x01
+      value        : 0x0
+  - L2QosEnumerationEn :
+      name         : L2 QOS Enumeration
+      type         : Combo
+      option       : $EN_DIS
+      help         : >
+                     Enable L2 Qos Enumerate
+      length       : 0x01
+      value        : 0x0
+  - IehMode :
+      name         : IEH Mode
+      type         : Combo
+      option       : 0:Bypass, 1:Enable
+      help         : >
+                     Integrated Error Handler Mode
+      length       : 0x01
+      value        : 0x0
+  - D3HotEnable :
+      name         : Enable D3 Hot in TCSS
+      type         : Combo
+      option       : $EN_DIS
+      help         : >
+                     This policy will enable/disable D3 hot support in IOM
+      length       : 0x01
+      value        : 0x1
+  - D3ColdEnable :
+      name         : Enable D3 Cold in TCSS
+      type         : Combo
+      option       : $EN_DIS
+      help         : >
+                     This policy will enable/disable D3 cold support in IOM
+      length       : 0x01
+      value        : 0x1
+  - TcCstateLimit :
+      name         : TC State in TCSS
+      type         : Combo
+      option       : 0:Disable, 1:1, 2:2, 4:4, 5:5, 6:6, 7:7, 10:10
+      help         : >
+                     TC C-State Limit in IOM
+      length       : 0x01
+      value        : 10
+  - VccSt        :
+      name         : VCCST request for IOM
+      type         : Combo
+      option       : $EN_DIS
+      help         : >
+                     This policy will enable/disable VCCST and also decides if message would be replayed in S4/S5
+      length       : 0x01
+      value        : 0x01

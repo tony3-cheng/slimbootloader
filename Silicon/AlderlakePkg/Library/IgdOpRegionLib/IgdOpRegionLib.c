@@ -96,7 +96,7 @@ AdlPDdr5GopVbtSpecificUpdate (
   IN CHILD_STRUCT **ChildStructPtr
 )
 {
-  DEBUG ((DEBUG_INFO,"Update VBT for ADL-P DDR5 Edp + DP1.4\n"));
+  DEBUG ((DEBUG_INFO,"Update VBT for ADL-PS DDR5 Edp + DP1.4\n"));
   // Disabling DDI-B (LFP1)
   ChildStructPtr[1]->DeviceClass = NO_DEVICE;
   // Enabling DP++ on DDI-B
@@ -259,7 +259,7 @@ UpdateVbt (
 
   GopVbtSpecificUpdate = NULL;
   VbtPtr = (VBT_TABLE_DATA *)VbtTablePtr;
-  if (VbtPtr == NULL) {
+  if (VbtPtr == NULL || VbtPtr->VbtGen2Info.BlockId != 2) {
     return EFI_ABORTED;
   }
 
@@ -284,16 +284,18 @@ UpdateVbt (
     DEBUG((DEBUG_INFO, "UpdateVbt: PLATFORM_ID_ADL_S_ADP_S_CRB .....\n"));
     GopVbtSpecificUpdate = (GOP_VBT_SPECIFIC_UPDATE)(UINTN)&AdlGopVbtSpecificUpdateNull;
     break;
-  case PLATFORM_ID_ADL_P_DDR5_RVP:
   case PLATFORM_ID_ADL_PS_DDR5_RVP:
   case PLATFORM_ID_ADL_PS_DDR5_CRB:
-    DEBUG((DEBUG_INFO, "UpdateVbt: PLATFORM_ID_ADL_P_DDR5_RVP .....\n"));
+    DEBUG((DEBUG_INFO, "UpdateVbt: PLATFORM_ID_ADL_PS_DDR5_RVP .....\n"));
     GopVbtSpecificUpdate = (GOP_VBT_SPECIFIC_UPDATE)(UINTN)&AdlPDdr5GopVbtSpecificUpdate;
     break;
+  case PLATFORM_ID_ADL_P_DDR5_RVP:
   case PLATFORM_ID_ADL_P_LP4_RVP:
   case PLATFORM_ID_ADL_P_LP5_RVP:
-    DEBUG((DEBUG_INFO, "UpdateVbt: BoardIdAdlPLp4/5Rvp .....\n"));
-    GopVbtSpecificUpdate = (GOP_VBT_SPECIFIC_UPDATE)(UINTN)&AdlGopVbtSpecificUpdateNull;
+  case PLATFORM_ID_RPL_P_DDR5_CRB:
+  case PLATFORM_ID_ADL_P_UPXI12:
+    DEBUG((DEBUG_INFO, "UpdateVbt: BoardIdAdlP DDR5, Lp4/5Rvp or i12 .....\n"));
+    GopVbtSpecificUpdate = (GOP_VBT_SPECIFIC_UPDATE)(UINTN)&AdlPDdr5GopVbtSpecificUpdate;
     break;
   case PLATFORM_ID_ADL_N_DDR5_CRB:
     DEBUG((DEBUG_INFO, "UpdateVbt: BoardIdAdlNDdr5 .....\n"));

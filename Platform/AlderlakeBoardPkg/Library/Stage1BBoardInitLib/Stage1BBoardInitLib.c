@@ -1,6 +1,6 @@
 /** @file
 
-  Copyright (c) 2020 - 2022, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2020 - 2023, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -71,6 +71,30 @@ CONST PLT_DEVICE mPlatformDevices[] = {
   {
     .Dev = {
       .PciDev = {
+        .PciFunctionNumber  = 5,
+        .PciDeviceNumber    = 18,
+        .PciBusNumber       = 0,
+        .IsMmioDevice       = 0
+      }
+    },
+    .Type = OsBootDeviceUfs,
+    .Instance = 0
+  },
+  {
+    .Dev = {
+      .PciDev = {
+        .PciFunctionNumber  = 7,
+        .PciDeviceNumber    = 18,
+        .PciBusNumber       = 0,
+        .IsMmioDevice       = 0
+      }
+    },
+    .Type = OsBootDeviceUfs,
+    .Instance = 1
+  },
+  {
+    .Dev = {
+      .PciDev = {
         .PciFunctionNumber  = PCI_FUNCTION_NUMBER_PCH_SMBUS,
         .PciDeviceNumber    = PCI_DEVICE_NUMBER_PCH_SMBUS,
         .PciBusNumber       = DEFAULT_PCI_BUS_NUMBER_PCH,
@@ -90,6 +114,18 @@ CONST PLT_DEVICE mPlatformDevices[] = {
       }
     },
     .Type = PlatformDeviceGraphics,
+    .Instance = 0
+  },
+  {
+    .Dev = {
+      .PciDev = {
+        .PciFunctionNumber  = PCI_FUNCTION_NUMBER_PCH_ISH,
+        .PciDeviceNumber    = 0,
+        .PciBusNumber       = DEFAULT_PCI_BUS_NUMBER_PCH,
+        .IsMmioDevice       = 0
+      }
+    },
+    .Type = PltDeviceIsh,
     .Instance = 0
   }
 };
@@ -148,137 +184,83 @@ PlatformDeviceTableInitialize (
 }
 
 /**
-  Switch between the boot partitions.
+  Set TS based on FW update status.
+  This function will set the TS register based on the FW update status.
+  The TS register is set here as opposed to in the FW update payload due to a
+  uCode assert issue.
 
-  This function will use platform specific method of switching
-  between primary and backup partitions.
-
-  @param[in] Partition        Partition to select
-
-  @retval  EFI_SUCCESS        Switched to desired partition successfully.
-  @retval  others             Error happening.
+  @retval  EFI_SUCCESS           The operation completed successfully.
+  @retval  others                There is error happening.
 **/
-EFI_STATUS
-SetBootPartition (
-  IN BOOT_PARTITION  Partition
-  )
-{
-  UINTN     P2sbBase;
-  UINT32    P2sbBar;
-  UINT32    TopSwapReg;
-  UINT32    Data32;
-  BOOLEAN   P2sbIsHidden;
-
-  //
-  // Get Top swap register Bit0 in PCH Private Configuration Space.
-  //
-  P2sbBase   = MM_PCI_ADDRESS (0, PCI_DEVICE_NUMBER_PCH_LPC, 1, 0); // P2SB device base
-  P2sbIsHidden = FALSE;
-
-  if (MmioRead16 (P2sbBase) == 0xFFFF) {
-    //
-    // unhide P2SB
-    //
-    MmioWrite8 (P2sbBase + 0xE1, 0);
-    P2sbIsHidden = TRUE;
-    DEBUG ((DEBUG_INFO, "P2sb is hidden, unhide it\n"));
-  }
-
-  P2sbBar    = MmioRead32 (P2sbBase + 0x10);
-  P2sbBar  &= 0xFFFFFFF0;
-  ASSERT (P2sbBar != 0xFFFFFFF0);
-
-  TopSwapReg = P2sbBar | ((PID_RTC_HOST) << 16) | (UINT16)(R_RTC_PCR_BUC);
-  Data32    = MmioRead32 (TopSwapReg);
-  DEBUG ((DEBUG_INFO, "P2sbBar=0x%x, Data32=0x%x\n", P2sbBar, Data32));
-
-  if (Partition == BackupPartition) {
-    //
-    // Switch to back up parition - Set Top Swap
-    //
-    Data32 |= BIT0;
-  } else if (Partition == PrimaryPartition) {
-    //
-    // Switch to primary parition - Clear Top Swap
-    //
-    Data32 &= ~BIT0;
-  }
-
-  MmioWrite32 (TopSwapReg, Data32);
-  DEBUG ((DEBUG_INFO, "write Data32=0x%x\n", Data32));
-  Data32 = MmioRead32 (TopSwapReg);
-
-  if (P2sbIsHidden) {
-    //
-    // Hide P2SB
-    //
-    MmioWrite8 (P2sbBase + 0xE1, BIT0);
-    DEBUG ((DEBUG_INFO, "Hide p2sb again.\n"));
-  }
-
-  DEBUG ((DEBUG_INFO, "Read it to ensure data is written. Data32=0x%x\n", Data32));
-
-  return EFI_SUCCESS;
-}
-
 VOID
 FwuTopSwapSetting (
-  IN FW_UPDATE_STATUS    *pFwUpdStatus
+  VOID
   )
 {
-  UINT32      Data32;
-  UINT32      TopSwapReg;
-  UINT32      P2sbBar;
-  EFI_STATUS  Status;
-  UINT32      RsvdBase;
-  UINT32      RsvdSize;
-  UINTN       P2sbBase;
+  EFI_STATUS        Status;
+  UINT32            RsvdBase;
+  UINT32            RsvdSize;
+  FW_UPDATE_STATUS  *FwUpdStatus;
 
-  if (pFwUpdStatus == NULL) {
-    Status = GetComponentInfoByPartition (FLASH_MAP_SIG_BLRESERVED, FALSE, &RsvdBase, &RsvdSize);
-    if (EFI_ERROR (Status)) {
-      DEBUG((DEBUG_ERROR, "Could not get component information for bootloader reserved region\n"));
-    }
-    pFwUpdStatus = (FW_UPDATE_STATUS *)(UINTN)RsvdBase;
+  Status = GetComponentInfoByPartition (FLASH_MAP_SIG_BLRESERVED, FALSE, &RsvdBase, &RsvdSize);
+  if (EFI_ERROR (Status)) {
+    DEBUG((DEBUG_ERROR, "Could not get component information for bootloader reserved region\n"));
+  }
+  FwUpdStatus = (FW_UPDATE_STATUS *)(UINTN)RsvdBase;
+
+
+  // If in a recovery path, stay on current partition
+  if (PcdGetBool (PcdSblResiliencyEnabled) && IsRecoveryTriggered ()) {
+    return;
   }
 
-  //
-  // Get Top swap register Bit0 in PCH Private Configuration Space.
-  //
-  P2sbBase   = MM_PCI_ADDRESS (0, PCI_DEVICE_NUMBER_PCH_LPC, 1, 0); // P2SB device base
+  switch (FwUpdStatus->StateMachine) {
+    case FW_UPDATE_SM_RECOVERY:
+      // This indicates that recovery is in progress
+      ASSERT (PcdGetBool (PcdSblResiliencyEnabled));
+      break;
 
-  if (MmioRead16 (P2sbBase) == 0xFFFF) {
-    //
-    // unhide P2SB
-    //
-    MmioWrite8 (P2sbBase + 0xE1, 0);
-    DEBUG ((DEBUG_INFO, "P2sb is hidden, unhide it\n"));
-  }
+    case FW_UPDATE_SM_PART_A:
+      // This indicates that update of partition B is complete
+      if (GetCurrentBootPartition () == PrimaryPartition) {
+        if (IsTopSwapTriggered ()) {
+          ClearTopSwapTrigger ();
+          SetBootPartition (BackupPartition);
+          ResetSystem (EfiResetCold);
+        }
+      } else {
+        if (IsTopSwapTriggered ()) {
+          DEBUG((DEBUG_INFO, "Already on partition that was meant to be swapped back to\n"));
+          ClearTopSwapTrigger ();
+          if (PcdGetBool (PcdSblResiliencyEnabled)) {
+            SetRecoveryTrigger ();
+          }
+        }
+      }
+      break;
 
-  P2sbBar    = MmioRead32 (P2sbBase + 0x10);
-  P2sbBar  &= 0xFFFFFFF0;
-  ASSERT (P2sbBar != 0xFFFFFFF0);
+    case FW_UPDATE_SM_PART_AB:
+      // This indicates update of partition A and B is complete and
+      // firmware update structure need finalization
+      break;
 
-  TopSwapReg = P2sbBar | ((PID_RTC_HOST) << 16) | (UINT16)(R_RTC_PCR_BUC);
-  Data32    = MmioRead32 (TopSwapReg);
-  DEBUG ((DEBUG_INFO, "TopSwapReg=0x%x\n",  Data32));
-  if (pFwUpdStatus->StateMachine == FW_UPDATE_SM_PART_A) {
-    if (GetCurrentBootPartition() == 0) {
-      SetBootPartition(1);
-      ResetSystem(EfiResetCold);
-    }
-  } else if (pFwUpdStatus->StateMachine == FW_UPDATE_SM_PART_B) {
-    if (GetCurrentBootPartition() == 1) {
-      SetBootPartition(0);
-      ResetSystem(EfiResetCold);
-    }
-  }
-  else{
-   if (GetCurrentBootPartition() == 1) {
-     SetBootPartition(0);
-     ResetSystem(EfiResetCold);
-   }
-   DEBUG ((DEBUG_INFO, "Not in Firmware Update mode.\n"));
+    default:
+      if (GetCurrentBootPartition () == BackupPartition) {
+        if (IsTopSwapTriggered ()) {
+          ClearTopSwapTrigger ();
+          SetBootPartition (PrimaryPartition);
+          ResetSystem (EfiResetCold);
+        }
+      } else {
+        if (IsTopSwapTriggered ()) {
+          DEBUG((DEBUG_INFO, "Already on partition that was meant to be swapped back to\n"));
+          ClearTopSwapTrigger ();
+          if (PcdGetBool (PcdSblResiliencyEnabled)) {
+            SetRecoveryTrigger ();
+          }
+        }
+      }
+      break;
   }
 }
 
@@ -291,8 +273,11 @@ FwuTopSwapSetting (
   @retval  others                There is error happening.
 **/
 BOOLEAN
-IsFirmwareUpdate ()
+IsFirmwareUpdate (
+  VOID
+  )
 {
+
   //
   // Check if state machine is set to capsule processing mode.
   //
@@ -303,7 +288,15 @@ IsFirmwareUpdate ()
   //
   // Check if platform firmware update trigger is set.
   //
-  if (IoRead32 (ACPI_BASE_ADDRESS + R_ACPI_IO_OC_WDT_CTL) & BIT16) {
+  if (IsUpdateTriggered ()) {
+    return TRUE;
+  }
+
+  //
+  // Check if we need to recover a failing partition.
+  //
+  if (PcdGetBool (PcdSblResiliencyEnabled) &&
+      IsRecoveryTriggered ()) {
     return TRUE;
   }
 
@@ -365,15 +358,14 @@ PlatformFeaturesInit (
   VOID
   )
 {
-  FEATURES_CFG_DATA           *FeaturesCfgData;
-  PLATFORM_DATA               *PlatformData;
+  FEATURES_CFG_DATA           *FeaturesCfgData = NULL;
+  PLATFORM_DATA               *PlatformData = NULL;
   UINTN                        HeciBaseAddress;
   UINT32                       LdrFeatures;
 
   // Set common features
   LdrFeatures  = GetFeatureCfg ();
   LdrFeatures |= FeaturePcdGet (PcdAcpiEnabled)?FEATURE_ACPI:0;
-
   LdrFeatures |= FeaturePcdGet (PcdVerifiedBootEnabled)?FEATURE_VERIFIED_BOOT:0;
   LdrFeatures |= FeaturePcdGet (PcdMeasuredBootEnabled)?FEATURE_MEASURED_BOOT:0;
 
@@ -387,6 +379,8 @@ PlatformFeaturesInit (
     if (FeaturesCfgData->Features.MeasuredBoot == 0) {
       LdrFeatures &= ~FEATURE_MEASURED_BOOT;
     }
+  } else {
+    DEBUG((DEBUG_ERROR, "FEATURES_CFG_DATA is NULL\n"));
   }
 
   // Disable features by boot guard profile
@@ -395,15 +389,28 @@ PlatformFeaturesInit (
     HeciBaseAddress = MeGetHeciMmPciAddress (0, 0);
     GetBootGuardInfo (HeciBaseAddress, &PlatformData->BtGuardInfo);
     DEBUG ((DEBUG_INFO, "GetPlatformDataPtr is copied 0x%08X \n", PlatformData));
-    if (!PlatformData->BtGuardInfo.MeasuredBoot) {
-      LdrFeatures &= ~FEATURE_MEASURED_BOOT;
-    }
     if (!PlatformData->BtGuardInfo.VerifiedBoot) {
       LdrFeatures &= ~FEATURE_VERIFIED_BOOT;
     }
+  } else {
+    DEBUG((DEBUG_ERROR, "PLATFORM_DATA is NULL\n"));
   }
 
   SetFeatureCfg (LdrFeatures);
+}
+
+/**
+  Disable measured boot in SBL
+**/
+VOID
+DisableMeasuredBoot (
+  VOID
+  )
+{
+  UINT32    Features;
+  Features  = GetFeatureCfg ();
+  Features &= (UINT32)(~FEATURE_MEASURED_BOOT);
+  SetFeatureCfg (Features);
 }
 
 /**
@@ -416,37 +423,51 @@ TpmInitialize (
 {
   EFI_STATUS                   Status;
   UINT8                        BootMode;
-  PLATFORM_DATA               *PlatformData;
-  UINT32                       Features;
+  PLATFORM_DATA               *PlatformData = NULL;
+  BOOT_LOADER_VERSION         *BlVersion = NULL;
 
   BootMode     = GetBootMode();
   PlatformData = (PLATFORM_DATA *)GetPlatformDataPtr ();
+  BlVersion    = GetVerInfoPtr ();
 
-  if((PlatformData != NULL) && PlatformData->BtGuardInfo.MeasuredBoot &&
-    (!PlatformData->BtGuardInfo.DisconnectAllTpms) &&
-    ((PlatformData->BtGuardInfo.TpmType == dTpm20) || (PlatformData->BtGuardInfo.TpmType == Ptt))){
+  if (PlatformData == NULL ||
+     (PlatformData->BtGuardInfo.BootGuardCapability &&
+      PlatformData->BtGuardInfo.DisconnectAllTpms)) {
+    DEBUG ((DEBUG_ERROR, "Tpm set to be disabled by ACM !! \n"));
+    DisableTpm ();
+    DisableMeasuredBoot ();
+    return;
+  }
 
-    //  As per PC Client spec, SRTM should perform a host platform reset
+  if (PlatformData->BtGuardInfo.BootGuardCapability &&
+      PlatformData->BtGuardInfo.MeasuredBoot) {
+    //  As per PC Client spec, if TPM startup failed in ACM on S3 resume, reset
     if (PlatformData->BtGuardInfo.TpmStartupFailureOnS3) {
-      ResetSystem(EfiResetCold);
+      ResetSystem (EfiResetCold);
       CpuDeadLoop ();
     }
 
-    // Initialize TPM if it has not already been initialized by BootGuard component (i.e. ACM)
-    Status = TpmInit(PlatformData->BtGuardInfo.BypassTpmInit, BootMode);
+    // If measured boot enabled in ACM, let ACM decide on if TPM is initialized here
+    Status = TpmInit (PlatformData->BtGuardInfo.BypassTpmInit, BootMode);
     if (EFI_ERROR (Status)) {
-      CpuHalt ("Tpm Initialization failed !!\n");
-    } else {
-      if (BootMode != BOOT_ON_S3_RESUME) {
-        // Create and add BootGuard Event logs in TCG Event log
-        CreateTpmEventLog (PlatformData->BtGuardInfo.TpmType);
-      }
+      DEBUG ((DEBUG_ERROR, "Tpm Initialization failed  %r !! \n", Status));
+      DisableMeasuredBoot ();
+    } else if (BootMode != BOOT_ON_S3_RESUME) {
+      // Add BtG events to TPM event log
+      CreateTpmEventLog (PlatformData->BtGuardInfo.TpmType);
+      // Add CRTM version event after BtG events
+      TpmLogCrtmVersionEvent (BlVersion);
     }
-  } else {
-    DisableTpm();
-    Features  = GetFeatureCfg ();
-    Features &= (UINT32)(~FEATURE_MEASURED_BOOT);
-    SetFeatureCfg (Features);
+  } else if (MEASURED_BOOT_ENABLED ()) {
+    // If measured boot enabled in SBL but not in ACM, force TPM initialization here
+    Status = TpmInit (FALSE, BootMode);
+    if (EFI_ERROR (Status)) {
+      DEBUG ((DEBUG_ERROR, "Tpm Initialization failed  %r !! \n", Status));
+      DisableMeasuredBoot ();
+    } else if (BootMode != BOOT_ON_S3_RESUME) {
+      // Add only CRTM version event to TPM event log at this point
+      TpmLogCrtmVersionEvent (BlVersion);
+    }
   }
 }
 
@@ -531,10 +552,13 @@ GetPlatformPowerState (
 
 **/
 VOID
+EFIAPI
 BoardInit (
   IN  BOARD_INIT_PHASE  InitPhase
   )
 {
+  UINT8  DeviceId;
+
   switch (InitPhase) {
   case PreConfigInit:
 DEBUG_CODE_BEGIN();
@@ -561,16 +585,19 @@ DEBUG_CODE_BEGIN();
 DEBUG_CODE_END();
     PlatformDeviceTableInitialize ();
     SpiControllerInitialize ();
+    FwuTopSwapSetting ();
     break;
   case PostConfigInit:
     PlatformIdInitialize ();
     PlatformNameInit ();
     SetBootMode (IsFirmwareUpdate() ? BOOT_ON_FLASH_UPDATE : GetPlatformPowerState());
-    FwuTopSwapSetting(NULL);
     PlatformFeaturesInit ();
     VariableInitialize ();
     RtcInit ();
     DEBUG ((DEBUG_INFO, "Boot Mode .... %d\n",GetBootMode()));
+    // Set ISH Device Address
+    DeviceId = (IsPchS () ? PCI_DEVICE_NUMBER_PCH_ISH : PCI_DEVICE_NUMBER_PCH_LP_ISH);
+    SetDeviceAddr (PltDeviceIsh, 0, (UINT32)((DEFAULT_PCI_BUS_NUMBER_PCH << 16) | (DeviceId << 8) | PCI_FUNCTION_NUMBER_PCH_ISH));
     break;
   case PreMemoryInit:
     //
@@ -605,6 +632,7 @@ DEBUG_CODE_END();
       ConfigureGpio (CDATA_NO_TAG, sizeof (mGpioTableEarlyPreMemTestSDdr5UDimm1DRvp) / sizeof (mGpioTableEarlyPreMemTestSDdr5UDimm1DRvp[0]), (UINT8*)mGpioTableEarlyPreMemTestSDdr5UDimm1DRvp);
       break;
     case PLATFORM_ID_ADL_PS_DDR5_RVP:
+    case PLATFORM_ID_ADL_PS_DDR5_CRB:
       ConfigureGpio (CDATA_NO_TAG, sizeof (mGpioTablePreMemAdlPsDdr5Rvp) / sizeof (mGpioTablePreMemAdlPsDdr5Rvp[0]), (UINT8*)mGpioTablePreMemAdlPsDdr5Rvp);
       break;
     case PLATFORM_ID_ADL_N_DDR5_CRB:
@@ -624,9 +652,7 @@ DEBUG_CODE_END();
   case PreTempRamExit:
     break;
   case PostTempRamExit:
-    if (MEASURED_BOOT_ENABLED()) {
-      TpmInitialize();
-    }
+    TpmInitialize();
     break;
   default:
     break;

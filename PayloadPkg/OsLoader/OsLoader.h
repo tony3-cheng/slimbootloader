@@ -1,6 +1,6 @@
 /** @file
 
-  Copyright (c) 2017 - 2021, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2017 - 2023, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -17,7 +17,6 @@
 #include <Library/DecompressLib.h>
 #include <Library/PayloadLib.h>
 #include <Library/ShellLib.h>
-#include <Library/IasImageLib.h>
 #include <Library/MultibootLib.h>
 #include <Library/MediaAccessLib.h>
 #include <Library/PayloadEntryLib.h>
@@ -86,6 +85,7 @@
 #define LOADED_IMAGE_COMPONENT   BIT6
 #define LOADED_IMAGE_RUN_EXTRA   BIT7
 #define LOADED_IMAGE_ELF         BIT8
+#define LOADED_IMAGE_MULTIBOOT2  BIT9
 
 #define MAX_EXTRA_FILE_NUMBER    16
 
@@ -171,6 +171,17 @@ DumpMbInfo (
   );
 
 /**
+Print out the Multiboot-2 information block.
+
+@param[in]  Mi  The Multiboot-2 information block to be printed.
+
+**/
+VOID
+DumpMb2Info (
+  IN  CONST MULTIBOOT2_START_TAG *Mi
+  );
+
+/**
   Print out the Multiboot boot state.
 
   @param[in]  BootState  The Multiboot boot state pointer.
@@ -178,19 +189,6 @@ DumpMbInfo (
 VOID
 DumpMbBootState (
   IN  CONST IA32_BOOT_STATE  *BootState
-  );
-
-/**
-  Dumps the content of the buffer starting from Address.
-
-  @param[in]  Address   Start address of buffer to dump
-  @param[in]  Length    Size of the buffer to dump
-
- **/
-VOID
-DumpBuffer (
-  IN CHAR8                   *Address,
-  IN UINT32                  Length
   );
 
 /**
@@ -254,20 +252,6 @@ UnloadBootImages (
 VOID
 UnloadLoadedImage (
   IN  LOADED_IMAGE  *LoadedImage
-  );
-
-/**
-  Free the allocated memory in an image data
-
-  This function free a memory allocated in IMAGE_DATA according to Allocation Type.
-
-  @param[in]  ImageData       An image data pointer which has allocated memory address,
-                              its size, and allocation type.
-
-**/
-VOID
-FreeImageData (
-  IN  IMAGE_DATA    *ImageData
   );
 
 /**

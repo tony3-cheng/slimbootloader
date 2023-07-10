@@ -1,7 +1,7 @@
 ## @file
 # Provides driver and definitions to build bootloader.
 #
-# Copyright (c) 2016 - 2022, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2016 - 2023, Intel Corporation. All rights reserved.<BR>
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 ##
@@ -135,6 +135,8 @@
   PagingLib|BootloaderCommonPkg/Library/PagingLib/PagingLib.inf
   TimerLib|BootloaderCommonPkg/Library/AcpiTimerLib/AcpiTimerLib.inf
   DebugPortLib|BootloaderCommonPkg/Library/DebugPortLib/DebugPortLibNull.inf
+  CrashLogLib|Silicon/CommonSocPkg/Library/CrashLogLibNull/CrashLogLibNull.inf
+  FusaConfigLib|Silicon/CommonSocPkg/Library/FusaConfigLibNull/FusaConfigLibNull.inf
 
 ################################################################################
 #
@@ -206,6 +208,7 @@
   gPlatformModuleTokenSpaceGuid.PcdMrcDataSize            | $(MRCDATA_SIZE)
   gPlatformModuleTokenSpaceGuid.PcdUcodeBase              | $(UCODE_BASE)
   gPlatformModuleTokenSpaceGuid.PcdUcodeSize              | $(UCODE_SIZE)
+  gPlatformModuleTokenSpaceGuid.PcdUcodeSlotSize          | $(UCODE_SLOT_SIZE)
   gPlatformModuleTokenSpaceGuid.PcdVariableRegionBase     | $(VARIABLE_BASE)
   gPlatformModuleTokenSpaceGuid.PcdVariableRegionSize     | $(VARIABLE_SIZE)
 
@@ -259,6 +262,10 @@
 
   gPayloadTokenSpaceGuid.PcdRtcmRsvdSize                        | $(RTCM_RSVD_SIZE)
 
+  gPlatformCommonLibTokenSpaceGuid.PcdBootPerformanceMask       | $(BOOT_PERFORMANCE_MASK)
+  gPlatformModuleTokenSpaceGuid.PcdSblResiliencyEnabled         | $(ENABLE_SBL_RESILIENCY)
+  gPlatformModuleTokenSpaceGuid.PcdIdenticalTopSwapsBuilt       | $(BUILD_IDENTICAL_TS)
+  gPlatformCommonLibTokenSpaceGuid.PcdTccEnabled          | $(ENABLE_TCC)
 
 [PcdsPatchableInModule]
   gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel   | 0x8000004F
@@ -322,12 +329,10 @@
   gPlatformModuleTokenSpaceGuid.PcdSplashEnabled          | $(ENABLE_SPLASH)
   gPlatformModuleTokenSpaceGuid.PcdFramebufferInitEnabled | $(ENABLE_FRAMEBUFFER_INIT)
   gPlatformModuleTokenSpaceGuid.PcdVtdEnabled             | $(ENABLE_VTD)
-  gPlatformCommonLibTokenSpaceGuid.PcdTccEnabled          | $(ENABLE_TCC)
   gPlatformModuleTokenSpaceGuid.PcdPsdBiosEnabled         | $(HAVE_PSD_TABLE)
   gPayloadTokenSpaceGuid.PcdGrubBootCfgEnabled            | $(ENABLE_GRUB_CONFIG)
   gPlatformModuleTokenSpaceGuid.PcdSmbiosEnabled          | $(ENABLE_SMBIOS)
   gPlatformModuleTokenSpaceGuid.PcdLinuxPayloadEnabled    | $(ENABLE_LINUX_PAYLOAD)
-  gPlatformCommonLibTokenSpaceGuid.PcdContainerBootEnabled| $(ENABLE_CONTAINER_BOOT)
   gPayloadTokenSpaceGuid.PcdCsmeUpdateEnabled             | $(ENABLE_CSME_UPDATE)
   gPlatformModuleTokenSpaceGuid.PcdLegacyEfSegmentEnabled | $(ENABLE_LEGACY_EF_SEG)
   gPlatformCommonLibTokenSpaceGuid.PcdEmmcHs400SupportEnabled | $(ENABLE_EMMC_HS400)
@@ -340,6 +345,7 @@
   gPayloadTokenSpaceGuid.PcdPayloadModuleEnabled          | $(ENABLE_PAYLOD_MODULE)
   gPlatformModuleTokenSpaceGuid.PcdEnableDts              | $(ENABLE_DTS)
   gPlatformModuleTokenSpaceGuid.PcdEnablePciePm           | $(ENABLE_PCIE_PM)
+  gPlatformCommonLibTokenSpaceGuid.PcdFspNoEop            | $(HAVE_NO_FSP_EOP)
 
 !ifdef $(S3_DEBUG)
   gPlatformModuleTokenSpaceGuid.PcdS3DebugEnabled         | $(S3_DEBUG)
@@ -387,10 +393,11 @@
 
   BootloaderCorePkg/Stage1B/Stage1B.inf {
     <LibraryClasses>
-      FspApiLib    | BootloaderCorePkg/Library/FspApiLib/FspmApiLib.inf
-      BaseMemoryLib| MdePkg/Library/BaseMemoryLibRepStr/BaseMemoryLibRepStr.inf
-      SocInitLib   | $(SOC_INIT_STAGE1B_LIB_INF_FILE)
-      BoardInitLib | $(BRD_INIT_STAGE1B_LIB_INF_FILE)
+      FspApiLib             | BootloaderCorePkg/Library/FspApiLib/FspmApiLib.inf
+      BaseMemoryLib         | MdePkg/Library/BaseMemoryLibRepStr/BaseMemoryLibRepStr.inf
+      FirmwareResiliencyLib | BootloaderCorePkg/Library/FirmwareResiliencyLib/FirmwareResiliencyLib.inf
+      SocInitLib            | $(SOC_INIT_STAGE1B_LIB_INF_FILE)
+      BoardInitLib          | $(BRD_INIT_STAGE1B_LIB_INF_FILE)
   }
 
   BootloaderCorePkg/Stage2/Stage2.inf {
@@ -439,7 +446,14 @@
 !endif
 
 !if $(UCODE_SIZE) > 0
-  $(MICROCODE_INF_FILE)
+  !if $(UCODE_SLOT_SIZE) > 0
+    $(MICROCODE_INF_FILE) {
+      <BuildOptions>
+        *_*_*_GENFW_FLAGS  = --align $(UCODE_SLOT_SIZE)
+    }
+  !else
+    $(MICROCODE_INF_FILE)
+  !endif
 !endif
 
 [BuildOptions.Common.EDKII]

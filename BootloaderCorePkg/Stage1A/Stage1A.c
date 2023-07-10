@@ -265,6 +265,7 @@ SecStartup2 (
   SERVICES_LIST            *ServiceList;
   BUF_INFO                 *BufInfo;
   CONTAINER_LIST           *ContainerList;
+  BOOT_PARTITION           Partition;
 
   Stage1aFvBase = PcdGet32 (PcdStage1AFdBase) + PcdGet32 (PcdFSPTSize);
   PeCoffFindAndReportImageInfo ((UINT32) (UINTN) GET_STAGE_MODULE_BASE (Stage1aFvBase));
@@ -359,9 +360,12 @@ SecStartup2 (
     SetLibraryData (PcdGet8 (PcdPcdLibId), LdrGlobal->PcdDataPtr, BufInfo->AllocLen);
   }
 
-  // Extra initialization
-  if (FlashMap != NULL) {
-    SetCurrentBootPartition ((FlashMap->Attributes & FLASH_MAP_ATTRIBUTES_BACKUP_REGION) ? 1 : 0);
+  if (PcdGetBool (PcdIdenticalTopSwapsBuilt)) {
+    if (!EFI_ERROR (GetBootPartition (&Partition))) {
+      SetCurrentBootPartition (Partition);
+    }
+  } else if (FlashMap != NULL) {
+    SetCurrentBootPartition ((FlashMap->Attributes & FLASH_MAP_ATTRIBUTES_BACKUP_REGION) ? BackupPartition : PrimaryPartition);
   }
 
   // Call board hook to enable debug

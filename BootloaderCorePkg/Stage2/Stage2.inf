@@ -1,6 +1,6 @@
 ## @file
 #
-#  Copyright (c) 2016 - 2021, Intel Corporation. All rights reserved.<BR>
+#  Copyright (c) 2016 - 2022, Intel Corporation. All rights reserved.<BR>
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -31,6 +31,7 @@
   BootloaderCorePkg/BootloaderCorePkg.dec
   BootloaderCommonPkg/BootloaderCommonPkg.dec
   IntelFsp2Pkg/IntelFsp2Pkg.dec
+  Silicon/CommonSocPkg/CommonSocPkg.dec
 
 [LibraryClasses]
   FspSupportLib
@@ -70,6 +71,8 @@
   ThunkLib
   LocalApicLib
   UniversalPayloadLib
+  TcoTimerLib
+  WatchDogTimerLib
 
 [Guids]
   gFspReservedMemoryResourceHobGuid
@@ -103,6 +106,8 @@
   gSpiFlashInfoGuid
   gNvVariableInfoGuid
   gPldS3CommunicationGuid
+  gTpmEventLogInfoGuid
+  gSecureBootInfoGuid
 
 [Pcd]
   gPlatformCommonLibTokenSpaceGuid.PcdMaxLibraryDataEntry
@@ -145,5 +150,8 @@
   gPlatformModuleTokenSpaceGuid.PcdSmmRebaseMode
   gPlatformModuleTokenSpaceGuid.PcdAcpiTablesRsdp
   gPlatformCommonLibTokenSpaceGuid.PcdBuildSmmHobs
+  gPlatformCommonLibTokenSpaceGuid.PcdBootPerformanceMask
+  gPlatformModuleTokenSpaceGuid.PcdSblResiliencyEnabled
+
 [Depex]
   TRUE

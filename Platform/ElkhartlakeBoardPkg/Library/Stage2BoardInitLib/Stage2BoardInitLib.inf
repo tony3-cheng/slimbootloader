@@ -1,7 +1,7 @@
 ## @file
 #
 #
-# Copyright (c) 2008-2020, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2008-2023, Intel Corporation. All rights reserved.<BR>
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 ##
@@ -61,6 +61,8 @@
   PsdLib
   MeExtMeasurementLib
   TccLib
+  WatchDogTimerLib
+  ResetSystemLib
 
 [Guids]
   gOsConfigDataGuid
@@ -101,3 +103,5 @@
   gPlatformModuleTokenSpaceGuid.PcdSmbiosEnabled
   gPlatformCommonLibTokenSpaceGuid.PcdTccEnabled
   gPlatformModuleTokenSpaceGuid.PcdAcpiTableTemplatePtr
+  gPlatformModuleTokenSpaceGuid.PcdFspsUpdPtr
+  gPlatformCommonLibTokenSpaceGuid.PcdFspNoEop

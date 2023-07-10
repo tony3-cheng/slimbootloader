@@ -1,7 +1,7 @@
 /**@file
   MKHI Messages
 
-  Copyright (c) 2021, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2022, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 **/
 
@@ -35,6 +35,9 @@
 ///
 /// Defines for MCA_GROUP Command
 ///
+#define MCA_READ_FILE_EX_CMD              0x0A
+#define MCA_ARB_SVN_COMMIT_CMD            0x1B
+#define MCA_ARB_SVN_GET_INFO_CMD          0x1C
 #define MCA_REVOKE_OEM_KEY_HASH_CMD       0x2F
 #define MCA_GET_OEM_KEY_STATUS_CMD        0x0D
 ///
@@ -46,28 +49,17 @@
 #define GEN_SET_MEASURED_BOOT_STATE_CMD           0x22
 #define GEN_GET_MEASURED_BOOT_STATE_CMD           0x23
 
-//
-// Typedef for Result field of MHKI Header
-//
-typedef enum {
-  MkhiStatusSuccess,
-  MkhiStatusInvalidState,
-  MkhiStatusMessageSkipped,
-  MkhiStatusSizeError       = 0x5,
-  MkhiStatusInvalidAccess   = 0x84,
-  MkhiStatusInvalidParams   = 0x85,
-  MkhiStatusNotReady        = 0x88,
-  MkhiStatusNotSupported    = 0x89,
-  MkhiStatusInvalidAddress  = 0x8C,
-  MkhiStatusInvalidCommand  = 0x8D,
-  MkhiStatusFailure         = 0x9E,
-  MkhiStatusInvalidResource = 0xE4,
-  MkhiStatusResourceInUse   = 0xE5,
-  MkhiStatusNoResource      = 0xE6,
-  MkhiStatusGeneralError    = 0xFF
-} MKHI_RESULT;
-
 ///
+/// HW Anti-Rollback Key Usage
+///
+#define  MFT_KEY_USAGE_INDEX_CSE_RBE_MANIFEST      3
+#define  MFT_KEY_USAGE_INDEX_BOOT_POLICY_MANIFEST 32
+#define  MFT_KEY_USAGE_INDEX_OEM_KEY_MANIFEST     45
+#define  MFT_KEY_USAGE_INDEX_OEM_BTG_KEY_MANIFEST 54
+#define  MFT_KEY_USAGE_INDEX_OEM_ACM_MANIFEST     56
+
+#define ARB_SVN_COMMIT_ALL                      0xFF ///< Value 0xFF refers to committing all pending ARBSVN values.
+
 /// MKHI_CBM_GROUP Definitions
 ///
 typedef union {
@@ -624,52 +616,6 @@ typedef union {
 } ARB_SVN_GET_INFO_BUFFER;
 
 ///
-/// OEM Key Revocation
-///
-typedef struct {
-  MKHI_MESSAGE_HEADER MkhiHeader;
-} OEM_KEY_REVOKE;
-
-typedef struct {
-  MKHI_MESSAGE_HEADER MkhiHeader;
-} OEM_KEY_REVOKE_ACK;
-
-typedef union {
-  OEM_KEY_REVOKE       Request;
-  OEM_KEY_REVOKE_ACK   Response;
-} OEM_KEY_REVOKE_BUFFER;
-
-
-typedef struct {
-  MKHI_MESSAGE_HEADER MkhiHeader;
-} OEM_KEY_STATUS_REQ;
-
-typedef struct {
-  UINT8               Valid;
-  UINT8               InUse;
-  UINT8               Revoked;
-  UINT8               KeyHash[64];
-} KEY_INFO;
-
-typedef struct {
-  UINT8               RevocationEnabled;
-  UINT8               NumKeySupported;
-  UINT32              KeyHashType;
-  KEY_INFO            Keys[2];
-} OEM_KEY_STATUS;
-
-typedef struct {
-  MKHI_MESSAGE_HEADER MkhiHeader;
-  OEM_KEY_STATUS      OemKeyStatus;
-} OEM_KEY_STATUS_ACK;
-
-typedef union {
-  OEM_KEY_STATUS_REQ   Request;
-  OEM_KEY_STATUS_ACK   Response;
-} OEM_KEY_STATUS_BUFFER;
-
-
-///
 /// DNX Request Set
 ///
 typedef struct {
@@ -927,94 +873,6 @@ typedef union {
   GET_IMAGE_FW_VER      Request;
   GET_IMAGE_FW_VER_ACK  Response;
 } GET_IMAGE_FW_VERSION_BUFFER;
-
-///
-/// Set FIPS Mode
-///
-#define FIPS_MODE_DISABLED 0
-#define FIPS_MODE_ENABLED  1
-
-typedef struct {
-  UINT32              FipsMode;
-} SET_FIPS_MODE_DATA;
-
-typedef struct {
-  MKHI_MESSAGE_HEADER MkhiHeader;
-  SET_FIPS_MODE_DATA  Data;
-} SET_FIPS_MODE;
-
-typedef struct {
-  MKHI_MESSAGE_HEADER MkhiHeader;
-} SET_FIPS_MODE_ACK;
-
-typedef union {
-  SET_FIPS_MODE       Request;
-  SET_FIPS_MODE_ACK   Response;
-} SET_FIPS_MODE_BUFFER;
-
-///
-/// Get FIPS Mode
-///
-typedef struct {
-  UINT16              Major;
-  UINT16              Minor;
-  UINT16              Hotfix;
-  UINT16              Build;
-} FIPS_VERSION;
-
-typedef struct {
-  UINT32              FipsMode;
-  FIPS_VERSION        CryptoVersion;
-  UINT8               Reserved[8];
-} GET_FIPS_MODE_DATA;
-
-typedef struct {
-  MKHI_MESSAGE_HEADER MkhiHeader;
-} GET_FIPS_MODE;
-
-typedef struct {
-  MKHI_MESSAGE_HEADER MkhiHeader;
-  GET_FIPS_MODE_DATA  Data;
-} GET_FIPS_MODE_ACK;
-
-typedef union {
-  GET_FIPS_MODE       Request;
-  GET_FIPS_MODE_ACK   Response;
-} GET_FIPS_MODE_BUFFER;
-
-///
-/// Set CSME Measured Boot
-///
-typedef struct {
-  MKHI_MESSAGE_HEADER     MkhiHeader;
-  UINT8                   Data;
-} SET_MEASURED_BOOT;
-
-typedef struct {
-  MKHI_MESSAGE_HEADER MkhiHeader;
-} SET_MEASURED_BOOT_ACK;
-
-typedef union {
-  SET_MEASURED_BOOT       Request;
-  SET_MEASURED_BOOT_ACK   Response;
-} SET_MEASURED_BOOT_BUFFER;
-
-///
-/// Get CSME Measured Boot
-///
-typedef struct {
-  MKHI_MESSAGE_HEADER     MkhiHeader;
-} GET_MEASURED_BOOT;
-
-typedef struct {
-  MKHI_MESSAGE_HEADER     MkhiHeader;
-  UINT8                   Data;
-} GET_MEASURED_BOOT_ACK;
-
-typedef union {
-  GET_MEASURED_BOOT       Request;
-  GET_MEASURED_BOOT_ACK   Response;
-} GET_MEASURED_BOOT_BUFFER;
 
 #pragma pack()
 

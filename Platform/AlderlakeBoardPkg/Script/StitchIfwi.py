@@ -1,7 +1,7 @@
 ## @ StitchIfwi.py
 #  This is a python stitching script for Slim Bootloader ADL build
 #
-# Copyright (c) 2020 - 2021, Intel Corporation. All rights reserved. <BR>
+# Copyright (c) 2020 - 2023, Intel Corporation. All rights reserved. <BR>
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 ##
@@ -29,9 +29,11 @@ sys.dont_write_bytecode = True
 # sign_bin_flag can be set to false to avoid signing process. Applicable for Btg profile 0
 sign_bin_flag = True
 
-sblopen_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), '../../../../', 'SblOpen')
+sblopen_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../'))
 if not os.path.exists (sblopen_dir):
     sblopen_dir = os.getenv('SBL_SOURCE', '')
+if not os.path.exists (sblopen_dir):
+    raise  Exception("Please set env 'SBL_SOURCE' to SBL open source root folder")
 
 sys.path.append (os.path.join(sblopen_dir, "BootloaderCorePkg" , "Tools"))
 
@@ -65,6 +67,32 @@ def gen_xml_file(stitch_dir, stitch_cfg_file, btg_profile, plt_params_list, plat
 
     tree.write(updated_xml_file)
 
+def patch_xml_file(stitch_dir, ifwi_src_path):
+    print ("Patching xml file .........")
+
+    TOP_SWAP_SIZE = {
+        0x00020000 : '64KB',
+        0x00040000 : '128KB',
+        0x00080000 : '512KB',
+        0x00100000 : '1MB',
+        0x00200000 : '2MB',
+        0x00400000 : '4MB',
+        0x00800000 : '8MB',
+    }
+
+    ifwi_bin = bytearray (get_file_data (ifwi_src_path))
+    ifwi = IFWI_PARSER.parse_ifwi_binary (ifwi_bin)
+    ts0_comp = IFWI_PARSER.locate_components (ifwi, 'IFWI/BIOS/TS0')
+    if len(ts0_comp) == 0:
+        raise Exception ("Could not locate component IFWI/BIOS/TS0!")
+
+    updated_xml_file = os.path.join (stitch_dir, 'Temp', 'updated.xml')
+    tree = ET.parse(updated_xml_file)
+    node = tree.find('./FlashSettings/BiosConfiguration/TopSwapOverride')
+    node.set('value', TOP_SWAP_SIZE[ts0_comp[0].length])
+    tree.write(updated_xml_file)
+
+
 def replace_component (ifwi_src_path, flash_path, file_path, comp_alg, pri_key, svn):
     print ("Replacing components.......")
     work_dir = os.getcwd()
@@ -93,12 +121,6 @@ def replace_component (ifwi_src_path, flash_path, file_path, comp_alg, pri_key, 
         container_file = os.path.join(work_dir, 'Temp', 'CTN_%s.bin') % comp_name
         gen_file_from_object (container_file, ifwi_bin[replace_comp.offset:replace_comp.offset + replace_comp.length])
         comp_file     = os.path.join(work_dir, file_path)
-        sblopen_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), '../../../../', 'SblOpen')
-        if not os.path.exists (sblopen_dir):
-            sblopen_dir = os.getenv('SBL_SOURCE', '')
-
-        if not os.path.exists (sblopen_dir):
-           raise  Exception("Please set env 'SBL_SOURCE' to SBL open source root folder")
 
         if os.name == 'nt':
             tool_bin_dir  = os.path.join(sblopen_dir, "BaseTools", "Bin", "Win32")
@@ -156,6 +178,8 @@ def stitch (stitch_dir, stitch_cfg_file, sbl_file, btg_profile, plt_params_list,
 
     # Generate xml
     gen_xml_file(stitch_dir, stitch_cfg_file, btg_profile, plt_params_list, platform, tpm)
+
+    patch_xml_file(stitch_dir, os.path.join(temp_dir, "SlimBootloader.bin"))
 
     if sign_bin_flag:
         update_btGuard_manifests(stitch_dir, stitch_cfg_file, btg_profile, tpm)

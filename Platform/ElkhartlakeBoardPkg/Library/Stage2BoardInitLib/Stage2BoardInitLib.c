@@ -1,6 +1,6 @@
 /** @file
 
-  Copyright (c) 2017 - 2021, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2017 - 2023, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -74,11 +74,13 @@
 #include <Library/HeciInitLib.h>
 #include <TccConfigSubRegions.h>
 #include <Library/TccLib.h>
+#include <Library/WatchDogTimerLib.h>
 #include <Library/MeExtMeasurementLib.h>
 #include <GpioConfig.h>
 #include <Register/RegsSpi.h>
 #include <Library/GpioLib.h>
 #include <Library/PlatformHookLib.h>
+#include <Library/ResetSystemLib.h>
 
 BOOLEAN mTccDsoTuning      = FALSE;
 UINT8   mTccRtd3Support    = 0;
@@ -314,6 +316,38 @@ FillGpioTable (
   return GpioTable;
 }
 
+
+/**
+  Configure the GPIO pins for GBEs: PCH TSN and Pse TSNs
+**/
+VOID
+ConfigureGbeGpio (
+  VOID
+  )
+{
+  SILICON_CFG_DATA            *SiCfgData;
+  MEMORY_CFG_DATA             *MemCfgData;
+
+  DEBUG ((DEBUG_INFO, "ConfigureGpio for Gbe\n"));
+  SiCfgData = (SILICON_CFG_DATA *)FindConfigDataByTag (CDATA_SILICON_TAG);
+  MemCfgData = (MEMORY_CFG_DATA *)FindConfigDataByTag (CDATA_MEMORY_TAG);
+
+  if (SiCfgData != NULL) {
+    if (SiCfgData->PchTsnEnable) {
+      ConfigureGpio (CDATA_NO_TAG, ARRAY_SIZE(mEhlPchTsnDeviceGpioTable), (UINT8*)mEhlPchTsnDeviceGpioTable);
+    }
+
+    if (MemCfgData != NULL && MemCfgData->PchPseEnable) {
+      if (SiCfgData->PchPseGbeEnable[0] > 0) {
+        ConfigureGpio (CDATA_NO_TAG, ARRAY_SIZE(mEhlPseTsn0DeviceGpioTable), (UINT8*)mEhlPseTsn0DeviceGpioTable);
+      }
+      if (SiCfgData->PchPseGbeEnable[1] > 0) {
+        ConfigureGpio (CDATA_NO_TAG, ARRAY_SIZE(mEhlPseTsn1DeviceGpioTable), (UINT8*)mEhlPseTsn1DeviceGpioTable);
+      }
+    }
+  }
+}
+
 /**
   Initialize the GPIO Config table that was read from CfgData into GPIO PAD registers.
   Create OS config data support HOB.
@@ -511,6 +545,18 @@ InitializeSmbiosInfo (
     4, "Board Serial Number");
 
   //
+  // SMBIOS_TYPE_SYSTEM_ENCLOSURE
+  //
+  AddSmbiosTypeString (&TempSmbiosStrTbl[Index++], SMBIOS_TYPE_SYSTEM_ENCLOSURE,
+    1, "Intel Corporation");
+  AddSmbiosTypeString (&TempSmbiosStrTbl[Index++], SMBIOS_TYPE_SYSTEM_ENCLOSURE,
+    2, "0.1");
+  AddSmbiosTypeString (&TempSmbiosStrTbl[Index++], SMBIOS_TYPE_SYSTEM_ENCLOSURE,
+    3, "Chassis Serial Number");
+  AddSmbiosTypeString (&TempSmbiosStrTbl[Index++], SMBIOS_TYPE_SYSTEM_ENCLOSURE,
+    4, "Chassis Sku Number");
+
+  //
   // SMBIOS_TYPE_PROCESSOR_INFORMATION : TBD
   //
 
@@ -666,6 +712,7 @@ BoardInit (
   VOID                        *FspHobList;
   UINT32                      TsegBase;
   UINT32                      TsegSize;
+  UINT32                      NeedReboot;
 
   if (mPchSciSupported == 0xFF){
     mPchSciSupported = PchIsSciSupported();
@@ -679,6 +726,9 @@ BoardInit (
       DEBUG ((DEBUG_INFO, "ConfigureGpio for Fusa\n"));
       ConfigureGpio (CDATA_NO_TAG, ARRAY_SIZE(mGpioTablePreMemEhlFusa), (UINT8*)mGpioTablePreMemEhlFusa);
     }
+
+    ConfigureGbeGpio ();
+
     SpiConstructor ();
     if (GetBootMode() != BOOT_ON_FLASH_UPDATE) {
       UpdatePayloadId ();
@@ -688,6 +738,9 @@ BoardInit (
     Status = PcdSet32S (PcdAcpiTableTemplatePtr, (UINT32)(UINTN)mPlatformAcpiTables);
     break;
   case PostSiliconInit:
+    if (IsWdtFlagsSet(WDT_FLAG_TCC_DSO_IN_PROGRESS)) {
+      WdtDisable (WDT_FLAG_TCC_DSO_IN_PROGRESS);
+    }
     // Set TSEG base/size PCD
     TsegBase = MmioRead32 (TO_MM_PCI_ADDRESS (0x00000000) + TSEG) & ~0xF;
     TsegSize = MmioRead32 (TO_MM_PCI_ADDRESS (0x00000000) + BGSM) & ~0xF;
@@ -761,6 +814,13 @@ BoardInit (
     }
     break;
   case ReadyToBoot:
+    if (FeaturePcdGet (PcdFspNoEop)) {
+      MeEndOfPostEvent (&NeedReboot);
+      if (NeedReboot) {
+        DEBUG ((DEBUG_INIT, "Me Requested Reboot ...\n\n"));
+        ResetSystem (EfiResetPlatformSpecific);
+      }
+    }
     if ((GetBootMode() != BOOT_ON_FLASH_UPDATE) && (GetPayloadId() == 0)) {
       ProgramSecuritySetting ();
     }
@@ -838,21 +898,29 @@ TccModePostMemConfig (
   FspsUpd->FspsConfig.DsoTuningEn     = TccCfgData->TccTuning;
   FspsUpd->FspsConfig.TccErrorLogEn   = TccCfgData->TccErrorLog;
   FspsUpd->FspsConfig.IfuEnable       = 0;
+  if (!IsWdtFlagsSet(WDT_FLAG_TCC_DSO_IN_PROGRESS)) {
+    //
+    // If FSPM doesn't enable TCC DSO timer, FSPS should also skip TCC DSO.
+    //
+    DEBUG ((DEBUG_INFO, "DSO Tuning skipped.\n"));
+    FspsUpd->FspsConfig.TccStreamCfgStatus = 1;
+  } else if (TccCfgData->TccTuning != 0) {
+    // Reload Watch dog timer
+    WdtReloadAndStart (WDT_TIMEOUT_TCC_DSO, WDT_FLAG_TCC_DSO_IN_PROGRESS);
 
-// Load TCC stream config from container
-  TccStreamBase = NULL;
-  TccStreamSize = 0;
-  Status = LoadComponent (SIGNATURE_32 ('I', 'P', 'F', 'W'), SIGNATURE_32 ('T', 'C', 'C', 'T'),
-                          (VOID **)&TccStreamBase, &TccStreamSize);
-  if (EFI_ERROR (Status) || (TccStreamSize < sizeof (TCC_STREAM_CONFIGURATION))) {
-    DEBUG ((DEBUG_INFO, "Load TCC Stream %r, size = 0x%x\n", Status, TccStreamSize));
-  } else {
-    FspsUpd->FspsConfig.TccStreamCfgBase = (UINT32)(UINTN)TccStreamBase;
-    FspsUpd->FspsConfig.TccStreamCfgSize = TccStreamSize;
-    DEBUG ((DEBUG_INFO, "Load tcc stream @0x%p, size = 0x%x\n", TccStreamBase, TccStreamSize));
+    // Load TCC stream config from container
+    TccStreamBase = NULL;
+    TccStreamSize = 0;
+    Status = LoadComponent (SIGNATURE_32 ('I', 'P', 'F', 'W'), SIGNATURE_32 ('T', 'C', 'C', 'T'),
+                            (VOID **)&TccStreamBase, &TccStreamSize);
+    if (EFI_ERROR (Status) || (TccStreamSize < sizeof (TCC_STREAM_CONFIGURATION))) {
+      DEBUG ((DEBUG_ERROR, "Load TCC Stream %r, size = 0x%x\n", Status, TccStreamSize));
+    } else {
+      FspsUpd->FspsConfig.TccStreamCfgBase = (UINT32)(UINTN)TccStreamBase;
+      FspsUpd->FspsConfig.TccStreamCfgSize = TccStreamSize;
+      DEBUG ((DEBUG_INFO, "Load tcc stream @0x%p, size = 0x%x\n", TccStreamBase, TccStreamSize));
 
-    // Update UPD from stream
-    if (TccCfgData->TccTuning != 0) {
+      //Update UPD from stream
       StreamConfig   = (TCC_STREAM_CONFIGURATION *) TccStreamBase;
       PolicyConfig = (BIOS_SETTINGS *) &StreamConfig->BiosSettings;
       FspsUpd->FspsConfig.Eist                       = PolicyConfig->Pstates;
@@ -898,7 +966,7 @@ TccModePostMemConfig (
   Status = LoadComponent (SIGNATURE_32 ('I', 'P', 'F', 'W'), SIGNATURE_32 ('T', 'C', 'C', 'C'),
                                 (VOID **)&TccCacheconfigBase, &TccCacheconfigSize);
   if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_INFO, "TCC Cache config not found! %r\n", Status));
+    DEBUG ((DEBUG_ERROR, "TCC Cache config not found! %r\n", Status));
   } else {
     FspsUpd->FspsConfig.TccCacheCfgBase = (UINT32)(UINTN)TccCacheconfigBase;
     FspsUpd->FspsConfig.TccCacheCfgSize = TccCacheconfigSize;
@@ -911,7 +979,7 @@ TccModePostMemConfig (
   Status = LoadComponent (SIGNATURE_32 ('I', 'P', 'F', 'W'), SIGNATURE_32 ('T', 'C', 'C', 'M'),
                                 (VOID **)&TccCrlBase, &TccCrlSize);
   if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_INFO, "TCC CRL not found! %r\n", Status));
+    DEBUG ((DEBUG_ERROR, "TCC CRL not found! %r\n", Status));
   } else {
     FspsUpd->FspsConfig.TccCrlBinBase = (UINT32)(UINTN)TccCrlBase;
     FspsUpd->FspsConfig.TccCrlBinSize = TccCrlSize;
@@ -964,10 +1032,10 @@ FspUpdatePsePolicy (
   Fspscfg->PchPseLogOutputChannel = SiCfgData->PchPseLogOutputChannel;
   Fspscfg->PchPseLogOutputSize    = SiCfgData->PchPseLogOutputSize;
   Fspscfg->PchPseLogOutputOffset  = SiCfgData->PchPseLogOutputOffset;
-  Fspscfg->PchPseEcliteEnabled    = 1;
   Fspscfg->PchPseOobEnabled       = 0;
   Fspscfg->PchPseWoLEnabled       = 1;
   Fspscfg->PchPseAicEnabled       = (UINT8)SiCfgData->PchPseAicEnabled;
+  Fspscfg->PchPseEcliteEnabled    = (UINT8)SiCfgData->PchPseEcliteEnabled;
   Fspscfg->CpuTempSensorReadEnable= 1;
   //Fspscfg->PseJtagEnabled       = 0;
   //Fspscfg->PseJtagPinMux        = 0;
@@ -1015,6 +1083,7 @@ FspUpdatePsePolicy (
     Fspscfg->PchPseSpiEnable[Index]            = SiCfgData->PchPseSpiEnable[Index];
     Fspscfg->PchPseSpiSbInterruptEnable[Index] = SiCfgData->PchPseSpiSbInterruptEnable[Index];
     Fspscfg->PchPseSpiCs0Enable[Index]         = SiCfgData->PchPseSpiCs0Enable[Index];
+    Fspscfg->PchPseSpiCs1Enable[Index]          = SiCfgData->PchPseSpiCs1Enable[Index];
   }
   Fspscfg->PchPseSpiMosiPinMux[1]              = GPIO_VER3_MUXING_PSE_SPI1_MOSI_GPP_D3;
   Fspscfg->PchPseSpiMisoPinMux[1]              = GPIO_VER3_MUXING_PSE_SPI1_MISO_GPP_D2;
@@ -1088,6 +1157,8 @@ UpdateFspConfig (
   UINT32      PseTsnIpConfigSize;
   UINT32      *TsnConfigBase;
   UINT32      TsnConfigSize;
+  UINT32      *ChipsetInitBinPtr;
+  UINT32      ChipsetInitBinSize;
   BOOLEAN     BiosProtected;
   BOOLEAN     IasProtected;
   EFI_STATUS  Status;
@@ -1097,7 +1168,10 @@ UpdateFspConfig (
   SILICON_CFG_DATA   *SiCfgData;
   POWER_CFG_DATA     *PowerCfgData;
   MEMORY_CFG_DATA    *MemCfgData;
+  GRAPHICS_CFG_DATA  *GfxCfgData;
   UINT8              SaDisplayConfigTable[17] = { 0 };
+  UINT32             *HdaVerbTablePtr;
+  UINT8              HdaVerbTableNum;
 
   FspsUpd    = (FSPS_UPD *)FspsUpdPtr;
   Fspscfg     = &FspsUpd->FspsConfig;
@@ -1212,7 +1286,23 @@ UpdateFspConfig (
     Fspscfg->PavpEnable                 = SiCfgData->PavpEnable;
     Fspscfg->CdClock                    = SiCfgData->CdClock;
     Fspscfg->PeiGraphicsPeimInit        = SiCfgData->PeiGraphicsPeimInit;
-    Fspscfg->GraphicsConfigPtr          = PcdGet32(PcdGraphicsVbtAddress);
+
+    GfxCfgData = (GRAPHICS_CFG_DATA *)FindConfigDataByTag (CDATA_GRAPHICS_TAG);
+    if ((GfxCfgData != NULL) && GfxCfgData->PchHdaEnable == 1) {
+      HdaVerbTablePtr = (UINT32 *) AllocateZeroPool (4 * sizeof (UINT32));
+      if (HdaVerbTablePtr != NULL) {
+        HdaVerbTableNum = 0;
+        HdaVerbTablePtr[HdaVerbTableNum++]   = (UINT32)(UINTN) &HdaVerbTableDisplayAudio;
+        FspsUpd->FspsConfig.PchHdaVerbTablePtr      = (UINT32)(UINTN) HdaVerbTablePtr;
+        FspsUpd->FspsConfig.PchHdaVerbTableEntryNum = HdaVerbTableNum;
+      } else {
+        DEBUG ((DEBUG_ERROR, "UpdateFspConfig Error: Could not allocate Memory for HdaVerbTable\n"));
+      }
+    }
+
+    if ((GetBootMode() != BOOT_ON_S3_RESUME)) {
+      Fspscfg->GraphicsConfigPtr          = (UINT32)GetVbtAddress ();
+    }
 
     CopyMem(SaDisplayConfigTable, (VOID *)(UINTN)mEhlCrbRowDisplayDdiConfig, sizeof(mEhlCrbRowDisplayDdiConfig));
     Fspscfg->DdiPortAConfig             = SaDisplayConfigTable[0];
@@ -1487,6 +1577,17 @@ UpdateFspConfig (
     Fspscfg->SerialIoUartRtsPinMuxPolicy[0]              = GPIO_VER3_MUXING_SERIALIO_UART0_RTS_GPP_F0;
     Fspscfg->SerialIoUartCtsPinMuxPolicy[0]              = GPIO_VER3_MUXING_SERIALIO_UART0_CTS_GPP_F3;
 
+    // ChipsetInit
+    ChipsetInitBinPtr   = NULL;
+    ChipsetInitBinSize  = 0;
+    Status = LoadComponent (SIGNATURE_32 ('I', 'P', 'F', 'W'), SIGNATURE_32 ('C', 'H', 'I', 'P'),
+                            (VOID **)&ChipsetInitBinPtr, &ChipsetInitBinSize);
+    if (!EFI_ERROR (Status)) {
+      DEBUG ((DEBUG_INFO, "Load ChipsetInitBin @0x%p, size = 0x%x\n", ChipsetInitBinPtr, ChipsetInitBinSize));
+      Fspscfg->ChipsetInitBinPtr = (UINT32)(UINTN)ChipsetInitBinPtr;
+      Fspscfg->ChipsetInitBinLen = ChipsetInitBinSize;
+    }
+
     // Check for TSN related sub-regions
     TsnMacAddrBase      = NULL;
     PseTsnIpConfigBase  = NULL;
@@ -1501,9 +1602,14 @@ UpdateFspConfig (
       if (MEASURED_BOOT_ENABLED() && (GetBootMode() != BOOT_ON_S3_RESUME)) {
         TpmHashAndExtendPcrEventLog (1, (UINT8 *)TsnMacAddrBase, TsnMacAddrSize, EV_EFI_VARIABLE_DRIVER_CONFIG, sizeof("TMAC Config"), (UINT8 *)"TMAC Config");
       }
+
+      Fspscfg->TsnMacAddrBase = (UINT32)(UINTN)TsnMacAddrBase;
+      Fspscfg->TsnMacAddrSize = TsnMacAddrSize;
+
+      DEBUG ((DEBUG_INFO, "Load TSN MAC subregion @0x%p, size = 0x%x\n", TsnMacAddrBase, TsnMacAddrSize));
+    } else {
+      DEBUG ((DEBUG_ERROR, "Failed to load TSN MAC subregion %r\n", Status));
     }
-    Fspscfg->TsnMacAddrBase      = (UINT32)(UINTN)TsnMacAddrBase;
-    Fspscfg->TsnMacAddrSize      = TsnMacAddrSize;
 
     Status = LoadComponent (SIGNATURE_32 ('I', 'P', 'F', 'W'), SIGNATURE_32 ('T', 'S', 'I', 'P'),
                             (VOID **)&PseTsnIpConfigBase, &PseTsnIpConfigSize);
@@ -1511,9 +1617,14 @@ UpdateFspConfig (
       if (MEASURED_BOOT_ENABLED() && (GetBootMode() != BOOT_ON_S3_RESUME)) {
         TpmHashAndExtendPcrEventLog (1, (UINT8 *)PseTsnIpConfigBase, PseTsnIpConfigSize, EV_EFI_VARIABLE_DRIVER_CONFIG, sizeof("TSIP Config"), (UINT8 *)"TSIP Config");
       }
+
+      Fspscfg->PseTsnIpConfigBase = (UINT32)(UINTN)PseTsnIpConfigBase;
+      Fspscfg->PseTsnIpConfigSize = PseTsnIpConfigSize;
+
+      DEBUG ((DEBUG_INFO, "Load TSN IP config @0x%p, size = 0x%x\n", PseTsnIpConfigBase, PseTsnIpConfigSize));
+    } else {
+      DEBUG ((DEBUG_ERROR, "Failed to load TSN IP config %r\n", Status));
     }
-    Fspscfg->PseTsnIpConfigBase  = (UINT32)(UINTN)PseTsnIpConfigBase;
-    Fspscfg->PseTsnIpConfigSize  = PseTsnIpConfigSize;
 
     Status = LoadComponent (SIGNATURE_32 ('I', 'P', 'F', 'W'), SIGNATURE_32 ('T', 'S', 'N', 'C'),
                             (VOID **)&TsnConfigBase, &TsnConfigSize);
@@ -1521,9 +1632,14 @@ UpdateFspConfig (
       if (MEASURED_BOOT_ENABLED() && (GetBootMode() != BOOT_ON_S3_RESUME)) {
         TpmHashAndExtendPcrEventLog (1, (UINT8 *)TsnConfigBase, TsnConfigSize, EV_EFI_VARIABLE_DRIVER_CONFIG, sizeof("TSNC Config"), (UINT8 *)"TSNC Config");
       }
+
+      Fspscfg->TsnConfigBase = (UINT32)(UINTN)TsnConfigBase;
+      Fspscfg->TsnConfigSize = TsnConfigSize;
+
+      DEBUG ((DEBUG_INFO, "Load TSN config @0x%p, size = 0x%x\n", TsnConfigBase, TsnConfigSize));
+    } else {
+      DEBUG ((DEBUG_ERROR, "Failed to load TSN config %r\n", Status));
     }
-    Fspscfg->TsnConfigBase       = (UINT32)(UINTN)TsnConfigBase;
-    Fspscfg->TsnConfigSize       = TsnConfigSize;
 
     Fspscfg->EnableTimedGpio0   = (UINT8)SiCfgData->EnableTimedGpio0;
     Fspscfg->EnableTimedGpio1   = (UINT8)SiCfgData->EnableTimedGpio1;

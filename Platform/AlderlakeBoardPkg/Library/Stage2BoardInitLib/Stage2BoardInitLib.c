@@ -1,6 +1,6 @@
 /** @file
 
-  Copyright (c) 2020 - 2022, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2020 - 2023, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -9,11 +9,15 @@
 #include <PlatformData.h>
 #include <Library/MeExtMeasurementLib.h>
 #include "Stage2BoardInitLib.h"
-#include "GpioTableAdlPsPostMem.h"
 #include "GpioTableAdlNPostMem.h"
 #include "GpioTableAdlTsn.h"
+#include "GpioTableTestSPostMem.h"
 #include <Library/PciePm.h>
 #include <Library/PlatformInfo.h>
+#include <Library/LoaderPerformanceLib.h>
+#include <Library/PciEnumerationLib.h>
+#include <Library/FusaConfigLib.h>
+#include "SioChip.h"
 
 GLOBAL_REMOVE_IF_UNREFERENCED UINT8    mBigCoreCount;
 GLOBAL_REMOVE_IF_UNREFERENCED UINT8    mSmallCoreCount;
@@ -28,6 +32,42 @@ STATIC S3_SAVE_REG mS3SaveReg = {
   { { REG_TYPE_IO, WIDE32, { 0, 0}, (ACPI_BASE_ADDRESS + R_ACPI_IO_SMI_EN), 0x00000000 } }
 };
 
+/**
+  Platform specific initialization for PCI Enum.
+  Logs Device addresses of NVME controllers to boot options.
+
+  @param[in] Bus      Device bus number
+  @param[in] Dev      Device number
+  @param[in] Fun      Device function number
+  @param[in] Phase    Current PCI enumeration phase
+**/
+VOID
+EFIAPI
+PlatformPciEnumHookProc (
+  UINT8         Bus,
+  UINT8         Dev,
+  UINT8         Fun,
+  EFI_PCI_CONTROLLER_RESOURCE_ALLOCATION_PHASE Phase
+  )
+{
+  STATIC UINT8                            Instance = 0;
+  volatile PCI_DEVICE_INDEPENDENT_REGION  *PciDev;
+
+  // Exit on any other PCI enumeration phase
+  if (Phase != EfiPciBeforeResourceCollection) {
+    return;
+  }
+
+  // When an NVME controller is detected, update its boot option entry.
+  PciDev = (volatile PCI_DEVICE_INDEPENDENT_REGION *) MM_PCI_ADDRESS (Bus, Dev, Fun, 0);
+  if ((PciDev->ClassCode[0] == PCI_IF_MASS_STORAGE_SOLID_STATE_ENTERPRISE_NVMHCI) &&
+      (PciDev->ClassCode[1] == PCI_CLASS_MASS_STORAGE_SOLID_STATE) &&
+      (PciDev->ClassCode[2] == PCI_CLASS_MASS_STORAGE)) {
+    DEBUG((DEBUG_INFO, "Found NVME controller at B%02X|D%02X|F%X\n", Bus, Dev, Fun));
+    SetDeviceAddr (OsBootDeviceNvme, Instance, (UINT32)((Bus << 16) | (Dev << 8)));
+    Instance += 1;
+  }
+}
 
 /**
   Create OS config data support HOB.
@@ -95,6 +135,58 @@ BuildOsConfigDataHob (
 }
 
 /**
+  Create Csme Boot time HOB.
+
+  @param[out]  CsmeBootTimeData       pointer to CSME_PERFORMANCE_INFO structure
+
+  @retval EFI_SUCCESS           OS config data HOB built
+  @retval EFI_NOT_FOUND         Loader Global data not found
+  @retval EFI_OUT_OF_RESOURCES  Could not build HOB
+**/
+EFI_STATUS
+UpdateCsmeBootPerfHob (
+  OUT CSME_PERFORMANCE_INFO  *CsmeBootTimeData
+  )
+{
+  UINT32      *EarlyBootData;
+  UINT32      EarlyBootDataLength;
+  UINT32      EarlyBootDataVersion;
+  UINT32      AllocatedDataLength;
+  EFI_STATUS  Status;
+
+  EarlyBootData = NULL;
+  EarlyBootDataLength = 0;
+
+  if (CsmeBootTimeData == NULL) {
+    return EFI_INVALID_PARAMETER;
+  }
+
+  //
+  // Memory allocated for boot data is passed through BootDataLength
+  //
+  AllocatedDataLength = CsmeBootTimeData->BootDataLength;
+
+  Status = HeciGetEarlyBootPerfData (&EarlyBootData, &EarlyBootDataLength, &EarlyBootDataVersion);
+  if (EFI_ERROR (Status)) {
+    DEBUG ((DEBUG_ERROR, "Obtaining CSME Boot performance data failed with status: %r\n", Status));
+    return Status;
+  } else {
+    DEBUG ((DEBUG_INFO, "Found CSME Boot performance data!\n"));
+  }
+
+  if (EarlyBootDataLength > AllocatedDataLength) {
+    return EFI_OUT_OF_RESOURCES;
+  }
+
+  CsmeBootTimeData->Revision = 1;
+  CsmeBootTimeData->BootDataVersion = EarlyBootDataVersion;
+  CsmeBootTimeData->BootDataLength = EarlyBootDataLength;
+  CopyMem (CsmeBootTimeData->BootPerformanceData, EarlyBootData, EarlyBootDataLength * sizeof (UINT32));
+
+  return EFI_SUCCESS;
+}
+
+/**
   Set SPI flash EISS and LE
 **/
 VOID
@@ -124,7 +216,8 @@ ClearSmi (
 {
   UINT32                SmiEn;
   UINT32                SmiSts;
-  UINT16                Pm1Sts;
+  UINT32                Pm1Sts;
+  UINT16                Pm1Cnt;
 
   SmiEn = IoRead32 ((UINTN)(UINT32)(ACPI_BASE_ADDRESS + R_ACPI_IO_SMI_EN));
   if (((SmiEn & B_ACPI_IO_SMI_EN_GBL_SMI) !=0) && ((SmiEn & B_ACPI_IO_SMI_EN_EOS) !=0)) {
@@ -135,7 +228,17 @@ ClearSmi (
   // Clear the status before setting smi enable
   //
   SmiSts = IoRead32 ((UINTN)(UINT32)(ACPI_BASE_ADDRESS + R_ACPI_IO_SMI_EN + 4));
-  Pm1Sts = IoRead16 ((UINTN)(ACPI_BASE_ADDRESS + R_ACPI_IO_PM1_STS));
+  Pm1Sts = IoRead32 ((UINTN)(UINT32)(ACPI_BASE_ADDRESS + R_ACPI_IO_PM1_STS));
+  Pm1Cnt = IoRead16 ((UINTN)(ACPI_BASE_ADDRESS + R_ACPI_IO_PM1_CNT));
+
+  // Clear RTC alarm and corresponding Pm1Sts only if wake-up source is RTC SMI#
+  if (((Pm1Sts & B_ACPI_IO_PM1_STS_RTC_EN) != 0) &&
+      ((Pm1Sts & B_ACPI_IO_PM1_STS_RTC) != 0) &&
+      ((Pm1Cnt & B_ACPI_IO_PM1_CNT_SCI_EN) == 0)) {
+    IoWrite8 (R_RTC_IO_INDEX, R_RTC_IO_REGC);
+    IoRead8 (R_RTC_IO_TARGET); /* RTC alarm is cleared upon read */
+    Pm1Sts |= B_ACPI_IO_PM1_STS_RTC;
+  }
 
   SmiSts |=
     (
@@ -206,6 +309,46 @@ PlatformCpuInit (
 }
 
 /**
+  Fix up the memory map entry for the flash map if it exceeds 16MB
+
+  @return EFI_STATUS
+ */
+EFI_STATUS
+EFIAPI
+FixUpFlashMapEntry (VOID)
+{
+  EFI_HOB_GUID_TYPE *RawHob;
+  MEMORY_MAP_INFO   *MemoryMapInfo;
+  UINT32            MapIndex;
+
+  DEBUG ((DEBUG_VERBOSE, "FixUpFlashMapEntry Start\n"));
+  RawHob = GetFirstGuidHob(&gLoaderMemoryMapInfoGuid);
+  if (RawHob == NULL) {
+    DEBUG ((DEBUG_ERROR, "Couldn't find Memory Map HOB\n"));
+    return EFI_NOT_FOUND;
+  }
+  MemoryMapInfo = (MEMORY_MAP_INFO*)(RawHob + 1);
+
+  DEBUG ((DEBUG_VERBOSE, "Map Entry Count %d\n", MemoryMapInfo->Count));
+  for (MapIndex = 0 ; MapIndex < MemoryMapInfo->Count ; MapIndex++) {
+    DEBUG ((DEBUG_VERBOSE, "Map index %d base 0x%X\n", MapIndex, MemoryMapInfo->Entry[MapIndex].Base));
+    if (MemoryMapInfo->Entry[MapIndex].Base == PcdGet32(PcdFlashBaseAddress)
+      && MemoryMapInfo->Entry[MapIndex].Size == PcdGet32(PcdFlashSize)
+      && PcdGet32(PcdFlashSize) > SIZE_16MB)
+    {
+      // only first 16MB of flash is memory mapped.
+      // Reserving more than that will cause memory map overlaps
+      DEBUG ((DEBUG_VERBOSE, "Found Flash Map Entry\n"));
+      MemoryMapInfo->Entry[MapIndex].Base = MAX_UINT32 - SIZE_16MB + 1;
+      MemoryMapInfo->Entry[MapIndex].Size = SIZE_16MB;
+      DEBUG ((DEBUG_VERBOSE, "Map index %d base 0x%X size 0x%X\n", MapIndex, MemoryMapInfo->Entry[MapIndex].Base, MemoryMapInfo->Entry[MapIndex].Size));
+      return EFI_SUCCESS;
+    }
+  }
+  return EFI_SUCCESS;
+}
+
+/**
   Board specific hook points.
 
   Implement board specific initialization during the boot flow.
@@ -214,6 +357,7 @@ PlatformCpuInit (
 
 **/
 VOID
+EFIAPI
 BoardInit (
   IN  BOARD_INIT_PHASE    InitPhase
   )
@@ -229,15 +373,15 @@ BoardInit (
   VOID                      *FspHobList;
   SILICON_CFG_DATA          *SiCfgData;
   BL_SW_SMI_INFO            *BlSwSmiInfo;
+  FEATURES_DATA             *FeatureCfgData;
+
+  SiCfgData = NULL;
 
   switch (InitPhase) {
   case PreSiliconInit:
     EnableLegacyRegions ();
     switch (GetPlatformId ()) {
-      case BoardIdAdlPSDdr5Rvp:
-        ConfigureGpio (CDATA_NO_TAG, sizeof (mGpioTablePostMemAdlPsDdr5Rvp) / sizeof (mGpioTablePostMemAdlPsDdr5Rvp[0]), (UINT8*)mGpioTablePostMemAdlPsDdr5Rvp);
-        break;
-      case BoardIdAdlNLp5Rvp:
+      case PLATFORM_ID_ADL_N_LPDDR5_RVP:
         ConfigureGpio (CDATA_NO_TAG, sizeof (mGpioTablePostMemAdlNLpddr5Rvp) / sizeof (mGpioTablePostMemAdlNLpddr5Rvp[0]), (UINT8*)mGpioTablePostMemAdlNLpddr5Rvp);
         break;
       default:
@@ -282,14 +426,19 @@ BoardInit (
     Status = PcdSet32S (PcdFuncCpuInitHook, (UINT32)(UINTN) PlatformCpuInit);
 
     if (PcdGetBool (PcdFastBootEnabled) == FALSE) {
-      Status = HsPhyLoadAndInit ();
-      if (EFI_ERROR (Status)) {
-        DEBUG ((DEBUG_WARN, "HsPhyInit failure, %r\n", Status));
+      if (IsPchS ()) {
+        Status = HsPhyLoadAndInit ();
+        if (EFI_ERROR (Status)) {
+          DEBUG ((DEBUG_WARN, "HsPhyInit failure, %r\n", Status));
+        }
       }
     }
 
     break;
   case PostSiliconInit:
+    FusaConfigPostSi();
+    FeatureCfgData = (FEATURES_DATA *)FindConfigDataByTag (CDATA_FEATURES_TAG);
+    SiCfgData = (SILICON_CFG_DATA *)FindConfigDataByTag (CDATA_SILICON_TAG);
     if (IsWdtFlagsSet(WDT_FLAG_TCC_DSO_IN_PROGRESS)) {
       WdtDisable (WDT_FLAG_TCC_DSO_IN_PROGRESS);
     }
@@ -321,31 +470,49 @@ BoardInit (
     if (FeaturePcdGet (PcdSmbiosEnabled)) {
       InitializeSmbiosInfo ();
     }
+
+    if ((SiCfgData != NULL) && (SiCfgData->EcAvailable == 0)) {
+      if ((FeatureCfgData != NULL) && (FeatureCfgData->S0ix == 1)) {
+        DEBUG ((DEBUG_INFO, "S0ix enabled. Skipping SioInit\n"));
+      } else {
+        //Init SIO if EC is not available and S0ix is disabled.
+        DEBUG ((DEBUG_INFO, "SioInit\n"));
+        SioInit();
+      }
+    }
+
+    // FIPS is disabled by default. enable it only when it is required.
+    if (FeatureCfgData != NULL && (FeatureCfgData->MeFipsMode != 0)){
+      DEBUG ((DEBUG_INFO, "Set HeciSetFipsMode to 0x%x\n", FeatureCfgData->MeFipsMode));
+      Status = HeciSetFipsMode(FeatureCfgData->MeFipsMode);
+      if (!EFI_ERROR(Status)) {
+        DEBUG ((DEBUG_INFO, "Enabled FIPS mode.\n"));
+      }
+    }
+
+    break;
+  case PrePciEnumeration:
+    (VOID) PcdSet32S (PcdPciEnumHookProc, (UINT32)(UINTN) PlatformPciEnumHookProc);
     break;
   case PostPciEnumeration:
     if (FeaturePcdGet (PcdEnablePciePm)) {
       PciePmConfig ();
     }
-    Status = SetFrameBufferWriteCombining (0, MAX_UINT32);
-    if (EFI_ERROR(Status)) {
-      DEBUG ((DEBUG_INFO, "Failed to set GFX framebuffer as WC\n"));
-    }
-    if (GetBootMode() == BOOT_ON_S3_RESUME) {
-      ClearSmi ();
-      RestoreS3RegInfo (FindS3Info (S3_SAVE_REG_COMM_ID));
-
-      //
-      // If payload registered a software SMI handler for bootloader to restore
-      // SMRR base and mask in S3 resume path, trigger sw smi
-      //
-      BlSwSmiInfo = FindS3Info (BL_SW_SMI_COMM_ID);
-      if (BlSwSmiInfo != NULL) {
-        TriggerPayloadSwSmi (BlSwSmiInfo->BlSwSmiHandlerInput);
+    // UEFI Payload will change cache type to UC based on PCI root bridge
+    // info HOB MMIO range. In some cases this causes a CPU exception.
+    if (GetPayloadId () != UEFI_PAYLOAD_ID_SIGNATURE) {
+      Status = SetFrameBufferWriteCombining (0, MAX_UINT32);
+      if (EFI_ERROR(Status)) {
+        DEBUG ((DEBUG_INFO, "Failed to set GFX framebuffer as WC\n"));
       }
     }
     InterruptRoutingInit ();
     break;
   case PrePayloadLoading:
+    Status = FixUpFlashMapEntry();
+    if (EFI_ERROR (Status)) {
+      DEBUG ((DEBUG_INFO, "Error fixing up Flash Map Memory Map entry %r\n", Status));
+    }
     Status = IgdOpRegionInit ();
     if (EFI_ERROR (Status)) {
       DEBUG ((DEBUG_INFO, "VBT not found %r\n", Status));
@@ -376,6 +543,7 @@ BoardInit (
           TriggerPayloadSwSmi (BlSwSmiInfo->BlSwSmiHandlerInput);
         }
       } else {
+        ClearS3SaveRegion ();
         //
         // Set SMMBASE_INFO dummy strucutre in TSEG before others
         //
@@ -393,16 +561,19 @@ BoardInit (
       ProgramSecuritySetting ();
     }
 
-    //
-    // Enable decoding of I/O locations 62h and 66h to LPC
-    //
-    LpcBase = MM_PCI_ADDRESS (0, PCI_DEVICE_NUMBER_PCH_LPC, 0, 0);
-    MmioOr16 (LpcBase + R_LPC_CFG_IOE, B_LPC_CFG_IOE_ME1);
+    SiCfgData = (SILICON_CFG_DATA *)FindConfigDataByTag (CDATA_SILICON_TAG);
+    if ( (SiCfgData != NULL) && (SiCfgData->EcAvailable == 1)) {
+      //
+      // Enable decoding of I/O locations 62h and 66h to LPC
+      //
+      LpcBase = MM_PCI_ADDRESS (0, PCI_DEVICE_NUMBER_PCH_LPC, 0, 0);
+      MmioOr16 (LpcBase + R_LPC_CFG_IOE, B_LPC_CFG_IOE_ME1);
 
-    //
-    // Enable EC's ACPI mode to control power to motherboard during Sleep (S3)
-    //
-    IoWrite16 (EC_C_PORT, EC_C_ACPI_ENABLE);
+      //
+      // Enable EC's ACPI mode to control power to motherboard during Sleep (S3)
+      //
+      IoWrite16 (EC_C_PORT, EC_C_ACPI_ENABLE);
+    }
     break;
   case ReadyToBoot:
     if ((GetBootMode() != BOOT_ON_FLASH_UPDATE) && (GetPayloadId() == 0)) {
@@ -552,31 +723,7 @@ UpdateOsBootMediumInfo (
   OUT  OS_BOOT_OPTION_LIST  *OsBootOptionList
   )
 {
-  volatile PCI_DEVICE_INDEPENDENT_REGION *PciDev;
-  UINT16                                 Bus;
-  UINT8                                  Dev;
-  UINT8                                  Instance;
-
   FillBootOptionListFromCfgData (OsBootOptionList);
-
-  //
-  // Depends on the PCI root bridge, connected external PCI devices, the bus number for
-  // NVMe device might be different, so update the NVMe bus number in the device table.
-  //
-  Instance = 0;
-  for (Bus = 1; Bus <= PCI_MAX_BUS; Bus++) {
-    for (Dev = 0; Dev <= PCI_MAX_DEVICE; Dev++) {
-      PciDev = (volatile PCI_DEVICE_INDEPENDENT_REGION *) MM_PCI_ADDRESS (Bus, Dev, 0, 0);
-      if (PciDev->DeviceId != 0xFFFF) {
-        if ((PciDev->ClassCode[0] == 2) && (PciDev->ClassCode[1] == 8) && (PciDev->ClassCode[2] == 1)) {
-          SetDeviceAddr (OsBootDeviceNvme, Instance, (UINT32)((Bus << 16) | (Dev << 8)));
-          Instance += 1;
-        }
-      }
-    }
-  }
-
-  return;
 }
 
 /**
@@ -735,6 +882,8 @@ PlatformUpdateHobInfo (
     UpdateSmmInfo (HobInfo);
   } else if (Guid == &gLoaderPlatformInfoGuid) {
     UpdateLoaderPlatformInfo (HobInfo);
+  } else if (Guid == &gCsmePerformanceInfoGuid) {
+    UpdateCsmeBootPerfHob (HobInfo);
   }
 }
 

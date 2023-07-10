@@ -1,7 +1,7 @@
 /** @file
   This file provides payload common library interfaces.
 
-  Copyright (c) 2017 - 2020, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2017 - 2023, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -272,7 +272,7 @@ SecStartup (
 
   // ACPI table
   SystemTableInfo = GetSystemTableInfo ();
-  if (SystemTableInfo != NULL) {
+  if ((SystemTableInfo != NULL) && (SystemTableInfo->AcpiTableBase != 0)) {
     ParseAcpiTableInfo ((UINT32)SystemTableInfo->AcpiTableBase);
   }
 

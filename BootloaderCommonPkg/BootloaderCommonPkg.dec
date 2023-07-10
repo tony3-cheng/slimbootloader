@@ -1,7 +1,7 @@
 ## @file
 # Provides bootloader driver related package definitions.
 #
-# Copyright (c) 2016 - 2022, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2016 - 2023, Intel Corporation. All rights reserved.<BR>
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 ##
@@ -42,6 +42,10 @@
   gCsmeFWUDriverImageFileGuid                   = { 0x4A467997, 0xA909, 0x4678, { 0x91, 0x0C, 0xE0, 0xFE, 0x1C, 0x90, 0x56, 0xEA } }
   gLoaderPciRootBridgeInfoGuid                  = { 0xb7f3d111, 0xb98d, 0x422f, { 0x84, 0x31, 0xa7, 0xd8, 0x29, 0xec, 0x00, 0x87 } }
   gLoaderMpCpuTaskInfoGuid                      = { 0xb2d12dd3, 0x1a61, 0x4ef8, { 0xa6, 0xb8, 0xd9, 0x48, 0x92, 0x39, 0x4c, 0xc0 } }
+  gCsmePerformanceInfoGuid                      = { 0x7add2938, 0xf96a, 0x45c2, { 0x8f, 0x99, 0x23, 0xf4, 0xf2, 0xf0, 0x6f, 0xb8 } }
+  gTpmEventLogInfoGuid                          = { 0xcdaffea5, 0x5e2,  0x4c2f, { 0x8b, 0xa7, 0xad, 0xbc, 0x8d, 0xfd, 0x5a, 0x9e } }
+  gSecureBootInfoGuid                           = { 0xd970f847, 0x07dd, 0x4b24, { 0x9e, 0x1e, 0xae, 0x6c, 0x80, 0x9b, 0x1d, 0x38 } }
+  gTcgEvent2EntryHobGuid                        = { 0xd26c221e, 0x2430, 0x4c8a, { 0x91, 0x70, 0x3f, 0xcb, 0x45, 0x0, 0x41, 0x3f  } }
 
   gEfiVariableGuid                              = { 0xddcf3616, 0x3275, 0x4164, { 0x98, 0xb6, 0xfe, 0x85, 0x70, 0x7f, 0xfe, 0x7d } }
   gEfiAuthenticatedVariableGuid                 = { 0xaaf32c78, 0x947b, 0x439a, { 0xa1, 0x80, 0x2e, 0x14, 0x4e, 0xc3, 0x77, 0x92 } }
@@ -50,6 +54,7 @@
   gEdkiiWorkingBlockSignatureGuid               = { 0x9e58292b, 0x7c68, 0x497d, { 0xa0, 0xce, 0x65,  0x0, 0xfd, 0x9f, 0x1b, 0x95 } }
   gEdkiiFpdtExtendedFirmwarePerformanceGuid     = { 0x3b387bfd, 0x7abc, 0x4cf2, { 0xa0, 0xca, 0xb6, 0xa1, 0x6c, 0x1b, 0x1b, 0x25 } }
   gTccRtctHobGuid                               = { 0x6bddb43d, 0x1782, 0x4d9c, { 0xb6, 0x80, 0xe3, 0xde, 0x45, 0xe0, 0x37, 0x4a } }
+  gZeroGuid                                     = { 0x0,        0x0,    0x0,    { 0x0,  0x0,  0x0,  0x0,  0x0,  0x0,  0x0,  0x0  } }
 
   #
   # GUID defined in UniversalPayload
@@ -160,6 +165,7 @@
   #               New HOB format refer these file headers: SmmS3CommunicationInfoGuid.h, SpiFlashInfoGuid.h
   #               SmmRegisterInfoGuid.h and NvVariableInfoGuid.h
   gPlatformCommonLibTokenSpaceGuid.PcdBuildSmmHobs                     |        0x03| UINT8 | 0x20000705
+  gPlatformCommonLibTokenSpaceGuid.PcdTccEnabled                  | FALSE  | BOOLEAN | 0x20000221
 
 [PcdsFixedAtBuild, PcdsPatchableInModule]
   # For patchable PCDs, try to set the default as none-zero
@@ -289,6 +295,7 @@
   ## This PCD defines bootloader boot performance related behavior
   #     BIT0    - Print Slim Bootloader boot performance.<BR>
   #     BIT1    - Print FSP HOB boot performance data.<BR>
+  #     BIT2    - Print CSME boot performance data.<BR>
   gPlatformCommonLibTokenSpaceGuid.PcdBootPerformanceMask | 0x00000001 | UINT32 | 0x00010092
 
 
@@ -309,7 +316,6 @@
   gPlatformCommonLibTokenSpaceGuid.PcdVerifiedBootEnabled     | FALSE      | BOOLEAN | 0x20000210
   gPlatformCommonLibTokenSpaceGuid.PcdMeasuredBootEnabled     | FALSE      | BOOLEAN | 0x20000211
   gPlatformCommonLibTokenSpaceGuid.PcdSourceDebugEnabled      | FALSE      | BOOLEAN | 0x20000212
-  gPlatformCommonLibTokenSpaceGuid.PcdContainerBootEnabled    | FALSE      | BOOLEAN | 0x20000213
   gPlatformCommonLibTokenSpaceGuid.PcdEmmcHs400SupportEnabled | TRUE       | BOOLEAN | 0x20000214
   # This PCD will force to initialize SerialPort regardless of its initialized state
   gPlatformCommonLibTokenSpaceGuid.PcdForceToInitSerialPort   | FALSE      | BOOLEAN | 0x20000216
@@ -322,3 +328,4 @@
   # Control if X2APIC should be used or not
   gPlatformCommonLibTokenSpaceGuid.PcdCpuX2ApicEnabled            | FALSE  | BOOLEAN | 0x20000220
   gPlatformCommonLibTokenSpaceGuid.PcdTccEnabled                  | FALSE  | BOOLEAN | 0x20000221
+  gPlatformCommonLibTokenSpaceGuid.PcdFspNoEop                    | FALSE  | BOOLEAN | 0x20000223

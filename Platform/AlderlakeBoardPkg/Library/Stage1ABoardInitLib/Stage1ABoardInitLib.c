@@ -1,6 +1,6 @@
 /** @file
 
-  Copyright (c) 2020 - 2022, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2020 - 2023, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -22,6 +22,7 @@
 #include <GpioPinsVer2Lp.h>
 #include <Library/ConfigDataLib.h>
 #include <Library/PchInfoLib.h>
+#include <Library/TcoTimerLib.h>
 
 #define UCODE_REGION_BASE   FixedPcdGet32(PcdUcodeBase)
 #define UCODE_REGION_SIZE   FixedPcdGet32(PcdUcodeSize)
@@ -114,9 +115,7 @@ EarlyPlatformDataCheck (
     SetDebugPort (PcdGet8 (PcdDebugPortNumber));
   } else {
     SetDebugPort  (StitchData->DebugUart);
-    if ((StitchData->PlatformId > 0) && (StitchData->PlatformId < 32)) {
-      SetPlatformId (StitchData->PlatformId);
-    }
+    SetPlatformId (StitchData->PlatformId);
   }
 }
 
@@ -129,6 +128,7 @@ EarlyPlatformDataCheck (
 
 **/
 VOID
+EFIAPI
 BoardInit (
   IN  BOARD_INIT_PHASE  InitPhase
   )
@@ -142,7 +142,10 @@ BoardInit (
 
   switch (InitPhase) {
   case PostTempRamInit:
-    DisableWatchDogTimer ();
+    // Initialize TCO timer in board-specific SG1A file
+    // as not to interfere with other boards' disable TCO
+    // timer functions which do the same thing
+    InitTcoTimer ();
     EarlyPlatformDataCheck ();
 
     DebugPort = GetDebugPort ();
@@ -168,6 +171,10 @@ BoardInit (
       MskLen = (AsmReadMsr64(MSR_CACHE_VARIABLE_MTRR_BASE + 1) | (SIZE_4GB - 1)) + 1;
       MsrIdx = MSR_CACHE_VARIABLE_MTRR_BASE + 1 * 2;
       ImgLen = PcdGet32(PcdFlashSize);
+      // PCH only decodes max 16MB of SPI flash from the top down to MMIO.
+      if (ImgLen > SIZE_16MB) {
+        ImgLen = SIZE_16MB;
+      }
       AdjLen = GetPowerOfTwo32(ImgLen);
       if (ImgLen > AdjLen) {
         AdjLen <<= 1;

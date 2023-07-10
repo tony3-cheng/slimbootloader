@@ -324,7 +324,7 @@ DebugPrintLevelEnabled (
   @param  Expression  Boolean expression that evaluated to FALSE
 
 **/
-#ifdef __KLOCWORK__
+#if defined(__KLOCWORK__) || defined(__COVERITY__)
   #define _ASSERT(Expression)    do { if (!(Expression)) abort(); } while (0)
 #else
   #ifdef LITE_PRINT
@@ -371,7 +371,7 @@ DebugPrintLevelEnabled (
   @param  Expression  Boolean expression.
 
 **/
-#ifdef __KLOCWORK__
+#if defined(__KLOCWORK__) || defined(__COVERITY__)
   #define ASSERT(Expression)    _ASSERT (Expression)
 #else
   #if !defined(MDEPKG_NDEBUG)
@@ -606,7 +606,7 @@ DebugPrintLevelEnabled (
   @param  TestSignature  The 32-bit signature value to match.
 
 **/
-#ifdef __KLOCWORK__
+#if defined(__KLOCWORK__) || defined(__COVERITY__)
   #define CR(Record, TYPE, Field, TestSignature)  BASE_CR(Record, TYPE, Field)
 #else
   #if !defined(MDEPKG_NDEBUG)

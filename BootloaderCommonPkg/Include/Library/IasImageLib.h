@@ -1,7 +1,7 @@
 /** @file
   This file defines IAS File structures.
 
-  Copyright (c) 2017, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2023, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 **/
 
@@ -66,6 +66,7 @@ typedef struct {        /* a file (sub-image) inside a boot image */
   VOID                 *Addr;
   UINT32                Size;
   IMAGE_ALLOCATE_TYPE   AllocType;
+  UINT32                Name;   // Name specified for the component when building the container
 } IMAGE_DATA;
 
 //
@@ -126,6 +127,21 @@ IasGetFiles (
   IN   IAS_HEADER  *IasImage,
   IN   UINT32      NumImg,
   OUT  IMAGE_DATA  *Img
+  );
+
+/**
+  Free the allocated memory in an image data
+
+  This function free a memory allocated in IMAGE_DATA according to Allocation Type.
+
+  @param[in]  ImageData       An image data pointer which has allocated memory address,
+                              its size, and allocation type.
+
+**/
+VOID
+EFIAPI
+FreeImageData (
+  IN  IMAGE_DATA    *ImageData
   );
 
 // Image type subfields (cf. boot subsustem HLD, appendix A for details).

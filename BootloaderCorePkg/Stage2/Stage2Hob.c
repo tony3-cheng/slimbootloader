@@ -1,6 +1,6 @@
 /** @file
 
-  Copyright (c) 2016 - 2021, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2016 - 2022, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -830,6 +830,9 @@ BuildExtraInfoHob (
   VOID                             *DeviceTableHob;
   LDR_SMM_INFO                     *SmmInfoHob;
   SYS_CPU_TASK_HOB                 *SysCpuTaskHob;
+  CSME_PERFORMANCE_INFO            *CsmeBootTimeData;
+  TPM_EVENT_LOG_INFO               *TpmEventLogHob;
+  SECUREBOOT_INFO                  *SecureBootInfoHob;
 
   LdrGlobal = (LOADER_GLOBAL_DATA *)GetLoaderGlobalDataPointer();
   S3Data    = (S3_DATA *)LdrGlobal->S3DataPtr;
@@ -936,6 +939,19 @@ BuildExtraInfoHob (
     CopyMem (PerformanceInfo->TimeStamp, LdrGlobal->PerfData.TimeStamp, sizeof (UINT64) * Count);
   }
 
+  //
+  // Build HOB for CSME boot time performance data
+  //
+  if ((PcdGet32 (PcdBootPerformanceMask) & BIT2) != 0) {
+    Length = sizeof (CSME_PERFORMANCE_INFO) + (64 * sizeof (UINT32));
+    CsmeBootTimeData = BuildGuidHob (&gCsmePerformanceInfoGuid, Length);
+    if (CsmeBootTimeData != NULL) {
+      ZeroMem (CsmeBootTimeData, Length);
+      CsmeBootTimeData->BootDataLength = 64;
+      PlatformUpdateHobInfo (&gCsmePerformanceInfoGuid, CsmeBootTimeData);
+    }
+  }
+
   // Build Loader Platform info Hob
   Length       = sizeof (LOADER_PLATFORM_INFO);
   LoaderPlatformInfo = BuildGuidHob (&gLoaderPlatformInfoGuid, Length);
@@ -960,6 +976,41 @@ BuildExtraInfoHob (
       SysCpuTaskHob->SysCpuTask = (UINTN) MpGetTask();
       SysCpuTaskHob->SysCpuInfo = (UINTN) MpGetInfo();
     }
+  }
+
+  // SecureBoot Info HOB
+  SecureBootInfoHob = BuildGuidHob (&gSecureBootInfoGuid, sizeof (SECUREBOOT_INFO));
+  if (SecureBootInfoHob != NULL) {
+    ZeroMem (SecureBootInfoHob, sizeof (SECUREBOOT_INFO));
+    SecureBootInfoHob->Header.Revision      = PAYLOAD_SECUREBOOT_INFO_HOB_REVISION;
+    SecureBootInfoHob->Header.Length        = sizeof (SECUREBOOT_INFO);
+    SecureBootInfoHob->VerifiedBootEnabled  = (LdrGlobal->LdrFeatures & FEATURE_VERIFIED_BOOT) >> 4;
+    SecureBootInfoHob->MeasuredBootEnabled  = (LdrGlobal->LdrFeatures & FEATURE_MEASURED_BOOT) >> 1;
+
+    TpmLibGetActivePcrBanks (&SecureBootInfoHob->TpmPcrActivePcrBanks);
+
+    if (LoaderPlatformInfo != NULL) {
+      SecureBootInfoHob->FirmwareDebuggerInitialized  = ((LoaderPlatformInfo->HwState >> 2) || (LoaderPlatformInfo->HwState >> 3));
+    }
+
+    // SBL supports only TPM 2.0
+    if (SecureBootInfoHob->MeasuredBootEnabled) {
+      SecureBootInfoHob->TpmType                      = TPM_TYPE_20;
+    } else {
+      SecureBootInfoHob->TpmType                      = NO_TPM;
+    }
+  }
+
+  // Create the Tpm event log for bootloader events.
+  CreateTpmEventLogHob ();
+
+  // Tpm Event log Buffer Info HOB
+  // This is a addon information
+  TpmEventLogHob = BuildGuidHob (&gTpmEventLogInfoGuid, sizeof (TPM_EVENT_LOG_INFO));
+  if (TpmEventLogHob != NULL) {
+    ZeroMem (TpmEventLogHob, sizeof (TPM_EVENT_LOG_INFO));
+    TpmEventLogHob->Revision  = PAYLOAD_TPM_EVENT_LOG_HOB_REVISION;
+    GetTpmEventLog (&TpmEventLogHob->Tcg2Lasa, &TpmEventLogHob->Tcg2EventSize);
   }
 
   BuildUniversalPayloadHob ();

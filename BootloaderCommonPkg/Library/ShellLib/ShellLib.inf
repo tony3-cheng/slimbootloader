@@ -44,6 +44,8 @@
   CmdCdata.c
   CmdCls.c
   CmdFs.c
+  CmdUsbDev.c
+  CmdCorruptComp.c
   ShellCmds.c
   Parsing.c
   History.c
@@ -52,6 +54,7 @@
 [Packages]
   MdePkg/MdePkg.dec
   BootloaderCommonPkg/BootloaderCommonPkg.dec
+  Silicon/CommonSocPkg/CommonSocPkg.dec
 
 [LibraryClasses]
   BaseLib
@@ -75,11 +78,15 @@
   PartitionLib
   ShellExtensionLib
   MtrrLib
+  RngLib
+  MemoryAllocationLib
+  LoaderPerformanceLib
 
 [Pcd]
   gEfiMdePkgTokenSpaceGuid.PcdPciExpressBaseAddress
   gPlatformCommonLibTokenSpaceGuid.PcdMiniShellEnabled
   gPlatformCommonLibTokenSpaceGuid.PcdConsoleInDeviceMask
+  gPlatformCommonLibTokenSpaceGuid.PcdBootPerformanceMask
 
 [Guids]
   gLoaderPerformanceInfoGuid

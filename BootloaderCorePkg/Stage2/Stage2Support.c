@@ -1,6 +1,6 @@
 /** @file
 
-  Copyright (c) 2016 - 2021, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2016 - 2023, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -29,9 +29,9 @@ BoardNotifyPhase (
   IN BOARD_INIT_PHASE   Phase
   )
 {
-  FSP_INIT_PHASE  FspPhase;
-  UINT8           FspPhaseMask;
-  EFI_STATUS      Status;
+  FSP_INIT_PHASE                                   FspPhase;
+  UINT8                                            FspPhaseMask;
+  EFI_STATUS                                       Status;
 
   // This is board notification from payload
   FspPhaseMask = 0;
@@ -72,6 +72,10 @@ BoardNotifyPhase (
     }
   }
 
+  // Update Osloader boot time in FPDT
+  if ((Phase == EndOfFirmware) && (GetBootMode () != BOOT_ON_S3_RESUME)) {
+    UpdateFpdtSblTable ();
+  }
 }
 
 /**

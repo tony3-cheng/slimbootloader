@@ -1,7 +1,7 @@
 ## @file
 # This file is used to provide board specific image information.
 #
-#  Copyright (c) 2018 - 2022, Intel Corporation. All rights reserved.<BR>
+#  Copyright (c) 2018 - 2023, Intel Corporation. All rights reserved.<BR>
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -25,7 +25,7 @@ class Board(BaseBoard):
 
         self.VERINFO_IMAGE_ID       = 'SBL_TGL'
         self.VERINFO_PROJ_MAJOR_VER = 1
-        self.VERINFO_PROJ_MINOR_VER = 5
+        self.VERINFO_PROJ_MINOR_VER = 8
         self.VERINFO_SVN            = 1
         self.VERINFO_BUILD_DATE     = time.strftime("%m/%d/%Y")
 
@@ -117,7 +117,7 @@ class Board(BaseBoard):
 
         if self.RELEASE_MODE:
             self.STAGE1A_SIZE         = 0x0000D000
-            self.STAGE1B_SIZE         = 0x000B0000
+            self.STAGE1B_SIZE         = 0x000B1000
             self.STAGE2_SIZE          = 0x00070000
             self.STAGE2_FD_SIZE       = 0x000E0000
             self.PAYLOAD_SIZE         = 0x00024000
@@ -288,6 +288,8 @@ class Board(BaseBoard):
             'GpioLib|Silicon/CommonSocPkg/Library/GpioLib/GpioLib.inf',
             'GpioSiLib|Silicon/$(PCH_PKG_NAME)/Library/GpioSiLib/GpioSiLib.inf',
             'WatchDogTimerLib|Silicon/CommonSocPkg/Library/WatchDogTimerLib/WatchDogTimerLib.inf',
+            'TcoTimerLib|Silicon/CommonSocPkg/Library/TcoTimerLib/TcoTimerLib.inf',
+            'TopSwapLib|Silicon/CommonSocPkg/Library/TopSwapLib/TopSwapLib.inf'
         ]
 
         if self.BUILD_CSME_UPDATE_DRIVER:

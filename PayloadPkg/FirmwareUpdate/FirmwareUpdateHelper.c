@@ -23,6 +23,7 @@
 #include <Library/TimerLib.h>
 #include "FirmwareUpdateHelper.h"
 #include <Service/SpiFlashService.h>
+#include <Library/BootGuardLib.h>
 
 SPI_FLASH_SERVICE   *mFwuSpiService = NULL;
 
@@ -538,33 +539,22 @@ UpdateFullBiosRegion (
   This function will update SBL or Configuration data alone.
 
   @param[in] ImageHdr       Pointer to fw mgmt capsule Image header
+  @param[in] FwPolicy       Fw update policy
 
   @retval  EFI_SUCCESS      Update successful.
   @retval  other            error occurred during firmware update
 **/
 EFI_STATUS
 UpdateSystemFirmware (
-  IN EFI_FW_MGMT_CAP_IMAGE_HEADER  *ImageHdr
+  IN EFI_FW_MGMT_CAP_IMAGE_HEADER  *ImageHdr,
+  IN FIRMWARE_UPDATE_POLICY        FwPolicy
   )
 {
-  EFI_STATUS              Status;
+  EFI_STATUS                  Status;
   FIRMWARE_UPDATE_PARTITION   *UpdatePartition;
-  FIRMWARE_UPDATE_POLICY  FwPolicy;
 
   //
-  // 1. Enforce firmware update policy.
-  //
-  Status = EnforceFwUpdatePolicy (&FwPolicy);
-  if (EFI_ERROR (Status)) {
-    if (Status == EFI_ALREADY_STARTED) {
-      return EFI_SUCCESS;
-    }
-    DEBUG((DEBUG_ERROR, "EnforceFwUpdatePolicy: Status = 0x%x\n", Status));
-    return Status;
-  }
-
-  //
-  // 2. Check firmware version.
+  // Check firmware version.
   //
   Status = VerifyFwVersion (ImageHdr, FwPolicy);
   if (EFI_ERROR (Status)) {
@@ -573,7 +563,7 @@ UpdateSystemFirmware (
   }
 
   //
-  // 3. Get firmware update required information.
+  // Get firmware update required information.
   //
   Status = GetFirmwareUpdateInfo (ImageHdr, FwPolicy, &UpdatePartition);
   if (EFI_ERROR(Status)) {
@@ -582,29 +572,21 @@ UpdateSystemFirmware (
   }
 
   //
-  // 4. Do boot partition update.
+  // Check firmware structure.
+  //
+  Status = VerifyFwStruct (ImageHdr);
+  if (EFI_ERROR (Status)) {
+    DEBUG ((DEBUG_ERROR, " VerifyFwStruct failed with Status = 0x%x\n", Status));
+    return Status;
+  }
+
+  //
+  // Do boot partition update.
   //
   Status = UpdateBootPartition (UpdatePartition);
   if (EFI_ERROR (Status)) {
     DEBUG ((DEBUG_ERROR, "UpdateBootPartition, Status = 0x%x\n", Status));
     return Status;
-  }
-
-  //
-  // 5. After update Enforce firmware update policy
-  //
-  Status = AfterUpdateEnforceFwUpdatePolicy(FwPolicy);
-  if (EFI_ERROR (Status)) {
-    //
-    // If EFI_END_OF_FILE is returned, that means SBL update is successful
-    // return success to end firmware update.
-    //
-    if (Status != EFI_END_OF_FILE) {
-      DEBUG((DEBUG_ERROR, "AfterUpdateEnforceFwUpdatePolicy failed! Status = %r\n", Status));
-      return Status;
-    } else {
-      return EFI_SUCCESS;
-    }
   }
 
   return Status;
@@ -926,7 +908,7 @@ IsUpdateComponentForContainer (
 EFI_STATUS
 CheckSblConfigDataSvn (
   IN   EFI_FW_MGMT_CAP_IMAGE_HEADER  *ImageHdr,
-  IN   FIRMWARE_UPDATE_POLICY         FwPolicy,
+  IN   FIRMWARE_UPDATE_POLICY        FwPolicy,
   OUT  UINT8                         *SvnStatus
   )
 {
@@ -977,23 +959,71 @@ CheckSblConfigDataSvn (
 }
 
 /**
+  Perform ACM svn check
+
+  This function will perform svn checks for ACM in flash and
+  ACM in capsule.
+
+  @param[in]  ImageHdr       Pointer to fw mgmt capsule Image header
+
+  @retval  EFI_SUCCESS      SVN check successful.
+  @retval  other            error occurred during firmware update
+**/
+EFI_STATUS
+CheckAcmSvn (
+  IN   EFI_FW_MGMT_CAP_IMAGE_HEADER  *ImageHdr
+  )
+{
+  EFI_STATUS            Status;
+  UINT16                ExistingAcmSvn;
+  UINT16                NewAcmSvn;
+  UINT32                NewAcmHdr;
+
+  if ((ImageHdr == NULL)) {
+    return EFI_INVALID_PARAMETER;
+  }
+
+  Status = GetExistingAcmSvn (&ExistingAcmSvn);
+  if (EFI_ERROR (Status)) {
+    DEBUG((DEBUG_ERROR, "Unable to get existing ACM SVN!"));
+    return Status;
+  }
+
+  NewAcmHdr = (UINT32)((UINTN)ImageHdr + sizeof(EFI_FW_MGMT_CAP_IMAGE_HEADER));
+
+  Status = GetAcmSvnFromAcmHdr(NewAcmHdr, &NewAcmSvn);
+  if (EFI_ERROR (Status)) {
+    DEBUG((DEBUG_ERROR, "Unable to get new ACM SVN!"));
+    return Status;
+  }
+
+  if (NewAcmSvn < ExistingAcmSvn) {
+    DEBUG((DEBUG_ERROR, "Acm update Svn check failed!!\n"));
+    return EFI_INCOMPATIBLE_VERSION;
+  }
+
+  return EFI_SUCCESS;
+}
+
+/**
   Perform Slim Bootloader component update.
 
   This function will try to locate component in the flash map,
   if found, will update the component.
 
   @param[in] ImageHdr       Pointer to fw mgmt capsule Image header
+  @param[in] FwPolicy       Fw update policy
 
   @retval  EFI_SUCCESS      Update successful.
   @retval  other            error occurred during firmware update
 **/
 EFI_STATUS
 UpdateSblComponent (
-  IN EFI_FW_MGMT_CAP_IMAGE_HEADER  *ImageHdr
+  IN EFI_FW_MGMT_CAP_IMAGE_HEADER  *ImageHdr,
+  IN FIRMWARE_UPDATE_POLICY        FwPolicy
   )
 {
   EFI_STATUS             Status;
-  FLASH_MAP_ENTRY_DESC  *Entry;
   UINT8                  SvnStatus;
 
   Status = EFI_NOT_FOUND;
@@ -1027,20 +1057,86 @@ UpdateSblComponent (
   //
   // This is a SBL component update, check if it is a redundant component
   //
-  Entry = GetComponentEntryByPartition((UINT32)ImageHdr->UpdateHardwareInstance, TRUE);
-  if (Entry == NULL) {
-    return EFI_NOT_FOUND;
-  }
-
-  if ((Entry->Flags & FLASH_MAP_FLAGS_NON_REDUNDANT_REGION) != 0){
+  if (IsRedundantComponent(ImageHdr->UpdateHardwareInstance)) {
+    DEBUG ((DEBUG_INFO, "Redundant component update requested! \n"));
+    Status = UpdateSystemFirmware(ImageHdr, FwPolicy);
+  } else {
     DEBUG ((DEBUG_INFO, "Non redundant component update requested! \n"));
     Status = UpdateNonRedundantComp(ImageHdr);
-  } else if ((Entry->Flags & FLASH_MAP_FLAGS_REDUNDANT_REGION) != 0) {
-    DEBUG ((DEBUG_INFO, "Redundant component update requested! \n"));
-    Status = UpdateSystemFirmware(ImageHdr);
+  }
+  return Status;
+}
+
+/**
+  Read the value of FW_UPDATE_STATUS.CsmeNeedReset
+
+  The CsmeNeedReset flag is used to ensure CSME update
+  has taken effect before processing CMDI payload.
+  This is specific to prevent {OEMKEYREVOCATION} command
+  failure for the case that CSME payload contains OEM KM
+  with key revocation extension.
+
+  @retval  Value  Value of FW_UPDATE_STATUS.CsmeNeedReset
+**/
+UINT8
+ReadCsmeNeedResetFlag (
+  VOID
+  )
+{
+  EFI_STATUS  Status;
+  UINT32      FwUpdStatusOffset;
+  UINT8       Value;
+
+  FwUpdStatusOffset = PcdGet32(PcdFwUpdStatusBase);
+  FwUpdStatusOffset += OFFSET_OF(FW_UPDATE_STATUS, CsmeNeedReset);
+
+  Value = CSME_NEED_RESET_INIT;
+  Status = BootMediaRead (FwUpdStatusOffset, sizeof(UINT8), (UINT8 *)&Value);
+  if (EFI_ERROR (Status)) {
+    DEBUG((DEBUG_ERROR, "BootMediaRead CsmeNeedReset. offset: 0x%04x, Status = 0x%x\n",
+          FwUpdStatusOffset, Status));
+    Value = CSME_NEED_RESET_INVALID;
   }
 
-  return Status;
+  return Value;
+}
+
+/**
+  Write the value of FW_UPDATE_STATUS.CsmeNeedReset
+
+  @param[in] Value  Value to be written to FW_UPDATE_STATUS.CsmeNeedReset
+
+  @retval  EFI_SUCCESS            Write operation is successful
+  @retval  EFI_INVALID_PARAMETER  Invalid parameter
+  @retval  EFI_DEVICE_ERROR       Write operation failed
+**/
+EFI_STATUS
+WriteCsmeNeedResetFlag (
+  IN  UINT8  Value
+  )
+{
+  EFI_STATUS  Status;
+  UINT32      FwUpdStatusOffset;
+  UINT8       CurrVal;
+
+  CurrVal = ReadCsmeNeedResetFlag();
+  if (Value > CurrVal) {
+    DEBUG((DEBUG_ERROR, "WriteCsmeNeedResetFlag invalid parameter: %x, current value: %x\n",
+          Value, CurrVal));
+    return EFI_INVALID_PARAMETER;
+  }
+
+  FwUpdStatusOffset = PcdGet32(PcdFwUpdStatusBase);
+  FwUpdStatusOffset += OFFSET_OF(FW_UPDATE_STATUS, CsmeNeedReset);
+
+  Status = BootMediaWrite (FwUpdStatusOffset, sizeof(UINT8), (UINT8 *)&Value);
+  if (EFI_ERROR (Status)) {
+    DEBUG((DEBUG_ERROR, "BootMediaWrite CsmeNeedReset=%x. offset: 0x%04x, Status = 0x%x\n",
+          Value, FwUpdStatusOffset, Status));
+    return EFI_DEVICE_ERROR;
+  }
+
+  return EFI_SUCCESS;
 }
 
 /**
@@ -1054,8 +1150,97 @@ Reboot (
   IN  EFI_RESET_TYPE        ResetType
   )
 {
+  // Set FW_UPDATE_STATUS.CsmeNeedReset to DONE since the system will do a reset
+  if (ReadCsmeNeedResetFlag() == CSME_NEED_RESET_PENDING) {
+    WriteCsmeNeedResetFlag(CSME_NEED_RESET_DONE);
+  }
+
   ConsolePrint("Reset required to proceed.\n\n");
   MicroSecondDelay (3000000);
   ResetSystem (ResetType);
   CpuDeadLoop ();
+}
+
+/**
+  Verify uCode internal structure
+
+  @param[in] ImageHdr     Pointer to the fw mgmt capsule image header
+
+  @retval  EFI_SUCCESS    The operation completed successfully.
+  @retval  others         There is error happening.
+**/
+EFI_STATUS
+VerifyUcodeStruct (
+  IN  EFI_FW_MGMT_CAP_IMAGE_HEADER  *ImageHdr
+  )
+{
+  UINTN                 ImageBase;
+  UINTN                 ImageOffset;
+  CPU_MICROCODE_HEADER  *UCodeHdr;
+  UINT8                 *ImageByte;
+
+  // Update is only supported for platforms that slot their uCode
+  if (PcdGet32 (PcdUcodeSlotSize) == 0) {
+    DEBUG((DEBUG_ERROR, "Existing image does not contain uCode slots!!\n"));
+    return EFI_UNSUPPORTED;
+  }
+
+  ImageBase = (UINTN)ImageHdr + sizeof(EFI_FW_MGMT_CAP_IMAGE_HEADER);
+  ImageOffset = 0;
+
+  ImageByte = (UINT8*)(ImageBase + ImageOffset);
+  while (*ImageByte != PAD_BYTE && ImageOffset < ImageHdr->UpdateImageSize) {
+    UCodeHdr = (CPU_MICROCODE_HEADER *)ImageByte;
+
+    // Ensure patches in update image start at slot boundaries
+    if (UCodeHdr->HeaderVersion != 1) {
+      DEBUG((DEBUG_ERROR, "Existing uCode slots do not line up with new uCode slots!!\n"));
+      return EFI_NO_MAPPING;
+    }
+
+    // Ensure total size from header does not exceed slot size
+    if (UCodeHdr->TotalSize > PcdGet32 (PcdUcodeSlotSize)) {
+      DEBUG((DEBUG_ERROR, "Total uCode size from header exceeds uCode slot size!!\n"));
+      return EFI_NO_MAPPING;
+    }
+    ImageOffset += PcdGet32(PcdUcodeSlotSize);
+    ImageByte = (UINT8*)(ImageBase + ImageOffset);
+  }
+
+  // Check remaining bytes are unused
+  while (ImageOffset < ImageHdr->UpdateImageSize) {
+    if (*ImageByte != PAD_BYTE) {
+      DEBUG((DEBUG_ERROR, "Existing image slots do not line up with new image slots!!\n"));
+      return EFI_NO_MAPPING;
+    }
+    ++ImageOffset;
+    ImageByte = (UINT8*)(ImageBase + ImageOffset);
+  }
+
+  return EFI_SUCCESS;
+}
+
+/**
+  Verify the firmware internal structure.
+
+  @param[in] ImageHdr     Pointer to the fw mgmt capsule image header
+
+  @retval  EFI_SUCCESS    The operation completed successfully.
+  @retval  others         There is error happening.
+**/
+EFI_STATUS
+VerifyFwStruct (
+  IN  EFI_FW_MGMT_CAP_IMAGE_HEADER  *ImageHdr
+  )
+{
+  EFI_STATUS  Status;
+
+  if ((UINT32)ImageHdr->UpdateHardwareInstance == FLASH_MAP_SIG_UCODE) {
+    Status = VerifyUcodeStruct (ImageHdr);
+    if (EFI_ERROR (Status)) {
+      return Status;
+    }
+  }
+
+  return EFI_SUCCESS;
 }

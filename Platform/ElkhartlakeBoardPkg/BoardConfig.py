@@ -1,7 +1,7 @@
 ## @file
 # This file is used to provide board specific image information.
 #
-#  Copyright (c) 2017 - 2021, Intel Corporation. All rights reserved.<BR>
+#  Copyright (c) 2017 - 2023, Intel Corporation. All rights reserved.<BR>
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 
@@ -26,7 +26,7 @@ class Board(BaseBoard):
         # VERINFO_PROJ_MAJOR_VER: 1 PV Quality release
         # VERINFO_PROJ_MINOR_VER: 0: PV  1: MR1  2: MR2 etc.
         self.VERINFO_PROJ_MAJOR_VER = 1
-        self.VERINFO_PROJ_MINOR_VER = 3
+        self.VERINFO_PROJ_MINOR_VER = 6
         self.VERINFO_SVN          = 1
         self.VERINFO_BUILD_DATE   = time.strftime("%m/%d/%Y")
         self.LOWEST_SUPPORTED_FW_VER = ((self.VERINFO_PROJ_MAJOR_VER << 8) + self.VERINFO_PROJ_MINOR_VER)
@@ -57,7 +57,14 @@ class Board(BaseBoard):
         self.ENABLE_SMM_REBASE    = 2
         self.ENABLE_FRAMEBUFFER_INIT = 1
 
+        # EHL FSP Ready To Boot does not call EOP
+        self.HAVE_NO_FSP_EOP      = 1
+
         self.SIIPFW_SIZE = 0x1000
+
+        # ChipsetInit binary
+        self.CHIPSET_SIZE = 0x4000
+        self.SIIPFW_SIZE += self.CHIPSET_SIZE
 
         self.ENABLE_TCC         = 0
         # TSN manual configuration- If enabled, user will be able to have more refined control over TSN configuration via
@@ -81,6 +88,9 @@ class Board(BaseBoard):
         if self.ENABLE_PSEFW_LOADING:
             self.PSEF_SIZE = 0x00030000
             self.SIIPFW_SIZE += self.PSEF_SIZE
+
+        # Allow boot through GRUB config
+        self.ENABLE_GRUB_CONFIG   = 1
 
         if self.ENABLE_TSN:
             self.TSNC_SIZE      = 0x00001000
@@ -136,7 +146,7 @@ class Board(BaseBoard):
         # if PAYLOAD_LOAD_HIGH is 1, PAYLOAD_EXE_BASE will be ignored
         self.PAYLOAD_LOAD_HIGH    = 1
         self.PAYLOAD_EXE_BASE     = 0x00B00000
-        self.PAYLOAD_SIZE         = 0x00020000
+        self.PAYLOAD_SIZE         = 0x00030000
         self.EPAYLOAD_SIZE        = 0x00162000
         self.UCODE_SIZE           = 0x00010000 if self.HAVE_FSP_BIN != 0 else 0
         self.MRCDATA_SIZE         = 0x00008000
@@ -149,7 +159,7 @@ class Board(BaseBoard):
         else:
             self.UEFI_VARIABLE_SIZE = 0x00001000
         self.SBLRSVD_SIZE         = 0x00001000
-        self.FWUPDATE_SIZE        = 0x0001B000 if self.ENABLE_FWU else 0
+        self.FWUPDATE_SIZE        = 0x0001C000 if self.ENABLE_FWU else 0
 
         self.TOP_SWAP_SIZE        = 0x080000
         self.REDUNDANT_SIZE       = 0x360000
@@ -177,10 +187,18 @@ class Board(BaseBoard):
         self.SPI_IAS1_SIZE        = 0x0
         self.SPI_IAS2_SIZE        = 0x0
 
-        self.PLD_HEAP_SIZE        = 0x04000000
+        self.PLD_HEAP_SIZE        = 0x0C000000
         self.PLD_STACK_SIZE       = 0x00020000
         self.PLD_RSVD_MEM_SIZE    = 0x00500000
         self.LOADER_RSVD_MEM_SIZE = 0x500000
+
+        # If mulitple VBT table support is required, list them as:
+        #   {VbtImageId1 : VbtFileName1, VbtImageId2 : VbtFileName2, ...}
+        # VbtImageId is ID to identify a VBT image. It is a UINT32 number to match
+        #   the ImageId field in the VBT container.
+        # VbtFileName is the VBT file name. It needs to be located under platform
+        #   VbtBin folder.
+        self._MULTI_VBT_FILE      = {1:'Vbt.dat'}
 
         # _CFGDATA_INT_FILE - Internal cfg data is generally used for internal boards like MRBs, RVPs etc.
         # _CFGDATA_EXT_FILE - External cfg data is for the customer boards to populate new data on top of the internal defaults.
@@ -218,6 +236,7 @@ class Board(BaseBoard):
             'PchInfoLib|Silicon/$(SILICON_PKG_NAME)/Library/PchInfoLib/PchInfoLib.inf',
             'PchSbiAccessLib|Silicon/CommonSocPkg/Library/PchSbiAccessLib/PchSbiAccessLib.inf',
             'PlatformHookLib|Silicon/$(SILICON_PKG_NAME)/Library/PlatformHookLib/PlatformHookLib.inf',
+            'ResetSystemLib|Platform/$(BOARD_PKG_NAME)/Library/ResetSystemLib/ResetSystemLib.inf',
             'TccLib|Silicon/CommonSocPkg/Library/TccLib/TccLib.inf',
             'GpioLib|Silicon/CommonSocPkg/Library/GpioLib/GpioLib.inf',
             'GpioSiLib|Silicon/$(SILICON_PKG_NAME)/Library/GpioSiLib/GpioSiLib.inf',
@@ -232,7 +251,10 @@ class Board(BaseBoard):
             'SmbusLib|Silicon/CommonSocPkg/Library/SmbusLib/SmbusLib.inf',
             'PsdLib|Silicon/$(SILICON_PKG_NAME)/Library/PsdLib/PsdLib.inf',
             'HeciInitLib|Silicon/$(SILICON_PKG_NAME)/Library/HeciInitLib/HeciInitLib.inf',
-            'MeExtMeasurementLib|Silicon/$(SILICON_PKG_NAME)/Library/MeExtMeasurementLib/MeExtMeasurementLib.inf'
+            'MeExtMeasurementLib|Silicon/$(SILICON_PKG_NAME)/Library/MeExtMeasurementLib/MeExtMeasurementLib.inf',
+            'TcoTimerLib|Silicon/CommonSocPkg/Library/TcoTimerLib/TcoTimerLib.inf',
+            'TopSwapLib|Silicon/CommonSocPkg/Library/TopSwapLib/TopSwapLib.inf',
+            'WatchDogTimerLib|Silicon/CommonSocPkg/Library/WatchDogTimerLib/WatchDogTimerLib.inf'
         ]
 
         if self.BUILD_CSME_UPDATE_DRIVER:
@@ -289,7 +311,13 @@ class Board(BaseBoard):
         CompFilePseTsnIpConfig='PseTsnIpConfig.bin' if os.path.exists(os.path.join(bins, 'PseTsnIpConfig.bin')) else ''
         CompFileTsnConfig='TsnConfig.bin' if os.path.exists(os.path.join(bins, 'TsnConfig.bin')) else ''
         CompFileTsnMacAddr='TsnMacAddr.bin' if os.path.exists(os.path.join(bins, 'TsnMacAddr.bin')) else ''
+        CompFileChipInitFw='ChipInitBinary.bin' if os.path.exists(os.path.join(bins, 'ChipInitBinary.bin')) else ''
         CompFileCrlFw='crl.bin' if os.path.exists(os.path.join(bins, 'crl.bin')) else ''
+
+        # chipset init fw
+        container_list.append (
+            ('CHIP', CompFileChipInitFw,     '',   container_list_auth_type,   'KEY_ID_CONTAINER_COMP'+'_'+self._RSA_SIGN_TYPE,    0,   self.CHIPSET_SIZE,  0),
+        )
 
         if self.ENABLE_TCC:
             container_list.append (

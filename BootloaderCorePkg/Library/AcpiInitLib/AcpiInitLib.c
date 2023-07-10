@@ -1,6 +1,6 @@
 /** @file
 
-  Copyright (c) 2017 - 2020, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2017 - 2023, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -117,7 +117,7 @@ UpdateAcpiGnvs (
 }
 
 /**
-  Update ACPI tables using the new table provided.
+  Find an ACPI table using the given signature.
 
   @param[in] Rsdt            ACPI table RSDT pointer.
   @param[in] Signature       ACPI table signature to find.

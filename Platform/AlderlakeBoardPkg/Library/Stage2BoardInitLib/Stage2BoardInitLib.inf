@@ -1,6 +1,6 @@
 ## @file
 #
-#  Copyright (c) 2020 - 2022, Intel Corporation. All rights reserved.<BR>
+#  Copyright (c) 2020 - 2023, Intel Corporation. All rights reserved.<BR>
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 ##
@@ -31,6 +31,8 @@
   LowPowerSupport.h
   AcpiPlatform.c
   CpuInfoLib.c
+  SioChip.c
+  SioChip.h
 
 [Packages]
   MdePkg/MdePkg.dec
@@ -63,6 +65,7 @@
   BdatLib
   IgdOpRegionLib
   HeciLib
+  HeciMeExtLib
   VtdLib
   PsdLib
   MeExtMeasurementLib
@@ -72,11 +75,14 @@
   FspsUpdUpdateLib
   PciePm
   PrintLib
+  CrashLogLib
+  FusaConfigLib
 
 [Guids]
   gOsConfigDataGuid
   gFspVariableNvDataHobGuid
   gCpuInitDataHobGuid
+  gCsmePerformanceInfoGuid
 
 [Pcd]
   gEfiMdePkgTokenSpaceGuid.PcdPciExpressBaseAddress
@@ -112,6 +118,10 @@
   gPlatformModuleTokenSpaceGuid.PcdFastBootEnabled
   gPlatformCommonLibTokenSpaceGuid.PcdTccEnabled
   gPlatformModuleTokenSpaceGuid.PcdEnablePciePm
+  gPlatformCommonLibTokenSpaceGuid.PcdBootPerformanceMask
+  gPlatformModuleTokenSpaceGuid.PcdPciEnumHookProc
+  gPlatformModuleTokenSpaceGuid.PcdFlashBaseAddress
+  gPlatformModuleTokenSpaceGuid.PcdFlashSize
 
 [FixedPcd]
   gPlatformAlderLakeTokenSpaceGuid.PcdAdlLpSupport

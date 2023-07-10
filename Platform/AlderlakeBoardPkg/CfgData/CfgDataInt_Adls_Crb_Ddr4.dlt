@@ -2,7 +2,7 @@
 #
 #  Platform Configuration Delta File.
 #
-#  Copyright (c) 2020 - 2021, Intel Corporation. All rights reserved.<BR>
+#  Copyright (c) 2020 - 2023, Intel Corporation. All rights reserved.<BR>
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 #
@@ -15,7 +15,7 @@
 PLATFORMID_CFG_DATA.PlatformId           | 0x0017
 PLAT_NAME_CFG_DATA.PlatformName          | 'ADL_S'
 GEN_CFG_DATA.PayloadId                   | 'AUTO'
-FEATURES_CFG_DATA.Features.S0ix          | 0x1
+FEATURES_CFG_DATA.Features.S0ix          | 0x0
 
 #
 # This GPIO maps to the SW7C1 4-block DIP switch's 3rd switch.
@@ -50,6 +50,7 @@ MEMORY_CFG_DATA.TcssDma1En | 0x1
 MEMORY_CFG_DATA.PchHdaAudioLinkHdaEnable   | 0x1
 MEMORY_CFG_DATA.PchHdaAudioLinkDmicEnable  | {0x1, 0x1}
 MEMORY_CFG_DATA.PchHdaDspEnable            | 0x1
+MEMORY_CFG_DATA.DmiMaxLinkSpeed            | 0x0
 
 PLDSEL_CFG_DATA.PldSelGpio.Enable      | 1
 PLDSEL_CFG_DATA.PldSelGpio.PadGroup    | 5
@@ -61,6 +62,8 @@ GEN_CFG_DATA.VbtImageId                  | 1
 SILICON_CFG_DATA.CpuPcieRpAspm           | {0x2, 0x2, 0x2, 0x0}
 SILICON_CFG_DATA.EnableTimedGpio0        | 0x1
 SILICON_CFG_DATA.EnableTimedGpio1        | 0x1
+SILICON_CFG_DATA.D3HotEnable             | 0x0
+SILICON_CFG_DATA.VccSt                   | 0x0
 
 POWER_CFG_DATA.PsysPmax                  | 0
 POWER_CFG_DATA.TdcEnable                 | {0x1, 0x1, 0x0, 0x0, 0x0}

@@ -13,16 +13,21 @@
 #include <Library/DebugLib.h>
 #include <Library/IoLib.h>
 
-#define R_ACPI_IO_OC_WDT_CTL                          0x54
-#define B_ACPI_IO_OC_WDT_CTL_RLD                      BIT31
-#define B_ACPI_IO_OC_WDT_CTL_ICCSURV_STS              BIT25
-#define B_ACPI_IO_OC_WDT_CTL_NO_ICCSURV_STS           BIT24
-#define B_ACPI_IO_OC_WDT_CTL_FORCE_ALL                BIT15
-#define B_ACPI_IO_OC_WDT_CTL_EN                       BIT14
-#define B_ACPI_IO_OC_WDT_CTL_ICCSURV                  BIT13
-#define B_ACPI_IO_OC_WDT_CTL_LCK                      BIT12
-#define B_ACPI_IO_OC_WDT_CTL_TOV_MASK                 0x3FF
-#define B_ACPI_IO_OC_WDT_CTL_SCRATCHPAD_MASK          0xFF0000
+#define R_ACPI_IO_OC_WDT_CTL                              0x54
+#define B_ACPI_IO_OC_WDT_CTL_RLD                          BIT31
+#define B_ACPI_IO_OC_WDT_CTL_ICCSURV_STS                  BIT25
+#define B_ACPI_IO_OC_WDT_CTL_NO_ICCSURV_STS               BIT24
+#define B_ACPI_IO_OC_WDT_CTL_TOP_SWAP_TRIGGER             BIT21
+#define B_ACPI_IO_OC_WDT_CTL_RECOVERY_TRIGGER             BIT20
+#define B_ACPI_IO_OC_WDT_CTL_UPDATE_TRIGGER               BIT16
+#define B_ACPI_IO_OC_WDT_CTL_FORCE_ALL                    BIT15
+#define B_ACPI_IO_OC_WDT_CTL_EN                           BIT14
+#define B_ACPI_IO_OC_WDT_CTL_ICCSURV                      BIT13
+#define B_ACPI_IO_OC_WDT_CTL_LCK                          BIT12
+#define B_ACPI_IO_OC_WDT_CTL_TOV_MASK                     0x3FF
+#define B_ACPI_IO_OC_WDT_CTL_SCRATCHPAD_MASK              0xFF0000
+#define B_ACPI_IO_OC_WDT_CTL_SCRATCHPAD_BOOT_CNT_MASK     0xC0000
+#define B_ACPI_IO_OC_WDT_CTL_SCRATCHPAD_BOOT_CNT_SHIFT    0x12
 
 
 /**
@@ -143,6 +148,25 @@ WdtSetScratchpad (
   IoWrite32 (WdtGetAddress (), Readback);
 }
 
+/**
+  Get WDT flags in scratchpad
+
+  @param[in] Flags             The scratchpad flags to get.
+  @retval UINT32               The flags specified.
+**/
+UINT32
+EFIAPI
+WdtGetScratchpad (
+  IN  UINT32  Flags
+  )
+{
+  UINT32  Readback;
+
+  Readback  = IoRead32 (WdtGetAddress ());
+  /* only get flagged bits from scratchpad */
+  Readback &= Flags & B_ACPI_IO_OC_WDT_CTL_SCRATCHPAD_MASK;
+  return Readback;
+}
 
 /**
   Returns if the previous reset is triggered by timer expiration.
@@ -238,3 +262,151 @@ IsWdtLocked (
   }
 }
 
+/**
+  Get the number of failed boots.
+
+  @retval UINT32              the number of boots
+
+**/
+UINT32
+EFIAPI
+GetFailedBootCount (
+  VOID
+  )
+{
+  return WdtGetScratchpad (B_ACPI_IO_OC_WDT_CTL_SCRATCHPAD_BOOT_CNT_MASK) >>
+                            B_ACPI_IO_OC_WDT_CTL_SCRATCHPAD_BOOT_CNT_SHIFT;
+}
+
+/**
+  Increment the number of failed boots.
+**/
+VOID
+EFIAPI
+IncrementFailedBootCount (
+  VOID
+  )
+{
+  UINT32 FailedBootCnt;
+
+  // Get current failed boot count
+  FailedBootCnt = GetFailedBootCount ();
+
+  // Clear current failed boot count
+  ClearFailedBootCount ();
+
+  // Calculate new failed boot count
+  FailedBootCnt += 1;
+
+  // Set bits in WDT scratchpad per new count
+  WdtSetScratchpad ((FailedBootCnt << B_ACPI_IO_OC_WDT_CTL_SCRATCHPAD_BOOT_CNT_SHIFT)
+                      & B_ACPI_IO_OC_WDT_CTL_SCRATCHPAD_BOOT_CNT_MASK);
+}
+
+/**
+  Set the number of failed boots to 0.
+**/
+VOID
+EFIAPI
+ClearFailedBootCount (
+  VOID
+  )
+{
+  WdtClearScratchpad (B_ACPI_IO_OC_WDT_CTL_SCRATCHPAD_BOOT_CNT_MASK);
+}
+
+/**
+  Check if FW update triggered.
+**/
+BOOLEAN
+EFIAPI
+IsUpdateTriggered (
+  VOID
+  )
+{
+  return WdtGetScratchpad (B_ACPI_IO_OC_WDT_CTL_UPDATE_TRIGGER) != 0;
+}
+
+/**
+  Clear FW update trigger.
+**/
+VOID
+EFIAPI
+ClearUpdateTrigger (
+  VOID
+  )
+{
+  WdtClearScratchpad (B_ACPI_IO_OC_WDT_CTL_UPDATE_TRIGGER);
+}
+
+/**
+  Check if top swap triggered.
+**/
+BOOLEAN
+EFIAPI
+IsTopSwapTriggered (
+  VOID
+  )
+{
+  return WdtGetScratchpad (B_ACPI_IO_OC_WDT_CTL_TOP_SWAP_TRIGGER) != 0;
+}
+
+/**
+  Clear top swap trigger.
+**/
+VOID
+EFIAPI
+ClearTopSwapTrigger (
+  VOID
+  )
+{
+  WdtClearScratchpad (B_ACPI_IO_OC_WDT_CTL_TOP_SWAP_TRIGGER);
+}
+
+/**
+  Set top swap trigger.
+**/
+VOID
+EFIAPI
+SetTopSwapTrigger (
+  VOID
+  )
+{
+  WdtSetScratchpad (B_ACPI_IO_OC_WDT_CTL_TOP_SWAP_TRIGGER);
+}
+
+/**
+  Check if FW recovery triggered.
+**/
+BOOLEAN
+EFIAPI
+IsRecoveryTriggered (
+  VOID
+  )
+{
+  return WdtGetScratchpad (B_ACPI_IO_OC_WDT_CTL_RECOVERY_TRIGGER) != 0;
+}
+
+/**
+  Clear FW recovery trigger.
+**/
+VOID
+EFIAPI
+ClearRecoveryTrigger (
+  VOID
+  )
+{
+  WdtClearScratchpad (B_ACPI_IO_OC_WDT_CTL_RECOVERY_TRIGGER);
+}
+
+/**
+  Set FW recovery trigger.
+**/
+VOID
+EFIAPI
+SetRecoveryTrigger (
+  VOID
+  )
+{
+  WdtSetScratchpad (B_ACPI_IO_OC_WDT_CTL_RECOVERY_TRIGGER);
+}
